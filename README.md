@@ -30,7 +30,7 @@ Every push builds the app in GitHub Actions and uploads it as the `sbx-app` arti
 The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks it until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
 
 ```bash
-gh run download --repo geofflamrock/sbx-app --name sbx-app && ditto -x -k sbx.zip . && rm sbx.zip
+gh run download --repo geofflamrock/sbx-app --name sbx-app "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')" && ditto -x -k sbx.zip . && rm sbx.zip
 ```
 
 If you downloaded it in a browser, clear the flag instead:
