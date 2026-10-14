@@ -1,4 +1,4 @@
-name: sbx
+name: sbx-manager
 options:
   bundleIdPrefix: com.geofflamrock
   deploymentTarget:
@@ -10,19 +10,23 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
 targets:
-  sbx:
+  sbx-manager:
     type: application
     platform: macOS
     sources:
-      - Sources/sbx
+      - Sources/sbx-manager
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleName: Docker Sandboxes Manager
+        CFBundleDisplayName: Docker Sandboxes Manager
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: ""
     settings:
       base:
-        PRODUCT_NAME: sbx
-        PRODUCT_BUNDLE_IDENTIFIER: com.geofflamrock.sbx
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: sbx
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        # File name sbx-manager.app; the menu bar and Dock use CFBundleName.
+        PRODUCT_NAME: sbx-manager
+        PRODUCT_BUNDLE_IDENTIFIER: com.geofflamrock.sbx-manager
         # The app launches the sbx CLI, so it can't run inside the App Sandbox.
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO

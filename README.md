@@ -1,4 +1,4 @@
-# sbx.app
+# Docker Sandboxes Manager
 
 A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) with the `sbx` CLI.
 
@@ -25,18 +25,18 @@ Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the fi
 
 ## Getting a build
 
-Every pull request and every push to `main` builds the app in GitHub Actions and uploads it as the `sbx-app` artifact.
+Every pull request and every push to `main` builds the app in GitHub Actions and uploads `sbx-manager.dmg` as the `sbx-manager` artifact. Open the DMG and drag **sbx-manager** onto **Applications**.
 
-The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks it until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
+The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks the app until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
 
 ```bash
-gh run download --repo geofflamrock/sbx-app --name sbx-app "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')" && ditto -x -k sbx.zip . && rm sbx.zip
+gh run download --repo geofflamrock/sbx-app --name sbx-manager "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')" && open sbx-manager.dmg
 ```
 
-If you downloaded it in a browser, clear the flag instead:
+If you downloaded it in a browser, clear the flag after copying the app to Applications:
 
 ```bash
-xattr -dr com.apple.quarantine sbx.app
+xattr -dr com.apple.quarantine /Applications/sbx-manager.app
 ```
 
 ## Building locally
@@ -46,5 +46,5 @@ The Xcode project is generated from `project.yml` with [XcodeGen](https://github
 ```bash
 brew install xcodegen
 xcodegen generate
-open sbx.xcodeproj
+open sbx-manager.xcodeproj
 ```

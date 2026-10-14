@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build sbx.app
+    name: Build sbx-manager.app
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
@@ -28,20 +28,34 @@ jobs:
       - name: Build
         run: |
           xcodebuild build \
-            -project sbx.xcodeproj \
-            -scheme sbx \
+            -project sbx-manager.xcodeproj \
+            -scheme sbx-manager \
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual
 
-      # Zip with ditto so the bundle keeps its symlinks and executable bits.
-      - name: Package
-        run: ditto -c -k --keepParent build/Build/Products/Release/sbx.app sbx.zip
+      - name: Check bundle names
+        run: |
+          plist=build/Build/Products/Release/sbx-manager.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleName' -c 'Print :CFBundleDisplayName' -c 'Print :CFBundleExecutable' "$plist"
+
+      # The DMG window shows the app next to an Applications shortcut to drag it onto.
+      - name: Package DMG
+        run: |
+          mkdir dmg
+          ditto build/Build/Products/Release/sbx-manager.app dmg/sbx-manager.app
+          ln -s /Applications dmg/Applications
+          # hdiutil sometimes fails with "Resource busy" on hosted runners, so retry.
+          for attempt in 1 2 3; do
+            hdiutil create -volname "Docker Sandboxes Manager" -srcfolder dmg -format UDZO -ov sbx-manager.dmg && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sbx-app
-          path: sbx.zip
+          name: sbx-manager
+          path: sbx-manager.dmg
           if-no-files-found: error

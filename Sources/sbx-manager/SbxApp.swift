@@ -8,7 +8,7 @@ struct SbxApp: App {
     @State private var recents = RecentsStore()
 
     var body: some Scene {
-        Window("sbx", id: "main") {
+        Window("Docker Sandboxes Manager", id: "main") {
             ContentView()
                 .environment(store)
                 .environment(recents)
