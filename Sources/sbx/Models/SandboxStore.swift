@@ -68,6 +68,16 @@ final class SandboxStore {
         }
     }
 
+    func openInClaudeDesktop(_ sandbox: Sandbox) async {
+        busyNames.insert(sandbox.name)
+        do {
+            try await ClaudeDesktopLauncher.open(sandbox)
+        } catch {
+            actionError = ActionError(title: "Couldn't Open Claude Desktop", message: error.localizedDescription)
+        }
+        busyNames.remove(sandbox.name)
+    }
+
     func isBusy(_ sandbox: Sandbox) -> Bool {
         busyNames.contains(sandbox.name)
     }

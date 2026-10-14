@@ -38,19 +38,11 @@ enum SandboxState: Hashable {
 }
 
 struct Sandbox: Identifiable, Hashable {
-    struct Field: Hashable {
-        let key: String
-        let value: String
-    }
-
     var id: String { name }
     let name: String
     let status: String
     let agent: String?
     let workspaces: [String]
-    let ports: [String]
-    /// Every field `sbx ls` reported, for the details view.
-    let fields: [Field]
 
     var state: SandboxState { SandboxState(status: status) }
 
@@ -111,17 +103,11 @@ enum SandboxListParser {
         guard let name = string(value(in: record, for: ["name", "sandbox", "id"])), !name.isEmpty else {
             return nil
         }
-        let fields = record
-            .compactMap { key, value in string(value).map { Sandbox.Field(key: key, value: $0) } }
-            .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
-
         return Sandbox(
             name: name,
             status: string(value(in: record, for: ["status", "state"])) ?? "",
             agent: string(value(in: record, for: ["agent", "kit", "workload", "image", "template"])),
-            workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"])),
-            ports: list(value(in: record, for: ["ports", "publishedports", "published"])),
-            fields: fields
+            workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"]))
         )
     }
 

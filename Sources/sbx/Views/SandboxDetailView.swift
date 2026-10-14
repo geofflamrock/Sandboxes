@@ -43,27 +43,6 @@ struct SandboxDetailView: View {
                         }
                     }
                 }
-                if !sandbox.ports.isEmpty {
-                    LabeledContent("Ports") {
-                        Text(sandbox.ports.joined(separator: ", "))
-                            .textSelection(.enabled)
-                    }
-                }
-            }
-
-            if !sandbox.fields.isEmpty {
-                Section {
-                    DisclosureGroup("All Fields") {
-                        ForEach(sandbox.fields, id: \.key) { field in
-                            LabeledContent(field.key) {
-                                Text(field.value)
-                                    .font(.callout.monospaced())
-                                    .multilineTextAlignment(.trailing)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                    }
-                }
             }
         }
         .formStyle(.grouped)
@@ -74,7 +53,7 @@ struct SandboxDetailView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
-                SandboxActionButtons(sandbox: sandbox)
+                SandboxActionButtons(sandbox: sandbox, showsDivider: false)
                     .labelStyle(.iconOnly)
             }
         }

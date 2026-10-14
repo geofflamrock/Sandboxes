@@ -95,7 +95,7 @@ private struct CreateSandboxForm: View {
                     }
                 }
                 HStack {
-                    TextField("Add kit", text: $newKit, prompt: Text("ghcr.io/geofflamrock/sbx-kit"))
+                    TextField("Add kit", text: $newKit, prompt: Text("ghcr.io/example/my-kit"))
                         .font(.body.monospaced())
                         .onSubmit(addTypedKit)
                     RecentsMenu(

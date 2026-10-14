@@ -107,17 +107,25 @@ struct SandboxSidebar: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if let error = store.loadError, !store.sandboxes.isEmpty {
-                Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(8)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
-                    .padding(8)
-                    .help(error)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let error = store.loadError, !store.sandboxes.isEmpty {
+                    Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(8)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                        .help(error)
+                }
+                Button("New Sandbox", systemImage: "plus") {
+                    store.isCreatePresented = true
+                }
+                .buttonStyle(.glass)
+                .help("Create a new sandbox")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
         }
         .navigationTitle("Sandboxes")
     }
@@ -156,9 +164,11 @@ struct SandboxRow: View {
     }
 }
 
-/// Start/stop, terminal and remove actions, shared by menus and the toolbar.
+/// Start/stop, open and remove actions, shared by menus and the toolbar.
 struct SandboxActionButtons: View {
     let sandbox: Sandbox
+    /// Menus separate Remove from the other actions; the toolbar doesn't.
+    var showsDivider = true
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
@@ -176,7 +186,19 @@ struct SandboxActionButtons: View {
         Button("Open in Terminal", systemImage: "apple.terminal") {
             store.openInTerminal(sandbox)
         }
-        Divider()
+        Button {
+            Task { await store.openInClaudeDesktop(sandbox) }
+        } label: {
+            Label {
+                Text("Open in Claude Desktop")
+            } icon: {
+                ClaudeDesktopIcon()
+            }
+        }
+        .disabled(store.isBusy(sandbox))
+        if showsDivider {
+            Divider()
+        }
         Button("Remove…", systemImage: "trash", role: .destructive) {
             store.removalCandidate = sandbox
         }
