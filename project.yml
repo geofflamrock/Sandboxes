@@ -25,6 +25,9 @@ targets:
       properties:
         CFBundleName: Sandboxes
         CFBundleDisplayName: Sandboxes
+        # XcodeGen otherwise writes fixed defaults (1.0 and 1).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: ""
         SandboxesBuildLabel: $(SANDBOXES_BUILD_LABEL)
