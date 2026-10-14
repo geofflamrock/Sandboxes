@@ -1,4 +1,4 @@
-name: sbx-manager
+name: Sandboxes
 options:
   bundleIdPrefix: com.geofflamrock
   deploymentTarget:
@@ -6,27 +6,32 @@ options:
   createIntermediateGroups: true
 settings:
   base:
+    # CI overrides these: releases take the version from the tag, and every CI
+    # build uses the workflow run number as the build number.
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    # Shown next to the version for non-release builds, e.g. "PR #12". CI sets
+    # it to an empty string for releases.
+    SANDBOXES_BUILD_LABEL: Local
     SWIFT_VERSION: "5.0"
 targets:
-  sbx-manager:
+  Sandboxes:
     type: application
     platform: macOS
     sources:
-      - Sources/sbx-manager
+      - Sources/Sandboxes
     info:
       path: Support/Info.plist
       properties:
-        CFBundleName: Docker Sandboxes Manager
-        CFBundleDisplayName: Docker Sandboxes Manager
+        CFBundleName: Sandboxes
+        CFBundleDisplayName: Sandboxes
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: ""
+        SandboxesBuildLabel: $(SANDBOXES_BUILD_LABEL)
     settings:
       base:
-        # File name sbx-manager.app; the menu bar and Dock use CFBundleName.
-        PRODUCT_NAME: sbx-manager
-        PRODUCT_BUNDLE_IDENTIFIER: com.geofflamrock.sbx-manager
+        PRODUCT_NAME: Sandboxes
+        PRODUCT_BUNDLE_IDENTIFIER: com.geofflamrock.sandboxes
         # The app launches the sbx CLI, so it can't run inside the App Sandbox.
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO

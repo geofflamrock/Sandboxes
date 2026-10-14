@@ -100,16 +100,29 @@ struct SandboxSidebar: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if let error = store.loadError, !store.sandboxes.isEmpty {
-                Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(8)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
-                    .padding(8)
-                    .help(error)
+            VStack(alignment: .leading, spacing: 8) {
+                if let error = store.loadError, !store.sandboxes.isEmpty {
+                    Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(8)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                        .help(error)
+                }
+                // Make it obvious when this isn't a release build.
+                if let label = AppInfo.buildLabel {
+                    Label(label, systemImage: "hammer.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular, in: .capsule)
+                        .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
         }
         .navigationTitle("Sandboxes")
         .toolbar {

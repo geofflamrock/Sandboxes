@@ -1,4 +1,4 @@
-# Docker Sandboxes Manager
+# Sandboxes
 
 A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) with the `sbx` CLI.
 
@@ -25,18 +25,28 @@ Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the fi
 
 ## Getting a build
 
-Every pull request and every push to `main` builds the app in GitHub Actions and uploads `sbx-manager.dmg` as the `sbx-manager` artifact. Open the DMG and drag **sbx-manager** onto **Applications**.
+**Releases.** Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`).
 
-The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks the app until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
+**Test builds.** Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Pull request builds are named `Sandboxes-<version>-pr<number>.dmg`, and the app shows a "PR #<number>" badge at the bottom of the sidebar so you can tell you're not on a release.
+
+Open the DMG and drag **Sandboxes** onto **Applications**. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch.
+
+The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks the app until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely. For the latest release:
 
 ```bash
-gh run download --repo geofflamrock/sbx-app --name sbx-manager "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')" && open sbx-manager.dmg
+gh release download --repo geofflamrock/sbx-app --pattern '*.dmg'
+```
+
+For the latest test build:
+
+```bash
+gh run download --repo geofflamrock/sbx-app --name Sandboxes "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
 If you downloaded it in a browser, clear the flag after copying the app to Applications:
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/sbx-manager.app
+xattr -dr com.apple.quarantine /Applications/Sandboxes.app
 ```
 
 ## Building locally
@@ -46,5 +56,7 @@ The Xcode project is generated from `project.yml` with [XcodeGen](https://github
 ```bash
 brew install xcodegen
 xcodegen generate
-open sbx-manager.xcodeproj
+open Sandboxes.xcodeproj
 ```
+
+Local builds show a "Local" badge. The version lives in `project.yml` (`MARKETING_VERSION`).
