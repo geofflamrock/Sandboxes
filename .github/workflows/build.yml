@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sbx.app
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project sbx.xcodeproj \
+            -scheme sbx \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual
+
+      # Zip with ditto so the bundle keeps its symlinks and executable bits.
+      - name: Package
+        run: ditto -c -k --keepParent build/Build/Products/Release/sbx.app sbx.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbx-app
+          path: sbx.zip
+          if-no-files-found: error
