@@ -17,9 +17,10 @@ struct SandboxesApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Sandboxes") {
-                    // The standard panel shows "Version <version> (<applicationVersion>)".
+                    // The standard panel shows "Version <applicationVersion> (<version>)".
                     NSApplication.shared.orderFrontStandardAboutPanel(options: [
-                        .applicationVersion: AppInfo.aboutPanelBuild,
+                        .applicationVersion: AppInfo.version,
+                        .version: AppInfo.aboutPanelBuild,
                     ])
                 }
             }

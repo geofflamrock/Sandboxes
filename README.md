@@ -25,7 +25,7 @@ Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the fi
 
 ## Getting a build
 
-**Releases.** Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`).
+**Releases.** Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar.
 
 **Test builds.** Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Pull request builds are named `Sandboxes-<version>-pr<number>.dmg`, and the app shows a "PR #<number>" badge at the bottom of the sidebar so you can tell you're not on a release.
 
