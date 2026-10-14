@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Generates the app icon: Design/AppIcon.svg and the AppIcon asset catalog PNGs.
 
-The icon is a container (an isometric cube) sitting in a sandbox. Everything is
+The icon is a container (an isometric cube, taped shut like a box) sitting in
+a sandbox. Everything is
 drawn on Apple's 1024pt macOS icon grid: an 824pt rounded square centred on the
 canvas with a soft shadow beneath it.
 
@@ -29,6 +30,7 @@ RIPPLE = "#E2C894"
 CUBE_TOP = "#5AB0F0"
 CUBE_LEFT = "#1D63ED"
 CUBE_RIGHT = "#0B4BC4"
+TAPE = "#9DD2F8"
 
 # Cube faces on a 120-unit design grid, scaled up to the icon body.
 CUBE_SCALE = 1.15
@@ -37,7 +39,11 @@ FACES = [
     (CUBE_TOP, [(60, 22), (90, 38), (60, 54), (30, 38)]),
     (CUBE_LEFT, [(30, 38), (60, 54), (60, 88), (30, 72)]),
     (CUBE_RIGHT, [(60, 54), (90, 38), (90, 72), (60, 88)]),
+    # Tape across the lid, where the two flaps meet.
+    (TAPE, [(41.4, 31.9), (48.6, 28.1), (78.6, 44.1), (71.4, 47.9)]),
 ]
+SEAM = [(45, 30), (75, 46)]
+SEAM_WIDTH = 1
 # Sand ripples: (start x, end x, baseline y) on the same grid.
 RIPPLES = [(12, 110, 101), (12, 110, 111), (12, 48, 18)]
 RIPPLE_WIDTH = 2
@@ -75,6 +81,11 @@ def write_svg():
         f'    <polygon points="{pts(cube_point(*p) for p in points)}" fill="{colour}"/>'
         for colour, points in FACES
     )
+    (x0, y0), (x1, y1) = (cube_point(*p) for p in SEAM)
+    seam = (
+        f'    <line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{CUBE_TOP}" '
+        f'stroke-width="{SEAM_WIDTH * unit * CUBE_SCALE:.1f}"/>'
+    )
     SVG_PATH.parent.mkdir(parents=True, exist_ok=True)
     SVG_PATH.write_text(
         f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS} {CANVAS}">
@@ -90,6 +101,7 @@ def write_svg():
   </g>
   <g id="cube">
 {faces}
+{seam}
   </g>
 </svg>
 """
@@ -116,6 +128,8 @@ def render(size):
         draw.line(s(ripple_points(*r)), fill=RIPPLE, width=width, joint="curve")
     for colour, points in FACES:
         draw.polygon(s(cube_point(*p) for p in points), fill=colour)
+    seam_width = max(1, round(SEAM_WIDTH * BODY / 120 * CUBE_SCALE * scale))
+    draw.line(s(cube_point(*p) for p in SEAM), fill=CUBE_TOP, width=seam_width)
 
     icon = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     shadow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
