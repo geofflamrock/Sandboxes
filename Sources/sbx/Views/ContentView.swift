@@ -16,14 +16,6 @@ struct ContentView: View {
                 ContentUnavailableView("No Sandbox Selected", systemImage: "shippingbox")
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("New Sandbox", systemImage: "plus") {
-                    store.isCreatePresented = true
-                }
-                .help("Create a new sandbox")
-            }
-        }
         .sheet(isPresented: $store.isCreatePresented) {
             CreateSandboxView()
         }
@@ -107,27 +99,29 @@ struct SandboxSidebar: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                if let error = store.loadError, !store.sandboxes.isEmpty {
-                    Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(8)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 10))
-                        .help(error)
-                }
+        .safeAreaInset(edge: .bottom) {
+            if let error = store.loadError, !store.sandboxes.isEmpty {
+                Label("Couldn't refresh: \(error)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(8)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                    .padding(8)
+                    .help(error)
+            }
+        }
+        .navigationTitle("Sandboxes")
+        .toolbar {
+            // Declared on the sidebar so it sits above the sidebar, leaving the
+            // window's trailing toolbar for actions on the selected sandbox.
+            ToolbarItem {
                 Button("New Sandbox", systemImage: "plus") {
                     store.isCreatePresented = true
                 }
-                .buttonStyle(.glass)
                 .help("Create a new sandbox")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
         }
-        .navigationTitle("Sandboxes")
     }
 }
 

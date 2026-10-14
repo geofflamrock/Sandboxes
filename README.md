@@ -25,9 +25,15 @@ Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the fi
 
 ## Getting a build
 
-Every push builds the app in GitHub Actions. Download the `sbx-app` artifact from the workflow run and unzip it twice (the artifact is a zip that contains `sbx.zip`).
+Every push builds the app in GitHub Actions and uploads it as the `sbx-app` artifact.
 
-The build is ad-hoc signed and not notarized, so clear the quarantine flag before opening it:
+The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks it until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
+
+```bash
+gh run download --repo geofflamrock/sbx-app --name sbx-app && ditto -x -k sbx.zip . && rm sbx.zip
+```
+
+If you downloaded it in a browser, clear the flag instead:
 
 ```bash
 xattr -dr com.apple.quarantine sbx.app
