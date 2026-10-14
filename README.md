@@ -25,7 +25,7 @@ Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the fi
 
 ## Getting a build
 
-Every push builds the app in GitHub Actions and uploads it as the `sbx-app` artifact.
+Every pull request and every push to `main` builds the app in GitHub Actions and uploads it as the `sbx-app` artifact.
 
 The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks it until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely:
 
