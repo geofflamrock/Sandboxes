@@ -59,15 +59,17 @@ enum ClaudeDesktopLauncher {
 
 /// Claude Desktop's own app icon, falling back to a symbol if it isn't installed.
 struct ClaudeDesktopIcon: View {
-    private static let icon: NSImage? = ClaudeDesktopLauncher.applicationURL
-        .map { NSWorkspace.shared.icon(forFile: $0.path) }
+    /// Menus draw an image at its own point size and ignore SwiftUI frames, so
+    /// size the image itself to match the menu's SF Symbols.
+    private static let icon: NSImage? = ClaudeDesktopLauncher.applicationURL.map { url in
+        let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+        icon.size = NSSize(width: 16, height: 16)
+        return icon
+    }
 
     var body: some View {
         if let icon = Self.icon {
             Image(nsImage: icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 16, height: 16)
         } else {
             Image(systemName: "sparkle")
         }
