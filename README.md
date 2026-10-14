@@ -1,1 +1,62 @@
-# sbx-app
+# Sandboxes
+
+A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) with the `sbx` CLI.
+
+- Lists sandboxes and their state, refreshing every few seconds.
+- Starts, stops and removes sandboxes, and opens them in Terminal (double-click a sandbox to attach) or Claude Desktop.
+- Creates sandboxes from a v3 workload kit (e.g. `docker/sbx-kit-claude`), with extra mixin kits, a workspace folder (optional), Direct or Clone mode and an optional name. The output of `sbx create` streams into the sheet.
+- Remembers workload and kit images you've used.
+
+Requires macOS 26 or later and the `sbx` CLI. The app looks for `sbx` on your login shell's `PATH`; you can set its location in **Settings**.
+
+## Commands it runs
+
+| Action | Command |
+| --- | --- |
+| List | `sbx ls --json` |
+| Create | `sbx create [--name NAME] [--clone] [--kit KIT]... WORKLOAD [PATH]` |
+| Start | `sbx run --detach --name NAME` |
+| Stop | `sbx stop NAME` |
+| Remove | `sbx rm --force NAME` (after confirming in the app) |
+| Open in Terminal | `sbx run --name NAME` |
+| Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |
+
+Claude Desktop (v2.110.0 or later) asks you to confirm the SSH connection the first time you open a sandbox in it. Use a sandbox created with a Claude workload so it has Anthropic credentials and network access.
+
+## Getting a build
+
+**Releases.** Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`).
+
+**Test builds.** Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Pull request builds are named `Sandboxes-<version>-pr<number>.dmg`, and the app shows a "PR #<number>" badge at the bottom of the sidebar so you can tell you're not on a release.
+
+Open the DMG and drag **Sandboxes** onto **Applications**. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch.
+
+The build is ad-hoc signed and not notarized. A browser download is quarantined, so macOS blocks the app until you allow it in System Settings. Downloading with the GitHub CLI avoids the quarantine flag entirely. For the latest release:
+
+```bash
+gh release download --repo geofflamrock/sbx-app --pattern '*.dmg'
+```
+
+For the latest test build:
+
+```bash
+gh run download --repo geofflamrock/sbx-app --name Sandboxes "$(gh run list --repo geofflamrock/sbx-app --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+If you downloaded it in a browser, clear the flag after copying the app to Applications:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Sandboxes.app
+```
+
+## Building locally
+
+The Xcode project is generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
+
+```bash
+brew install xcodegen
+xcodegen generate
+open Sandboxes.xcodeproj
+```
+
+Local builds show a "Local" badge. The version lives in `project.yml` (`MARKETING_VERSION`).

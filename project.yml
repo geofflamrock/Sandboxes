@@ -1,0 +1,44 @@
+name: Sandboxes
+options:
+  bundleIdPrefix: com.geofflamrock
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    # CI overrides these: releases take the version from the tag, and every CI
+    # build uses the workflow run number as the build number.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Shown next to the version for non-release builds, e.g. "PR #12". CI sets
+    # it to an empty string for releases.
+    SANDBOXES_BUILD_LABEL: Local
+    SWIFT_VERSION: "5.0"
+targets:
+  Sandboxes:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Sandboxes
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleName: Sandboxes
+        CFBundleDisplayName: Sandboxes
+        # XcodeGen otherwise writes fixed defaults (1.0 and 1).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: ""
+        SandboxesBuildLabel: $(SANDBOXES_BUILD_LABEL)
+    settings:
+      base:
+        PRODUCT_NAME: Sandboxes
+        PRODUCT_BUNDLE_IDENTIFIER: com.geofflamrock.sandboxes
+        # The app launches the sbx CLI, so it can't run inside the App Sandbox.
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+    scheme: {}

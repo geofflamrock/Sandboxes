@@ -1,0 +1,136 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Sandboxes.app
+    runs-on: macos-26
+    outputs:
+      dmg: ${{ steps.package.outputs.dmg }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Releases take their version from the tag (v1.2.3 or 1.2.3) and have no
+      # build label. Other builds keep the version in project.yml and are
+      # labelled, e.g. "PR #12", so they're easy to tell apart in the app.
+      - name: Work out version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$EVENT" in
+            release)
+              version="${TAG#v}"
+              if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::error::Release tag '$TAG' must look like v1.2.3 or 1.2.3"
+                exit 1
+              fi
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "label=" >> "$GITHUB_OUTPUT"
+              echo "suffix=" >> "$GITHUB_OUTPUT"
+              ;;
+            pull_request)
+              echo "label=PR #$PR_NUMBER" >> "$GITHUB_OUTPUT"
+              echo "suffix=-pr$PR_NUMBER" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "label=$REF_NAME" >> "$GITHUB_OUTPUT"
+              echo "suffix=-build$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          LABEL: ${{ steps.version.outputs.label }}
+        run: |
+          settings=(
+            "CURRENT_PROJECT_VERSION=$GITHUB_RUN_NUMBER"
+            "SANDBOXES_BUILD_LABEL=$LABEL"
+            "CODE_SIGN_IDENTITY=-"
+            "CODE_SIGN_STYLE=Manual"
+          )
+          if [ -n "$VERSION" ]; then
+            settings+=("MARKETING_VERSION=$VERSION")
+          fi
+          xcodebuild build \
+            -project Sandboxes.xcodeproj \
+            -scheme Sandboxes \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            "${settings[@]}"
+
+      - name: Show bundle details
+        run: |
+          plist=build/Build/Products/Release/Sandboxes.app/Contents/Info.plist
+          for key in CFBundleName CFBundleExecutable CFBundleShortVersionString CFBundleVersion SandboxesBuildLabel; do
+            echo "$key: $(/usr/libexec/PlistBuddy -c "Print :$key" "$plist")"
+          done
+
+      # The DMG window shows the app next to an Applications shortcut to drag it onto.
+      - name: Package DMG
+        id: package
+        env:
+          SUFFIX: ${{ steps.version.outputs.suffix }}
+        run: |
+          app=build/Build/Products/Release/Sandboxes.app
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
+          dmg="Sandboxes-$version$SUFFIX.dmg"
+          mkdir dmg
+          ditto "$app" dmg/Sandboxes.app
+          ln -s /Applications dmg/Applications
+          # hdiutil sometimes fails with "Resource busy" on hosted runners, so retry.
+          for attempt in 1 2 3; do
+            hdiutil create -volname Sandboxes -srcfolder dmg -format UDZO -ov "$dmg" && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sandboxes
+          path: ${{ steps.package.outputs.dmg }}
+          if-no-files-found: error
+
+  release:
+    name: Attach DMG to release
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sandboxes
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          DMG: ${{ needs.build.outputs.dmg }}
+        run: gh release upload "$TAG" "$DMG" --clobber --repo "$GITHUB_REPOSITORY"
