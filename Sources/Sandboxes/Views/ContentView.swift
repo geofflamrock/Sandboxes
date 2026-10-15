@@ -110,16 +110,22 @@ struct SandboxSidebar: View {
                         .glassEffect(.regular, in: .rect(cornerRadius: 10))
                         .help(error)
                 }
-                // Make it obvious when this isn't a release build.
-                if let label = AppInfo.buildLabel {
-                    Label(label, systemImage: "hammer.fill")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .glassEffect(.regular, in: .capsule)
-                        .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
+                // Releases show their version; other builds show what they are
+                // built from, so it's obvious when this isn't a release.
+                Group {
+                    if let label = AppInfo.buildLabel {
+                        Label(label, systemImage: "hammer.fill")
+                            .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
+                    } else {
+                        Label("v\(AppInfo.version)", systemImage: "tag.fill")
+                            .help("Version \(AppInfo.version), build \(AppInfo.build)")
+                    }
                 }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .glassEffect(.regular, in: .capsule)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
