@@ -11,26 +11,19 @@ struct SandboxDetailView: View {
     var body: some View {
         Form {
             Section {
-                HStack(spacing: 14) {
-                    AgentIcon(agent: sandbox.knownAgent, size: 28, filled: true)
-                        .foregroundStyle(sandbox.knownAgent?.color ?? Color.accentColor)
-                        .frame(width: 56, height: 56)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(sandbox.name)
-                            .font(.title2.bold())
-                            .textSelection(.enabled)
-                        StatusBadge(sandbox: sandbox)
+                LabeledContent("Status") {
+                    HStack(spacing: 6) {
+                        StatusDot(color: sandbox.state.color)
+                        Text(sandbox.statusLabel)
                     }
-                    Spacer()
                 }
-                .padding(.vertical, 4)
-            }
-
-            Section {
                 if let agent = sandbox.agent {
                     LabeledContent("Agent") {
-                        Text(agent).textSelection(.enabled)
+                        HStack(spacing: 6) {
+                            AgentIcon(agent: sandbox.knownAgent, size: 14)
+                                .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
+                            Text(agent).textSelection(.enabled)
+                        }
                     }
                 }
                 if let createdAt = sandbox.createdAt {
@@ -171,12 +164,7 @@ struct SandboxDetailView: View {
     @ViewBuilder
     private var networkPolicy: some View {
         if let network {
-            HStack(spacing: 6) {
-                DecisionLabel(decision: network.defaultDecision, style: .policy)
-                if let preset = network.presetLabel {
-                    Text("(\(preset))").foregroundStyle(.secondary)
-                }
-            }
+            DecisionLabel(decision: network.defaultDecision, style: .policy, detail: network.presetLabel)
         } else if networkError != nil {
             Text("Unknown")
         }
@@ -508,13 +496,13 @@ private struct DecisionLabel: View {
 
     let decision: NetworkDecision
     let style: Style
+    /// Shown in parentheses after the decision, e.g. "Allow (Balanced)".
+    var detail: String?
 
     var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: decision == .allow ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                .foregroundStyle(decision == .allow ? .green : .red)
+        HStack(spacing: 6) {
+            StatusDot(color: decision == .allow ? .green : .red)
+            Text(detail.map { "\(text) (\($0))" } ?? text)
         }
     }
 
@@ -528,19 +516,13 @@ private struct DecisionLabel: View {
     }
 }
 
-struct StatusBadge: View {
-    let sandbox: Sandbox
+/// A small coloured circle for a sandbox state or network decision.
+struct StatusDot: View {
+    let color: Color
 
     var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(sandbox.state.color)
-                .frame(width: 7, height: 7)
-            Text(sandbox.statusLabel)
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .glassEffect(.regular.tint(sandbox.state.color.opacity(0.25)), in: .capsule)
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
     }
 }
