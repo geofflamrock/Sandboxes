@@ -48,7 +48,9 @@ private struct HomeHeader: View {
                 .scaledToFit()
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            // No extra spacing: the large title's line already leaves room for
+            // descenders, which "Sandboxes" doesn't have.
+            VStack(alignment: .leading, spacing: 0) {
                 Text(store.hasLoaded && store.sandboxes.isEmpty && store.loadError == nil ? "No sandboxes yet" : "Sandboxes")
                     .font(.largeTitle.bold())
                 summary
