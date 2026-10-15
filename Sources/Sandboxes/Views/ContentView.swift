@@ -64,7 +64,11 @@ struct SandboxSidebar: View {
 
         List(selection: $store.selection) {
             ForEach(store.sandboxes) { sandbox in
-                SandboxRow(sandbox: sandbox, isBusy: store.isBusy(sandbox))
+                SandboxRow(
+                    sandbox: sandbox,
+                    isBusy: store.isBusy(sandbox),
+                    pendingApprovals: store.approvals(for: sandbox).count
+                )
             }
         }
         .contextMenu(forSelectionType: Sandbox.ID.self) { ids in
@@ -152,6 +156,7 @@ struct SandboxSidebar: View {
 struct SandboxRow: View {
     let sandbox: Sandbox
     let isBusy: Bool
+    var pendingApprovals = 0
 
     var body: some View {
         HStack(spacing: 8) {
@@ -168,6 +173,11 @@ struct SandboxRow: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 4)
+            if pendingApprovals > 0 {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundStyle(.orange)
+                    .help(pendingApprovals == 1 ? "1 network request waiting for approval" : "\(pendingApprovals) network requests waiting for approval")
+            }
             if isBusy {
                 ProgressView()
                     .controlSize(.small)
