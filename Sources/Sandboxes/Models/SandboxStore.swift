@@ -71,7 +71,7 @@ final class SandboxStore {
     func refreshPeriodically() async {
         while !Task.isCancelled {
             await refresh()
-            try? await Task.sleep(for: .seconds(isWindowOpen ? 5 : 10))
+            try? await Task.sleep(for: .seconds(isWindowOpen ? 5 : 15))
         }
     }
 

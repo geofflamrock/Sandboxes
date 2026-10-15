@@ -51,6 +51,34 @@ struct SandboxDetailView: View {
 
     private var form: some View {
         Form {
+            let approvals = store.approvals(for: sandbox)
+            if !approvals.isEmpty {
+                Section {
+                    ForEach(approvals) { approval in
+                        NetworkApprovalRow(approval: approval) { action in
+                            switch action {
+                            case let .approve(option):
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
+                            case .deny:
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
+                            case let .dismiss(option):
+                                Task { await store.respond(to: approval, with: option) }
+                            }
+                        }
+                        .disabled(store.isResponding(to: approval))
+                    }
+                } header: {
+                    SectionHeader(
+                        title: "Pending Approvals (\(approvals.count.formatted()))",
+                        isLoading: approvals.contains { store.isResponding(to: $0) }
+                    )
+                } footer: {
+                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
+                        .foregroundStyle(.secondary)
+                }
+                .id(DetailAnchor.approvals)
+            }
+
             Section {
                 LabeledContent("Status") {
                     HStack(spacing: 6) {
@@ -91,34 +119,6 @@ struct SandboxDetailView: View {
 
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
-
-            let approvals = store.approvals(for: sandbox)
-            if !approvals.isEmpty {
-                Section {
-                    ForEach(approvals) { approval in
-                        NetworkApprovalRow(approval: approval) { action in
-                            switch action {
-                            case let .approve(option):
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
-                            case .deny:
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
-                            case let .dismiss(option):
-                                Task { await store.respond(to: approval, with: option) }
-                            }
-                        }
-                        .disabled(store.isResponding(to: approval))
-                    }
-                } header: {
-                    SectionHeader(
-                        title: "Pending Approvals (\(approvals.count.formatted()))",
-                        isLoading: approvals.contains { store.isResponding(to: $0) }
-                    )
-                } footer: {
-                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
-                        .foregroundStyle(.secondary)
-                }
-                .id(DetailAnchor.approvals)
-            }
 
             Section {
                 if network == nil {
