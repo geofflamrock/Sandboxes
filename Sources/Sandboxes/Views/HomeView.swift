@@ -298,11 +298,13 @@ private struct QuickCreateCard: View {
                     Text(title)
                         .font(.headline)
                         .lineLimit(1)
-                    Text(subtitle)
-                        .font(workload == nil ? Font.caption : Font.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    if let workload {
+                        Text(workload)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -335,10 +337,6 @@ private struct QuickCreateCard: View {
     private var title: String {
         guard let workload else { return "New Sandbox" }
         return agent?.displayName ?? Self.shortName(workload)
-    }
-
-    private var subtitle: String {
-        workload ?? "Choose an agent, kits and workspace"
     }
 
     /// The image's repository name without registry, namespace or tag, e.g.
