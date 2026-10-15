@@ -5,6 +5,7 @@ struct SandboxDetailView: View {
     @Environment(SandboxStore.self) private var store
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
+    @State private var isLoadingNetwork = false
     @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
@@ -26,7 +27,7 @@ struct SandboxDetailView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("Details") {
+            Section {
                 if let agent = sandbox.agent {
                     LabeledContent("Agent") {
                         Text(agent).textSelection(.enabled)
@@ -49,6 +50,9 @@ struct SandboxDetailView: View {
                 LabeledContent("Network Policy") {
                     networkPolicy
                 }
+            } header: {
+                // The network policy is read along with the rules and traffic.
+                SectionHeader(title: "Details", isLoading: isLoadingNetwork)
             }
 
             SandboxResourcesSection(sandbox: sandbox)
@@ -68,17 +72,21 @@ struct SandboxDetailView: View {
                                 Task { await store.respond(to: approval, with: option) }
                             }
                         }
+                        .disabled(store.isResponding(to: approval))
                     }
                 } header: {
-                    Text("Pending Approvals (\(approvals.count.formatted()))")
+                    SectionHeader(
+                        title: "Pending Approvals (\(approvals.count.formatted()))",
+                        isLoading: approvals.contains { store.isResponding(to: $0) }
+                    )
                 } footer: {
                     Text("This sandbox tried to reach these destinations and was blocked until you respond.")
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if let network {
-                Section {
+            Section {
+                if let network {
                     if network.rules.isEmpty {
                         Text("No rules apply to this sandbox.")
                             .foregroundStyle(.secondary)
@@ -86,16 +94,21 @@ struct SandboxDetailView: View {
                     ForEach(network.rules) { rule in
                         NetworkRuleRow(rule: rule)
                     }
-                } header: {
-                    Text("Network Rules (\(network.rules.count.formatted()))")
-                } footer: {
-                    if network.defaultDecision == .deny {
-                        Text("Requests that no rule allows are blocked, or wait for your approval.")
-                            .foregroundStyle(.secondary)
-                    }
                 }
+            } header: {
+                SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingNetwork)
+            } footer: {
+                if let networkError {
+                    Text("Couldn't read the network policy: \(networkError)")
+                        .foregroundStyle(.secondary)
+                } else if network?.defaultDecision == .deny {
+                    Text("Requests that no rule allows are blocked, or wait for your approval.")
+                        .foregroundStyle(.secondary)
+                }
+            }
 
-                Section("Network Traffic (\(network.log.count.formatted()))") {
+            Section {
+                if let network {
                     if network.log.isEmpty {
                         Text("No requests yet.")
                             .foregroundStyle(.secondary)
@@ -104,6 +117,8 @@ struct SandboxDetailView: View {
                         NetworkLogRow(entry: entry)
                     }
                 }
+            } header: {
+                SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingNetwork)
             }
         }
         .formStyle(.grouped)
@@ -156,11 +171,8 @@ struct SandboxDetailView: View {
                     Text("(\(preset))").foregroundStyle(.secondary)
                 }
             }
-        } else if let networkError {
+        } else if networkError != nil {
             Text("Unknown")
-                .help("Couldn't read the network policy: \(networkError)")
-        } else {
-            ProgressView().controlSize(.small)
         }
     }
 
@@ -169,7 +181,9 @@ struct SandboxDetailView: View {
     private func refreshNetwork() async {
         network = nil
         networkError = nil
+        isLoadingNetwork = false
         while !Task.isCancelled {
+            isLoadingNetwork = true
             do {
                 let latest = try await SandboxNetwork.fetch(for: sandbox)
                 guard !Task.isCancelled else { return }
@@ -181,6 +195,7 @@ struct SandboxDetailView: View {
                 guard !Task.isCancelled else { return }
                 networkError = error.localizedDescription
             }
+            isLoadingNetwork = false
             try? await Task.sleep(for: .seconds(5))
         }
     }
@@ -205,6 +220,7 @@ private struct SandboxResourcesSection: View {
     let sandbox: Sandbox
     @State private var usage: SandboxUsage?
     @State private var usageError: String?
+    @State private var isLoadingUsage = false
 
     private var isRunning: Bool { sandbox.state == .running }
 
@@ -225,7 +241,7 @@ private struct SandboxResourcesSection: View {
                 }
             }
         } header: {
-            Text("Resources")
+            SectionHeader(title: "Resources", isLoading: isLoadingUsage)
         } footer: {
             if let usageError {
                 Text("Couldn't read resource usage: \(usageError)")
@@ -239,9 +255,11 @@ private struct SandboxResourcesSection: View {
             guard isRunning else {
                 usage = nil
                 usageError = nil
+                isLoadingUsage = false
                 return
             }
             while !Task.isCancelled {
+                isLoadingUsage = true
                 do {
                     let sample = try await SandboxUsage.fetch(for: sandbox)
                     guard !Task.isCancelled else { return }
@@ -252,6 +270,7 @@ private struct SandboxResourcesSection: View {
                     guard !Task.isCancelled else { return }
                     usageError = error.localizedDescription
                 }
+                isLoadingUsage = false
                 try? await Task.sleep(for: .seconds(4))
             }
         }
@@ -276,15 +295,35 @@ private struct SandboxResourcesSection: View {
         }
     }
 
-    /// Shows a spinner until the first sample arrives.
+    /// Empty until the first sample arrives; the header shows a spinner.
     @ViewBuilder
     private func value(_ text: String?) -> some View {
         if let text {
             Text(text).textSelection(.enabled)
         } else if usageError != nil {
             Text("Unknown")
-        } else {
-            ProgressView().controlSize(.small)
+        }
+    }
+}
+
+/// A section title, with an optional count in brackets, and a spinner while
+/// the section's data is loading or an action is running.
+private struct SectionHeader: View {
+    let title: String
+    var count: Int?
+    let isLoading: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let count {
+                Text("\(title) (\(count.formatted()))")
+            } else {
+                Text(title)
+            }
+            if isLoading {
+                ProgressView()
+                    .controlSize(.mini)
+            }
         }
     }
 }

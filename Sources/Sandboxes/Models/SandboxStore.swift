@@ -16,6 +16,8 @@ final class SandboxStore {
     private(set) var busyNames: Set<String> = []
     /// Pending network approvals for every sandbox.
     private(set) var approvals: [NetworkApproval] = []
+    /// Approvals with a response or deny in flight.
+    private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
     var selection: Sandbox.ID?
     var isCreatePresented = false
     var removalCandidate: Sandbox?
@@ -84,13 +86,18 @@ final class SandboxStore {
         approvals.filter { $0.sandbox == sandbox.name }
     }
 
+    func isResponding(to approval: NetworkApproval) -> Bool {
+        respondingApprovalIDs.contains(approval.id)
+    }
+
     func respond(to approval: NetworkApproval, with option: NetworkApproval.Option) async {
+        respondingApprovalIDs.insert(approval.id)
         do {
             try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: approval, option: option))
         } catch {
             actionError = ActionError(title: "Couldn't Respond to the Request for “\(approval.title)”", message: error.localizedDescription)
         }
-        await refresh()
+        await finishResponding(to: [approval])
     }
 
     /// Adds a deny rule for the destination, for `sandbox` or for every sandbox
@@ -98,13 +105,14 @@ final class SandboxStore {
     /// pending. Denying for every sandbox also dismisses other sandboxes'
     /// requests for the same host.
     func deny(_ approval: NetworkApproval, in sandbox: Sandbox?) async {
+        var dismissed = [approval]
+        if sandbox == nil {
+            let host = approval.target.host.lowercased()
+            dismissed += approvals.filter { $0.id != approval.id && $0.target.host.lowercased() == host }
+        }
+        respondingApprovalIDs.formUnion(dismissed.map(\.id))
         do {
             try await SbxCLI.runChecked(NetworkApproval.denyArguments(approval: approval, sandbox: sandbox?.name))
-            var dismissed = [approval]
-            if sandbox == nil {
-                let host = approval.target.host.lowercased()
-                dismissed += approvals.filter { $0.id != approval.id && $0.target.host.lowercased() == host }
-            }
             for pending in dismissed {
                 if let dismiss = pending.dismissOption {
                     try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: pending, option: dismiss))
@@ -113,6 +121,16 @@ final class SandboxStore {
         } catch {
             actionError = ActionError(title: "Couldn't Deny Access to “\(approval.title)”", message: error.localizedDescription)
         }
+        await finishResponding(to: dismissed)
+    }
+
+    /// Reloads the pending approvals before clearing the spinner, so a request
+    /// that was answered doesn't flash back, then refreshes everything else.
+    private func finishResponding(to answered: [NetworkApproval]) async {
+        if let latest = try? await NetworkApproval.fetch() {
+            approvals = latest
+        }
+        respondingApprovalIDs.subtract(answered.map(\.id))
         await refresh()
     }
 
