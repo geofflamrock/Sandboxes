@@ -11,23 +11,6 @@ struct SandboxDetailView: View {
     var body: some View {
         Form {
             Section {
-                HStack(spacing: 14) {
-                    AgentIcon(agent: sandbox.knownAgent, size: 28, filled: true)
-                        .foregroundStyle(sandbox.knownAgent?.color ?? Color.accentColor)
-                        .frame(width: 56, height: 56)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(sandbox.name)
-                            .font(.title2.bold())
-                            .textSelection(.enabled)
-                        StatusBadge(sandbox: sandbox)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-            }
-
-            Section {
                 if let agent = sandbox.agent {
                     LabeledContent("Agent") {
                         Text(agent).textSelection(.enabled)
@@ -156,6 +139,7 @@ struct SandboxDetailView: View {
             Text(response.message)
         }
         .navigationTitle(sandbox.name)
+        .navigationSubtitle(sandbox.statusLabel)
         .toolbar {
             ToolbarItemGroup {
                 if store.isBusy(sandbox) {
@@ -525,22 +509,5 @@ private struct DecisionLabel: View {
         case (.allow, _): "Allow"
         case (.deny, _): "Deny"
         }
-    }
-}
-
-struct StatusBadge: View {
-    let sandbox: Sandbox
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(sandbox.state.color)
-                .frame(width: 7, height: 7)
-            Text(sandbox.statusLabel)
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .glassEffect(.regular.tint(sandbox.state.color.opacity(0.25)), in: .capsule)
     }
 }
