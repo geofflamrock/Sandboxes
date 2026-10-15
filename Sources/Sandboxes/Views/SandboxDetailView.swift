@@ -8,9 +8,8 @@ struct SandboxDetailView: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    Image(systemName: "shippingbox.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.tint)
+                    AgentIcon(agent: sandbox.knownAgent, size: 28, filled: true)
+                        .foregroundStyle(sandbox.knownAgent?.color ?? Color.accentColor)
                         .frame(width: 56, height: 56)
                         .glassEffect(.regular, in: .rect(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 6) {

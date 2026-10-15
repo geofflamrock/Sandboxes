@@ -150,8 +150,8 @@ struct SandboxRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "shippingbox")
-                .foregroundStyle(.secondary)
+            AgentIcon(agent: sandbox.knownAgent)
+                .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(sandbox.name)
                     .fontWeight(.medium)
