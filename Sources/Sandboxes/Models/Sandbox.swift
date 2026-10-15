@@ -43,6 +43,13 @@ struct Sandbox: Identifiable, Hashable {
     let status: String
     let agent: String?
     let workspaces: [String]
+    let createdAt: Date?
+    /// Published ports, formatted for display, e.g. `127.0.0.1:54321 → 8080/tcp`.
+    let ports: [String]
+    /// The CPU limit recorded for the sandbox, if `sbx ls` reports one.
+    let cpus: Double?
+    /// The memory limit recorded for the sandbox in bytes, if `sbx ls` reports one.
+    let memoryBytes: Int64?
 
     var state: SandboxState { SandboxState(status: status) }
 
@@ -107,8 +114,100 @@ enum SandboxListParser {
             name: name,
             status: string(value(in: record, for: ["status", "state"])) ?? "",
             agent: string(value(in: record, for: ["agent", "kit", "workload", "image", "template"])),
-            workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"]))
+            workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"])),
+            createdAt: date(value(in: record, for: ["created_at", "created", "creation_time", "created_time"])),
+            ports: ports(value(in: record, for: ["ports", "published_ports", "port_mappings", "publish"])),
+            cpus: number(resource(in: record, for: ["cpus", "cpu", "cpu_count", "cpu_limit", "vcpus", "num_cpus"])),
+            memoryBytes: memoryBytes(in: record)
         )
+    }
+
+    /// Looks for a resource limit at the top level or in a nested
+    /// `resources` or `limits` object.
+    private static func resource(in record: [String: Any], for keys: [String]) -> Any? {
+        if let found = value(in: record, for: keys) {
+            return found
+        }
+        for container in ["resources", "limits", "resource_limits"] {
+            if let nested = value(in: record, for: [container]) as? [String: Any],
+               let found = resource(in: nested, for: keys) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func memoryBytes(in record: [String: Any]) -> Int64? {
+        if let mebibytes = number(resource(in: record, for: ["memory_mib", "memory_mb", "mem_mib", "mem_mb"])) {
+            return Int64(mebibytes * 1_048_576)
+        }
+        let value = resource(in: record, for: ["memory_bytes", "memory", "memory_limit", "mem", "mem_limit"])
+        if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            // A bare number under a million is far too small to be bytes, so read it as MiB.
+            let amount = number.doubleValue
+            return Int64(amount < 1_000_000 ? amount * 1_048_576 : amount)
+        }
+        // A size with an optional unit, such as "8g", "512MiB" or "8589934592".
+        guard let text = string(value)?.lowercased().filter({ $0 != " " }) else { return nil }
+        let digits = text.prefix { $0.isNumber || $0 == "." }
+        let units: [String: Double] = [
+            "": 1, "b": 1,
+            "k": 1024, "kb": 1024, "kib": 1024,
+            "m": 1_048_576, "mb": 1_048_576, "mib": 1_048_576,
+            "g": 1_073_741_824, "gb": 1_073_741_824, "gib": 1_073_741_824,
+            "t": 1_099_511_627_776, "tb": 1_099_511_627_776, "tib": 1_099_511_627_776,
+        ]
+        guard let amount = Double(digits), let multiplier = units[String(text.dropFirst(digits.count))] else {
+            return nil
+        }
+        return Int64(amount * multiplier)
+    }
+
+    /// Accepts RFC 3339 timestamps (with any number of fractional digits) and
+    /// Unix timestamps in seconds or milliseconds.
+    private static func date(_ value: Any?) -> Date? {
+        if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            let seconds = number.doubleValue
+            return Date(timeIntervalSince1970: seconds > 100_000_000_000 ? seconds / 1000 : seconds)
+        }
+        guard let text = value as? String, !text.isEmpty else { return nil }
+        // ISO8601DateFormatter can't read Go's nanosecond precision, so drop the fraction.
+        var trimmed = text
+        if let dot = trimmed.firstIndex(of: ".") {
+            let fractionEnd = trimmed[trimmed.index(after: dot)...].firstIndex { !$0.isNumber } ?? trimmed.endIndex
+            trimmed.removeSubrange(dot..<fractionEnd)
+        }
+        return ISO8601DateFormatter().date(from: trimmed)
+    }
+
+    private static func ports(_ value: Any?) -> [String] {
+        let items = value as? [Any] ?? value.map { [$0] } ?? []
+        return items.compactMap { item -> String? in
+            guard let mapping = item as? [String: Any] else {
+                return string(item)
+            }
+            guard let sandboxPort = string(Self.value(in: mapping, for: ["sandbox_port", "container_port", "private_port", "target", "port"])) else {
+                return string(mapping)
+            }
+            var target = sandboxPort
+            if let proto = string(Self.value(in: mapping, for: ["protocol", "proto", "type"])), !target.contains("/") {
+                target += "/\(proto)"
+            }
+            guard let hostPort = string(Self.value(in: mapping, for: ["host_port", "published_port", "public_port", "published"])) else {
+                return target
+            }
+            let hostIP = string(Self.value(in: mapping, for: ["host_ip", "host_address", "ip", "address"])) ?? ""
+            let host = hostIP.isEmpty ? hostPort : hostIP.contains(":") ? "[\(hostIP)]:\(hostPort)" : "\(hostIP):\(hostPort)"
+            return "\(host) → \(target)"
+        }
+        .filter { !$0.isEmpty }
+    }
+
+    private static func number(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            return number.doubleValue
+        }
+        return (value as? String).flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }
     }
 
     /// Looks up a value ignoring case, underscores and hyphens.
