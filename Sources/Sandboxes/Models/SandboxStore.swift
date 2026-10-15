@@ -93,6 +93,20 @@ final class SandboxStore {
         await refresh()
     }
 
+    /// Adds a deny rule for the destination, then dismisses the request so it
+    /// no longer shows as pending.
+    func deny(_ approval: NetworkApproval, in sandbox: Sandbox) async {
+        do {
+            try await SbxCLI.runChecked(NetworkApproval.denyArguments(approval: approval, sandbox: sandbox.name))
+            if let dismiss = approval.dismissOption {
+                try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: approval, option: dismiss))
+            }
+        } catch {
+            actionError = ActionError(title: "Couldn't Deny Access to “\(approval.title)”", message: error.localizedDescription)
+        }
+        await refresh()
+    }
+
     func isBusy(_ sandbox: Sandbox) -> Bool {
         busyNames.contains(sandbox.name)
     }

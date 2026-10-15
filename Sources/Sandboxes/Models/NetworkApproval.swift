@@ -21,15 +21,32 @@ struct NetworkApproval: Identifiable, Hashable {
         options.first { NetworkDecision($0.id) == .allow }
     }
 
-    /// A deny option if there is one, otherwise dismiss, which leaves the
-    /// destination blocked until the sandbox asks for it again.
-    var denyOption: Option? {
-        options.first { NetworkDecision($0.id) == .deny }
-            ?? options.first { $0.id.lowercased().contains("dismiss") }
+    /// Leaves the destination blocked until the sandbox asks for it again.
+    var dismissOption: Option? {
+        options.first { $0.id.lowercased().contains("dismiss") }
     }
 
     static func respondArguments(approval: NetworkApproval, option: Option) -> [String] {
         ["policy", "approval", "respond", approval.id, "--option", option.id]
+    }
+
+    /// Adds a deny rule for this sandbox covering what it asked for. A request
+    /// an HTTP rule matched is titled like `GET api.example.com:443/v1/data`,
+    /// so that becomes a rule for that method and path.
+    static func denyArguments(approval: NetworkApproval, sandbox: String) -> [String] {
+        var target = Substring(approval.title.trimmingCharacters(in: .whitespaces))
+        var method: Substring?
+        if let space = target.firstIndex(of: " ") {
+            method = target[..<space]
+            target = target[target.index(after: space)...].drop { $0 == " " }
+        }
+        var arguments = ["policy", "deny", "network", "--sandbox", sandbox]
+        guard let slash = target.firstIndex(of: "/") else {
+            return arguments + [String(target)]
+        }
+        arguments.append(String(target[..<slash]))
+        arguments += ["--method", String(method ?? "ANY"), "--path", String(target[slash...])]
+        return arguments
     }
 
     /// Pending approvals for every sandbox.

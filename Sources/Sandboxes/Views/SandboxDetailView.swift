@@ -58,8 +58,15 @@ struct SandboxDetailView: View {
             if !approvals.isEmpty {
                 Section {
                     ForEach(approvals) { approval in
-                        NetworkApprovalRow(approval: approval) { option, approves in
-                            approvalResponse = ApprovalResponse(approval: approval, option: option, approves: approves)
+                        NetworkApprovalRow(approval: approval) { action in
+                            switch action {
+                            case let .approve(option):
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
+                            case .deny:
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
+                            case let .dismiss(option):
+                                Task { await store.respond(to: approval, with: option) }
+                            }
                         }
                     }
                 } header: {
@@ -111,8 +118,15 @@ struct SandboxDetailView: View {
             ),
             presenting: approvalResponse
         ) { response in
-            Button(response.approves ? "Approve" : "Deny", role: response.approves ? nil : .destructive) {
-                Task { await store.respond(to: response.approval, with: response.option) }
+            switch response.action {
+            case let .approve(option):
+                Button("Approve") {
+                    Task { await store.respond(to: response.approval, with: option) }
+                }
+            case .deny:
+                Button("Deny", role: .destructive) {
+                    Task { await store.deny(response.approval, in: response.sandbox) }
+                }
             }
         } message: { response in
             Text(response.message)
@@ -273,33 +287,51 @@ private struct SandboxResourcesSection: View {
 }
 
 /// A response to a pending approval, waiting for the user to confirm it.
-private struct ApprovalResponse: Identifiable {
-    var id: String { "\(approval.id)|\(option.id)" }
+private struct ApprovalResponse {
+    enum Action {
+        case approve(NetworkApproval.Option)
+        case deny
+    }
+
     let approval: NetworkApproval
-    let option: NetworkApproval.Option
-    let approves: Bool
+    let sandbox: Sandbox
+    let action: Action
 
     var question: String {
-        approves ? "Allow access to “\(approval.title)”?" : "Deny access to “\(approval.title)”?"
+        switch action {
+        case .approve: "Allow access to “\(approval.title)”?"
+        case .deny: "Deny access to “\(approval.title)”?"
+        }
     }
 
     var message: String {
-        let command = (["sbx"] + NetworkApproval.respondArguments(approval: approval, option: option)).joined(separator: " ")
         let effect: String
-        if approves {
-            effect = "This adds a rule that lets “\(approval.sandbox ?? "this sandbox")” reach \(approval.title)."
-        } else if NetworkDecision(option.id) == .deny {
-            effect = "\(approval.title) stays blocked for this sandbox."
-        } else {
-            effect = "\(approval.title) stays blocked. The sandbox asks again the next time it tries to reach it."
+        var commands: [[String]]
+        switch action {
+        case let .approve(option):
+            effect = "This adds a rule that lets “\(sandbox.name)” reach \(approval.title)."
+            commands = [NetworkApproval.respondArguments(approval: approval, option: option)]
+        case .deny:
+            effect = "This adds a rule that blocks “\(sandbox.name)” from reaching \(approval.title), and dismisses the request."
+            commands = [NetworkApproval.denyArguments(approval: approval, sandbox: sandbox.name)]
+            if let dismiss = approval.dismissOption {
+                commands.append(NetworkApproval.respondArguments(approval: approval, option: dismiss))
+            }
         }
-        return "\(effect)\n\nRuns: \(command)"
+        let lines = commands.map { (["sbx"] + $0).joined(separator: " ") }
+        return "\(effect)\n\nRuns:\n\(lines.joined(separator: "\n"))"
     }
 }
 
 private struct NetworkApprovalRow: View {
+    enum Action {
+        case approve(NetworkApproval.Option)
+        case deny
+        case dismiss(NetworkApproval.Option)
+    }
+
     let approval: NetworkApproval
-    let respond: (NetworkApproval.Option, Bool) -> Void
+    let respond: (Action) -> Void
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -314,12 +346,16 @@ private struct NetworkApprovalRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            if let option = approval.denyOption {
-                Button("Deny") { respond(option, false) }
-            }
+            Button("Deny") { respond(.deny) }
             if let option = approval.approveOption {
-                Button("Approve") { respond(option, true) }
+                Button("Approve") { respond(.approve(option)) }
                     .buttonStyle(.borderedProminent)
+            }
+            if let option = approval.dismissOption {
+                Button("Dismiss", systemImage: "xmark") { respond(.dismiss(option)) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Dismiss this request. The sandbox asks again the next time it tries to reach \(approval.title).")
             }
         }
         .help([approval.title, approval.detail].compactMap { $0 }.joined(separator: "\n"))

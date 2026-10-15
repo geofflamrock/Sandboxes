@@ -7,7 +7,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Creates sandboxes for an agent picked from a list (Claude Code maps to `docker/sbx-kit-claude`, and so on) or any v3 workload kit image, with extra mixin kits, a workspace folder (optional), Direct or Clone mode and an optional name. The output of `sbx create` streams into the sheet.
 - Remembers agent and kit images you've used.
 - Shows each sandbox's network policy (allow or deny by default), the network rules that apply to it, and the hosts it has contacted, with request counts and whether they were allowed or denied.
-- Lists network requests waiting for approval, with Approve and Deny buttons (confirmed before running), and marks sandboxes with pending approvals in the sidebar.
+- Lists network requests waiting for approval, with Approve and Deny buttons (confirmed before running) and a button to dismiss a request, and marks sandboxes with pending approvals in the sidebar.
 
 Requires macOS 26 or later and the `sbx` CLI. The app looks for `sbx` on your login shell's `PATH`; you can set its location in **Settings**.
 
@@ -24,7 +24,9 @@ Requires macOS 26 or later and the `sbx` CLI. The app looks for `sbx` on your lo
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
-| Approve or deny a request | `sbx policy approval respond ID --option OPTION` (after confirming in the app) |
+| Approve a request | `sbx policy approval respond ID --option allow` (after confirming in the app) |
+| Deny a request | `sbx policy deny network --sandbox NAME HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` (after confirming in the app) |
+| Dismiss a request | `sbx policy approval respond ID --option dismiss` |
 | Open in Terminal | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |
 
