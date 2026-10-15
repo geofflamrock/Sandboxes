@@ -17,8 +17,8 @@
     {
       "layers": [
         {
-          "image-name": "Tape.svg",
-          "name": "Tape",
+          "image-name": "Tape-Split.svg",
+          "name": "Tape-Split",
           "position": {
             "scale": 1.2,
             "translation-in-points": [
