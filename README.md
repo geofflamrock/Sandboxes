@@ -2,10 +2,11 @@
 
 A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/).
 
-Features:
+### Features 
 
 - See the details of your sandboxes, including resource usage while they're running.
-- Create, start, stop and remove sandboxes.
+- Create new sandboxes quickly and easily. 
+- Start, stop and remove sandboxes.
 - Open a session in a sandbox in Terminal or [Claude Desktop](https://claude.ai/download).
 - Approve or deny network requests made by agents.
 
