@@ -1,169 +1,138 @@
 #!/usr/bin/env python3
-"""Generates the app icon: Design/AppIcon.svg and the AppIcon asset catalog PNGs.
+"""Generates the app icon's layers and Design/AppIcon.svg.
 
 The icon is a container (an isometric cube, taped shut like a box) sitting in
-a sandbox. Everything is
-drawn on Apple's 1024pt macOS icon grid: an 824pt rounded square centred on the
-canvas with a soft shadow beneath it.
+a sandbox. It follows the macOS 26 Liquid Glass style: flat, solid shapes in
+separate layers, with no drawn shadows or highlights, since the system adds
+those itself.
 
-Requires Pillow: pip install pillow
+Outputs:
+- Design/AppIcon.icon/Assets/*.svg: the foreground layers of the Icon
+  Composer icon, on its full-bleed 1024pt canvas. The background fill and how
+  the layers are grouped, scaled and lit live in Design/AppIcon.icon/icon.json,
+  which Icon Composer edits.
+- Design/AppIcon.svg: a flattened preview of the icon.
+
 Run from the repository root: python3 scripts/generate-app-icon.py
 """
 
-import json
-import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
-
 ROOT = Path(__file__).resolve().parent.parent
-SVG_PATH = ROOT / "Design" / "AppIcon.svg"
-ICONSET = ROOT / "Sources" / "Sandboxes" / "Assets.xcassets" / "AppIcon.appiconset"
+DESIGN = ROOT / "Design"
+LAYERS = DESIGN / "AppIcon.icon" / "Assets"
 
 CANVAS = 1024
+# The preview is drawn on Apple's macOS icon grid: an 824pt rounded square
+# centred on the canvas.
 BODY = 824
 INSET = (CANVAS - BODY) // 2
 RADIUS = 185
 
-SAND = "#F4E3C1"
-RIPPLE = "#E2C894"
-CUBE_TOP = "#5AB0F0"
-CUBE_LEFT = "#1D63ED"
-CUBE_RIGHT = "#0B4BC4"
-TAPE = "#9DD2F8"
+# The preview's background: the light fill from icon.json, a soft top-lit
+# gradient, (top, bottom). The dark fill is #4A3C29 to #2A2117.
+SAND = ("#F8ECD4", "#EDD7AA")
+BOX_TOP = "#5AACF2"
+BOX_LEFT = "#2A6EEF"
+BOX_RIGHT = "#1C5CDB"
+TAPE = "#A6D5FA"
 
-# Cube faces on a 120-unit design grid, scaled up to the icon body and moved so
-# the cube's centre lands on the grid's centre (60, 60).
+# Shapes on a 120-unit design grid that spans the icon, moved so the cube's
+# centre lands on the grid's centre (60, 60).
 CUBE_SCALE = 1.15
 CUBE_CENTRE = (60, 55)
-FACES = [
-    (CUBE_TOP, [(60, 22), (90, 38), (60, 54), (30, 38)]),
-    (CUBE_LEFT, [(30, 38), (60, 54), (60, 88), (30, 72)]),
-    (CUBE_RIGHT, [(60, 54), (90, 38), (90, 72), (60, 88)]),
-    # Tape across the lid, where the two flaps meet.
-    (TAPE, [(41.4, 31.9), (48.6, 28.1), (78.6, 44.1), (71.4, 47.9)]),
+BOX = [
+    (BOX_TOP, [(60, 22), (90, 38), (60, 54), (30, 38)]),
+    (BOX_LEFT, [(30, 38), (60, 54), (60, 88), (30, 72)]),
+    (BOX_RIGHT, [(60, 54), (90, 38), (90, 72), (60, 88)]),
 ]
-SEAM = [(45, 30), (75, 46)]
-SEAM_WIDTH = 1
-# Sand ripples: (start x, end x, baseline y) on the same grid.
-RIPPLES = [(12, 110, 104), (12, 110, 113), (12, 48, 16)]
-RIPPLE_WIDTH = 2
+# Tape across the lid, where the two flaps meet. It's split down the middle
+# along the seam, so the lid shows through a SEAM_GAP wide gap.
+TAPE_SHAPE = [(41.4, 31.9), (48.6, 28.1), (78.6, 44.1), (71.4, 47.9)]
+SEAM_GAP = 1
 
 
-def to_canvas(x, y):
-    unit = BODY / 120
-    return INSET + x * unit, INSET + y * unit
+def split_tape():
+    # Cut the tape along its length, from the middle of one short end to the
+    # middle of the other, and pull the halves apart so the gap is SEAM_GAP
+    # wide.
+    a, b, c, d = TAPE_SHAPE
+    along = (d[0] - a[0], d[1] - a[1])
+    across = (b[0] - a[0], b[1] - a[1])
+    length = (along[0] ** 2 + along[1] ** 2) ** 0.5
+    normal = (along[1] / length, -along[0] / length)
+    # How far to move along the short ends for half the gap, measured square
+    # to the seam.
+    shift = (SEAM_GAP / 2) / abs(across[0] * normal[0] + across[1] * normal[1])
 
+    def at(p, q, t):
+        return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
 
-def cube_point(x, y):
-    cx, cy = CUBE_CENTRE
-    return to_canvas(60 + (x - cx) * CUBE_SCALE, 60 + (y - cy) * CUBE_SCALE)
-
-
-def ripple_points(x0, x1, y, steps=120):
-    # A gentle wave with a 36-unit period, matching the original sketch.
     return [
-        to_canvas(x, y - 3 * math.sin(math.pi * (x - x0) / 18))
-        for x in (x0 + (x1 - x0) * i / steps for i in range(steps + 1))
+        [a, at(a, b, 0.5 - shift), at(d, c, 0.5 - shift), d],
+        [at(a, b, 0.5 + shift), b, c, at(d, c, 0.5 + shift)],
     ]
 
 
-def write_svg():
-    def pts(points):
-        return " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+def tape():
+    return [(TAPE, half) for half in split_tape()]
 
-    unit = BODY / 120
-    ripples = "\n".join(
-        f'    <polyline points="{pts(ripple_points(*r))}" fill="none" stroke="{RIPPLE}" '
-        f'stroke-width="{RIPPLE_WIDTH * unit:.1f}" stroke-linecap="round"/>'
-        for r in RIPPLES
+
+def cube_point(x, y, size, inset=0):
+    unit = size / 120
+    cx, cy = CUBE_CENTRE
+    return (
+        inset + (60 + (x - cx) * CUBE_SCALE) * unit,
+        inset + (60 + (y - cy) * CUBE_SCALE) * unit,
     )
-    faces = "\n".join(
-        f'    <polygon points="{pts(cube_point(*p) for p in points)}" fill="{colour}"/>'
-        for colour, points in FACES
+
+
+def pts(points):
+    return " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+
+
+def polygons(shapes, size, inset=0, indent="  "):
+    return "\n".join(
+        f'{indent}<polygon points="{pts(cube_point(*p, size, inset) for p in points)}" fill="{colour}"/>'
+        for colour, points in shapes
     )
-    (x0, y0), (x1, y1) = (cube_point(*p) for p in SEAM)
-    seam = (
-        f'    <line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{CUBE_TOP}" '
-        f'stroke-width="{SEAM_WIDTH * unit * CUBE_SCALE:.1f}"/>'
+
+
+def gradient_def(fill, id="fill"):
+    top, bottom = fill
+    return (
+        f'<linearGradient id="{id}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/>'
+        f"</linearGradient>"
     )
-    SVG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SVG_PATH.write_text(
-        f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS} {CANVAS}">
+
+
+def svg(body, defs=""):
+    defs = f"  <defs>\n    {defs}\n  </defs>\n" if defs else ""
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS} {CANVAS}">
   <!-- Generated by scripts/generate-app-icon.py. Edit that script, not this file. -->
-  <defs>
-    <clipPath id="body"><rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}"/></clipPath>
-  </defs>
-  <g id="background">
-    <rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}" fill="{SAND}"/>
-    <g clip-path="url(#body)">
-{ripples}
-    </g>
-  </g>
-  <g id="cube">
-{faces}
-{seam}
-  </g>
+{defs}{body}
 </svg>
 """
-    )
 
 
-def render(size):
-    # Draw at 4x and scale down for smooth edges.
-    scale = 4 * size / CANVAS
-    big = 4 * size
-
-    def s(points):
-        return [(x * scale, y * scale) for x, y in points]
-
-    body_box = [INSET * scale, INSET * scale, (INSET + BODY) * scale, (INSET + BODY) * scale]
-
-    mask = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(mask).rounded_rectangle(body_box, RADIUS * scale, fill=255)
-
-    art = Image.new("RGBA", (big, big), SAND)
-    draw = ImageDraw.Draw(art)
-    width = max(1, round(RIPPLE_WIDTH * BODY / 120 * scale))
-    for r in RIPPLES:
-        draw.line(s(ripple_points(*r)), fill=RIPPLE, width=width, joint="curve")
-    for colour, points in FACES:
-        draw.polygon(s(cube_point(*p) for p in points), fill=colour)
-    seam_width = max(1, round(SEAM_WIDTH * BODY / 120 * CUBE_SCALE * scale))
-    draw.line(s(cube_point(*p) for p in SEAM), fill=CUBE_TOP, width=seam_width)
-
-    icon = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    shadow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    shadow_mask = Image.new("L", (big, big), 0)
-    offset = 10 * scale
-    ImageDraw.Draw(shadow_mask).rounded_rectangle(
-        [body_box[0], body_box[1] + offset, body_box[2], body_box[3] + offset],
-        RADIUS * scale,
-        fill=77,
-    )
-    shadow.putalpha(shadow_mask.filter(ImageFilter.GaussianBlur(10 * scale)))
-    icon.alpha_composite(shadow)
-    icon.paste(art, (0, 0), mask)
-    return icon.resize((size, size), Image.LANCZOS)
+def write_layers():
+    LAYERS.mkdir(parents=True, exist_ok=True)
+    (LAYERS / "Box.svg").write_text(svg(polygons(BOX, CANVAS)))
+    (LAYERS / "Tape-Split.svg").write_text(svg(polygons(tape(), CANVAS)))
 
 
-def write_iconset():
-    ICONSET.mkdir(parents=True, exist_ok=True)
-    images = []
-    for point in (16, 32, 128, 256, 512):
-        for factor in (1, 2):
-            pixels = point * factor
-            name = f"icon_{point}x{point}{'@2x' if factor == 2 else ''}.png"
-            render(pixels).save(ICONSET / name, optimize=True)
-            images.append(
-                {"filename": name, "idiom": "mac", "scale": f"{factor}x", "size": f"{point}x{point}"}
-            )
-    contents = {"images": images, "info": {"author": "xcode", "version": 1}}
-    (ICONSET / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n")
-    catalog = ICONSET.parent / "Contents.json"
-    catalog.write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+def write_preview():
+    body = f"""  <rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}" fill="url(#fill)"/>
+  <g id="box">
+{polygons(BOX, BODY, INSET, "    ")}
+  </g>
+  <g id="tape">
+{polygons(tape(), BODY, INSET, "    ")}
+  </g>"""
+    (DESIGN / "AppIcon.svg").write_text(svg(body, gradient_def(SAND)))
 
 
 if __name__ == "__main__":
-    write_svg()
-    write_iconset()
+    write_layers()
+    write_preview()
