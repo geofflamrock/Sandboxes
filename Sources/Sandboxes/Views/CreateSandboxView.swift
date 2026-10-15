@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
@@ -25,7 +26,7 @@ struct CreateSandboxView: View {
                 )
             }
         }
-        .frame(minWidth: 560, idealWidth: 620, minHeight: 520, idealHeight: 600)
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
         .interactiveDismissDisabled(run?.phase == .running)
         .onAppear {
             if request.workload.isEmpty {
@@ -53,111 +54,18 @@ private struct CreateSandboxForm: View {
     let onCreate: () -> Void
 
     @Environment(RecentsStore.self) private var recents
-    @State private var newKit = ""
-    @State private var isChoosingFolder = false
+    @State private var kitDraft = KitDraft()
+
+    // The optional sections stay open or closed the way they were last left,
+    // so options someone uses often are one step closer.
+    @AppStorage("createSheetShowsKits") private var showsKits = false
+    @AppStorage("createSheetShowsResources") private var showsResources = false
+    @AppStorage("createSheetShowsEnvironment") private var showsEnvironment = false
 
     var body: some View {
         Form {
-            Section {
-                AgentPicker(selection: Agent(workloadImage: request.workload)) { agent in
-                    if let image = agent.workloadImage {
-                        request.workload = image
-                    }
-                }
-                HStack {
-                    TextField("Image", text: $request.workload, prompt: Text("docker/sbx-kit-claude"))
-                        .font(.body.monospaced())
-                    RecentsMenu(title: "Recent Images", items: recents.workloads) {
-                        request.workload = $0
-                    } onClear: {
-                        recents.clearWorkloads()
-                    }
-                }
-            } header: {
-                Text("Agent")
-            } footer: {
-                Text("Pick an agent, or enter any v3 workload kit from an OCI registry.")
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                ForEach(request.kits, id: \.self) { kit in
-                    HStack {
-                        Image(systemName: "puzzlepiece.extension")
-                            .foregroundStyle(.secondary)
-                        Text(kit)
-                            .font(.body.monospaced())
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Button("Remove", systemImage: "minus.circle.fill") {
-                            request.kits.removeAll { $0 == kit }
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .help("Remove kit")
-                    }
-                }
-                HStack {
-                    TextField("Add kit", text: $newKit, prompt: Text("docker.io/example/my-kit"))
-                        .font(.body.monospaced())
-                        .onSubmit(addTypedKit)
-                    RecentsMenu(
-                        title: "Recent Kits",
-                        items: recents.kits.filter { !request.kits.contains($0) }
-                    ) {
-                        add(kit: $0)
-                    } onClear: {
-                        recents.clearKits()
-                    }
-                    Button("Add", action: addTypedKit)
-                        .disabled(trimmedNewKit.isEmpty)
-                }
-            } header: {
-                Text("Kits")
-            } footer: {
-                Text("Extra mixin kits from an OCI registry (v3 kits only).")
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent("Folder") {
-                    HStack {
-                        if let workspace = request.workspace {
-                            Label((workspace.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .help(workspace.path)
-                            Button("Clear", systemImage: "xmark.circle.fill") {
-                                request.workspace = nil
-                            }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.secondary)
-                            .help("Don't mount a workspace")
-                        } else {
-                            Text("None")
-                                .foregroundStyle(.secondary)
-                        }
-                        Button("Choose…") { isChoosingFolder = true }
-                    }
-                }
-                Picker("Mode", selection: $request.mode) {
-                    ForEach(WorkspaceMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .disabled(request.workspace == nil)
-            } header: {
-                Text("Workspace")
-            } footer: {
-                Text(request.workspace == nil
-                     ? "Without a workspace the agent works in the sandbox's own filesystem."
-                     : request.mode.explanation)
-                    .foregroundStyle(.secondary)
-            }
+            agentSection
+            workspaceSection
 
             Section {
                 TextField("Name", text: $request.name, prompt: Text("Automatic"))
@@ -165,6 +73,10 @@ private struct CreateSandboxForm: View {
                 Text("Leave empty to let sbx choose a name.")
                     .foregroundStyle(.secondary)
             }
+
+            kitsSection
+            resourcesSection
+            environmentSection
 
             Section("Command") {
                 Text(commandPreview)
@@ -174,11 +86,6 @@ private struct CreateSandboxForm: View {
             }
         }
         .formStyle(.grouped)
-        .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
-            if case let .success(url) = result {
-                request.workspace = url
-            }
-        }
         .safeAreaInset(edge: .bottom) {
             HStack {
                 if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
@@ -200,22 +107,233 @@ private struct CreateSandboxForm: View {
         }
     }
 
-    private var trimmedNewKit: String {
-        newKit.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    // MARK: Agent
 
-    /// The command as it will run, including a kit that's typed but not yet added.
-    private var commandPreview: String {
-        var preview = request
-        if !trimmedNewKit.isEmpty && !preview.kits.contains(trimmedNewKit) {
-            preview.kits.append(trimmedNewKit)
+    private var agentSection: some View {
+        Section {
+            AgentPicker(selection: Agent(workloadImage: request.workload)) { agent in
+                if let image = agent.workloadImage {
+                    request.workload = image
+                }
+            }
+            HStack {
+                TextField("Image", text: $request.workload, prompt: Text("docker/sbx-kit-claude"))
+                    .font(.body.monospaced())
+                RecentsMenu(title: "Recent Images", items: recents.workloads) {
+                    request.workload = $0
+                } onClear: {
+                    recents.clearWorkloads()
+                }
+            }
+        } header: {
+            Text("Agent")
+        } footer: {
+            Text("Pick an agent, or enter any v3 workload kit from an OCI registry.")
+                .foregroundStyle(.secondary)
         }
-        return preview.commandLine
     }
 
-    private func addTypedKit() {
-        add(kit: trimmedNewKit)
-        newKit = ""
+    // MARK: Workspace
+
+    private var workspaceSection: some View {
+        Section {
+            LabeledContent("Folder") {
+                HStack {
+                    if let workspace = request.workspace {
+                        Label((workspace.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(workspace.path)
+                        RemoveButton(help: "Don't mount a workspace") {
+                            request.workspace = nil
+                            request.additionalWorkspaces = []
+                        }
+                    } else {
+                        Text("None")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Choose…", action: chooseWorkspace)
+                }
+            }
+            Picker("Mode", selection: $request.mode) {
+                ForEach(WorkspaceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(request.workspace == nil)
+
+            if request.workspace != nil {
+                ForEach($request.additionalWorkspaces) { $folder in
+                    HStack {
+                        Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(folder.url.path)
+                        Spacer()
+                        Toggle("Read-only", isOn: $folder.isReadOnly)
+                            .toggleStyle(.checkbox)
+                            .help("Stop the agent changing anything in this folder")
+                        RemoveButton(help: "Don't mount this folder") {
+                            request.additionalWorkspaces.removeAll { $0.id == folder.id }
+                        }
+                    }
+                }
+                Button("Add Another Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
+                    .buttonStyle(.borderless)
+            }
+        } header: {
+            Text("Workspace")
+        } footer: {
+            Text(workspaceFooter)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var workspaceFooter: String {
+        guard request.workspace != nil else {
+            return "Without a workspace the agent works in the sandbox's own filesystem."
+        }
+        if request.additionalWorkspaces.isEmpty {
+            return request.mode.explanation
+        }
+        return request.mode.explanation + " Other folders are mounted at the same paths as on your Mac."
+    }
+
+    private func chooseWorkspace() {
+        if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder the agent works in.").first {
+            request.workspace = url
+            request.additionalWorkspaces.removeAll { $0.url == url }
+        }
+    }
+
+    private func addAdditionalWorkspaces() {
+        let urls = OpenPanel.choose(
+            directories: true,
+            multiple: true,
+            prompt: "Add",
+            message: "Choose folders to mount alongside the workspace, such as docs or a related repository."
+        )
+        let existing = Set(request.additionalWorkspaces.map(\.url) + [request.workspace].compactMap { $0 })
+        for url in urls where !existing.contains(url) {
+            request.additionalWorkspaces.append(AdditionalWorkspace(url: url))
+        }
+    }
+
+    // MARK: Kits
+
+    private var kitsSection: some View {
+        CollapsibleSection(
+            title: "Kits",
+            summary: request.kits.isEmpty ? "None" : request.kits.count == 1 ? "1 kit" : "\(request.kits.count) kits",
+            isExpanded: $showsKits
+        ) {
+            ForEach(request.kits, id: \.self) { kit in
+                HStack {
+                    Image(systemName: KitSource(reference: kit).systemImage)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                    Text(KitSource(reference: kit) == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
+                        .font(.body.monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(kit)
+                    Spacer()
+                    RemoveButton(help: "Remove kit") {
+                        request.kits.removeAll { $0 == kit }
+                    }
+                }
+            }
+
+            HStack {
+                Picker("Add from", selection: $kitDraft.source) {
+                    ForEach(KitSource.allCases) { source in
+                        Label(source.title, systemImage: source.systemImage).tag(source)
+                    }
+                }
+                .pickerStyle(.segmented)
+                RecentsMenu(
+                    title: "Recent Kits",
+                    items: recents.kits.filter { !request.kits.contains($0) }
+                ) {
+                    add(kit: $0)
+                } onClear: {
+                    recents.clearKits()
+                }
+            }
+
+            switch kitDraft.source {
+            case .registry:
+                HStack {
+                    TextField("Image", text: $kitDraft.image, prompt: Text("docker.io/example/my-kit:1.0"))
+                        .font(.body.monospaced())
+                        .onSubmit(addDraftKit)
+                    Button("Add", action: addDraftKit)
+                        .disabled(kitDraft.reference == nil)
+                }
+            case .git:
+                TextField("Repository", text: $kitDraft.git.repository, prompt: Text("https://github.com/org/repo"))
+                    .font(.body.monospaced())
+                    .onSubmit(addDraftKit)
+                TextField("Ref", text: $kitDraft.git.ref, prompt: Text("Default branch"))
+                    .font(.body.monospaced())
+                    .onSubmit(addDraftKit)
+                TextField("Folder", text: $kitDraft.git.folder, prompt: Text("Repository root"))
+                    .font(.body.monospaced())
+                    .onSubmit(addDraftKit)
+                HStack {
+                    if !kitDraft.git.isEmpty {
+                        Text(kitDraft.git.reference ?? "Enter the repository's URL.")
+                            .font(.callout.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                    Spacer()
+                    Button("Add", action: addDraftKit)
+                        .disabled(kitDraft.reference == nil)
+                }
+            case .local:
+                LabeledContent("Folder or ZIP") {
+                    Button("Choose…", action: chooseLocalKit)
+                }
+            }
+        } footer: {
+            Text(kitsFooter)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var kitsFooter: String {
+        let intro = "Mixin kits add tools and settings to the agent."
+        switch kitDraft.source {
+        case .registry:
+            return "\(intro) sbx only pulls kits from Docker Hub unless you allow other registries."
+        case .git:
+            return "\(intro) Paste a clone URL or a link to the kit's folder. Ref is a branch, tag or commit; Folder is where the kit is in the repository. sbx only uses Git kits if you allow Git sources."
+        case .local:
+            return "\(intro) sbx builds a kit folder or ZIP file on your Mac when it creates the sandbox."
+        }
+    }
+
+    private func chooseLocalKit() {
+        let urls = OpenPanel.choose(
+            directories: true,
+            files: [.zip],
+            multiple: true,
+            prompt: "Add",
+            message: "Choose kit folders or ZIP files."
+        )
+        for url in urls {
+            add(kit: url.path)
+        }
+    }
+
+    private func addDraftKit() {
+        guard let reference = kitDraft.reference else { return }
+        add(kit: reference)
+        kitDraft.clearFields()
     }
 
     private func add(kit: String) {
@@ -223,9 +341,235 @@ private struct CreateSandboxForm: View {
         request.kits.append(kit)
     }
 
+    // MARK: Resources
+
+    private var resourcesSection: some View {
+        CollapsibleSection(title: "Resources", summary: resourcesSummary, isExpanded: $showsResources) {
+            Picker("CPUs", selection: $request.cpus) {
+                Text("Automatic").tag(0)
+                Divider()
+                ForEach(1...HostResources.cpuCount, id: \.self) { count in
+                    Text("\(count)").tag(count)
+                }
+            }
+            Picker("Memory", selection: $request.memoryGiB) {
+                Text("Automatic").tag(0)
+                Divider()
+                ForEach(Self.memoryChoices, id: \.self) { size in
+                    Text("\(size) GB").tag(size)
+                }
+            }
+        } footer: {
+            Text("Automatic uses all \(HostResources.cpuCount) of your Mac's CPUs and \(Self.formattedMemory(HostResources.defaultMemoryGiB)) of memory.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var resourcesSummary: String {
+        var parts: [String] = []
+        if request.cpus > 0 {
+            parts.append(request.cpus == 1 ? "1 CPU" : "\(request.cpus) CPUs")
+        }
+        if request.memoryGiB > 0 {
+            parts.append("\(request.memoryGiB) GB")
+        }
+        return parts.isEmpty ? "Automatic" : parts.joined(separator: ", ")
+    }
+
+    private static let memoryChoices: [Int] = {
+        let max = HostResources.maxMemoryGiB
+        let sizes = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256].filter { $0 < max }
+        return sizes + [max]
+    }()
+
+    private static func formattedMemory(_ gib: Double) -> String {
+        gib < 1 ? "512 MB" : "\(gib.formatted(.number.precision(.fractionLength(0...1)))) GB"
+    }
+
+    // MARK: Environment
+
+    private var environmentSection: some View {
+        CollapsibleSection(title: "Environment", summary: environmentSummary, isExpanded: $showsEnvironment) {
+            ForEach($request.environment) { $variable in
+                HStack {
+                    TextField("Name", text: $variable.key, prompt: Text("NAME"))
+                        .labelsHidden()
+                        .frame(maxWidth: 180)
+                    Text("=")
+                        .foregroundStyle(.secondary)
+                    TextField("Value", text: $variable.value, prompt: Text("value"))
+                        .labelsHidden()
+                    RemoveButton(help: "Remove variable") {
+                        request.environment.removeAll { $0.id == variable.id }
+                    }
+                }
+                .font(.body.monospaced())
+            }
+            ForEach(request.environmentFiles, id: \.self) { file in
+                HStack {
+                    Label((file.path as NSString).abbreviatingWithTildeInPath, systemImage: "doc.text")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(file.path)
+                    Spacer()
+                    RemoveButton(help: "Remove file") {
+                        request.environmentFiles.removeAll { $0 == file }
+                    }
+                }
+            }
+            HStack {
+                Button("Add Variable", systemImage: "plus") {
+                    request.environment.append(EnvironmentVariable())
+                }
+                Button("Add File…", systemImage: "doc.badge.plus", action: addEnvironmentFiles)
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        } footer: {
+            Text("Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var environmentSummary: String {
+        let variables = request.environment.filter { !$0.isBlank }.count
+        let files = request.environmentFiles.count
+        var parts: [String] = []
+        if variables > 0 { parts.append(variables == 1 ? "1 variable" : "\(variables) variables") }
+        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
+        return parts.isEmpty ? "None" : parts.joined(separator: ", ")
+    }
+
+    private func addEnvironmentFiles() {
+        let urls = OpenPanel.choose(
+            files: [.item],
+            multiple: true,
+            showsHiddenFiles: true,
+            prompt: "Add",
+            message: "Choose files of KEY=VALUE lines, such as a .env file."
+        )
+        for url in urls where !request.environmentFiles.contains(url) {
+            request.environmentFiles.append(url)
+        }
+    }
+
+    // MARK: Command
+
+    /// The command as it will run, including a kit that's entered but not yet added.
+    private var commandPreview: String {
+        var preview = request
+        if let pending = kitDraft.reference, !preview.kits.contains(pending) {
+            preview.kits.append(pending)
+        }
+        return preview.commandLine
+    }
+
     private func create() {
-        addTypedKit()
+        addDraftKit()
         onCreate()
+    }
+}
+
+/// What's typed into the kit fields before it's added.
+private struct KitDraft {
+    var source: KitSource = .registry
+    var image = ""
+    var git = GitKitDraft()
+
+    var reference: String? {
+        switch source {
+        case .registry:
+            let image = image.trimmingCharacters(in: .whitespacesAndNewlines)
+            return image.isEmpty ? nil : image
+        case .git:
+            return git.reference
+        case .local:
+            return nil
+        }
+    }
+
+    mutating func clearFields() {
+        image = ""
+        git = GitKitDraft()
+    }
+}
+
+/// A form section that folds away to its header, which shows `summary` while
+/// it's collapsed.
+private struct CollapsibleSection<Content: View, Footer: View>: View {
+    let title: String
+    let summary: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: Content
+    @ViewBuilder let footer: Footer
+
+    var body: some View {
+        Section {
+            if isExpanded {
+                content
+            }
+        } header: {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Text(title)
+                    Spacer()
+                    if !isExpanded {
+                        Text(summary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summary)")
+        } footer: {
+            if isExpanded {
+                footer
+            }
+        }
+    }
+}
+
+private struct RemoveButton: View {
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button("Remove", systemImage: "minus.circle.fill", action: action)
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(help)
+    }
+}
+
+@MainActor
+private enum OpenPanel {
+    /// Shows an open panel and returns what was chosen, or nothing if it was cancelled.
+    static func choose(
+        directories: Bool = false,
+        files: [UTType] = [],
+        multiple: Bool = false,
+        showsHiddenFiles: Bool = false,
+        prompt: String,
+        message: String
+    ) -> [URL] {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = directories
+        panel.canChooseFiles = !files.isEmpty
+        panel.allowedContentTypes = files
+        panel.allowsMultipleSelection = multiple
+        panel.canCreateDirectories = false
+        panel.showsHiddenFiles = showsHiddenFiles
+        panel.prompt = prompt
+        panel.message = message
+        return panel.runModal() == .OK ? panel.urls : []
     }
 }
 

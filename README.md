@@ -5,7 +5,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 ### Features 
 
 - See the details of your sandboxes, including resource usage and network traffic.
-- Create new sandboxes quickly and easily. 
+- Create new sandboxes quickly and easily, with extra kits from a registry, Git repository or folder, extra workspace folders, CPU and memory limits, and environment variables.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in Terminal.
 - Run a sandbox's agent in Terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download). The open button and double-clicking a sandbox use whichever you picked last.
@@ -92,7 +92,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Action | Command |
 | --- | --- |
 | List | `sbx ls --json` |
-| Create | `sbx create [--name NAME] [--clone] [--kit KIT]... WORKLOAD [PATH]` |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
