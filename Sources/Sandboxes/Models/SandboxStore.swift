@@ -19,6 +19,9 @@ final class SandboxStore {
     /// Approvals with a response or deny in flight.
     private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
     var selection: Sandbox.ID?
+    /// A sandbox whose pending approvals its detail view should scroll to,
+    /// after the user clicked a notification about them.
+    var approvalsToReveal: Sandbox.ID?
     var isCreatePresented = false
     /// The workload image the create sheet starts with, or nil for the most
     /// recently used one.
@@ -39,6 +42,8 @@ final class SandboxStore {
 
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
+    /// A sandbox to select once the first list loads.
+    @ObservationIgnored private var pendingSelection: Sandbox.ID?
 
     var selectedSandbox: Sandbox? {
         sandboxes.first { $0.id == selection }
@@ -129,6 +134,21 @@ final class SandboxStore {
         busyNames.remove(sandbox.name)
     }
 
+    /// Shows the sandbox named `name` with its pending approvals, or Home,
+    /// which lists every sandbox's, when there's no such sandbox.
+    func showApprovals(forSandbox name: String?) {
+        guard let name else {
+            selection = nil
+            return
+        }
+        approvalsToReveal = name
+        if !hasLoaded {
+            pendingSelection = name
+        } else {
+            selection = sandboxes.contains { $0.id == name } ? name : nil
+        }
+    }
+
     func approvals(for sandbox: Sandbox) -> [NetworkApproval] {
         approvals.filter { $0.sandbox == sandbox.name }
     }
@@ -176,6 +196,7 @@ final class SandboxStore {
     private func finishResponding(to answered: [NetworkApproval]) async {
         if let latest = try? await NetworkApproval.fetch() {
             approvals = latest
+            ApprovalNotifier.shared.update(latest)
         }
         respondingApprovalIDs.subtract(answered.map(\.id))
         await refresh()
@@ -192,6 +213,12 @@ final class SandboxStore {
             sandboxes = try SandboxListParser.parse(output)
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             loadError = nil
+            if let pendingSelection {
+                self.pendingSelection = nil
+                if sandboxes.contains(where: { $0.id == pendingSelection }) {
+                    selection = pendingSelection
+                }
+            }
             if let selection, !sandboxes.contains(where: { $0.id == selection }) {
                 self.selection = nil
             }
@@ -200,8 +227,11 @@ final class SandboxStore {
         }
         hasLoaded = true
         // Approvals are an extra; if sbx can't list them, keep the last list.
-        if let latest = await latestApprovals, latest != approvals {
-            approvals = latest
+        if let latest = await latestApprovals {
+            if latest != approvals {
+                approvals = latest
+            }
+            ApprovalNotifier.shared.update(latest)
         }
     }
 

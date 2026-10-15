@@ -51,6 +51,7 @@ struct ContentView: View {
             Text(error.message)
         }
         .task {
+            ApprovalNotifier.shared.attach(store)
             await store.refreshPeriodically()
         }
     }
