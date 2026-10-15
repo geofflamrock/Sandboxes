@@ -16,6 +16,11 @@ struct ContentView: View {
                 ContentUnavailableView("No Sandbox Selected", systemImage: "shippingbox")
             }
         }
+        // The window starts with a non-scrolling detail view, so AppKit draws a
+        // hard titlebar separator and doesn't drop it when the Form arrives
+        // until the window next lays out. Hide it; scroll edge effects still
+        // mark the toolbar edge when content scrolls under it.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .sheet(isPresented: $store.isCreatePresented) {
             CreateSandboxView()
         }
