@@ -260,7 +260,7 @@ struct OpenSplitButton: View {
             OpenTargetButtons(sandbox: sandbox)
                 .labelStyle(.titleAndIcon)
         } label: {
-            OpenTargetLabel(target: target)
+            OpenTargetLabel(target: target, agent: sandbox.knownAgent)
         } primaryAction: {
             Task { await store.open(sandbox, in: target) }
         }
@@ -284,7 +284,7 @@ struct OpenTargetButtons: View {
             Button {
                 Task { await store.open(sandbox, in: target) }
             } label: {
-                OpenTargetLabel(target: target, showsTargetNameOnly: showsTargetNameOnly)
+                OpenTargetLabel(target: target, agent: sandbox.knownAgent, showsTargetNameOnly: showsTargetNameOnly)
             }
             .disabled(!store.canOpen(sandbox, in: target))
         }
@@ -293,6 +293,9 @@ struct OpenTargetButtons: View {
 
 struct OpenTargetLabel: View {
     let target: OpenTarget
+    /// Terminal shows the agent's logo, since it opens a session with the
+    /// agent, so it doesn't look like Open Shell.
+    var agent: Agent?
     var showsTargetNameOnly = false
 
     var body: some View {
@@ -300,7 +303,7 @@ struct OpenTargetLabel: View {
             Text(showsTargetNameOnly ? target.name : target.title)
         } icon: {
             switch target {
-            case .terminal: Image(systemName: "apple.terminal")
+            case .terminal: agent?.menuIcon ?? Image(systemName: "apple.terminal")
             case .claudeDesktop: ClaudeDesktopIcon()
             }
         }
