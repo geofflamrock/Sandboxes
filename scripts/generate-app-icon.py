@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the app icon: the Icon Composer layers, Design/AppIcon.svg and the
-AppIcon asset catalog PNGs.
+"""Generates the app icon's layers and Design/AppIcon.svg.
 
 The icon is a container (an isometric cube, taped shut like a box) sitting in
 a sandbox. It follows the macOS 26 Liquid Glass style: flat, solid shapes in
@@ -8,35 +7,29 @@ separate layers, with no drawn shadows or highlights, since the system adds
 those itself.
 
 Outputs:
-- Design/AppIcon/*.svg: one file per Icon Composer layer, on Icon Composer's
-  full-bleed 1024pt canvas. Background.svg and Background-Dark.svg are the
-  light and dark fills; Box.svg and Tape.svg are the foreground groups.
-- Design/AppIcon.svg: a flattened preview of the light icon.
-- AppIcon.appiconset: flattened PNGs on Apple's 1024pt macOS icon grid (an
-  824pt rounded square centred on the canvas), with no shadow.
+- Design/AppIcon.icon/Assets/*.svg: the layers of the Icon Composer icon, on
+  its full-bleed 1024pt canvas. How they're grouped, scaled and lit lives in
+  Design/AppIcon.icon/icon.json, which Icon Composer edits.
+- Design/AppIcon.svg: a flattened preview of the icon.
 
-Requires Pillow: pip install pillow
 Run from the repository root: python3 scripts/generate-app-icon.py
 """
 
-import json
 from pathlib import Path
-
-from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 DESIGN = ROOT / "Design"
-LAYERS = DESIGN / "AppIcon"
-ICONSET = ROOT / "Sources" / "Sandboxes" / "Assets.xcassets" / "AppIcon.appiconset"
+LAYERS = DESIGN / "AppIcon.icon" / "Assets"
 
 CANVAS = 1024
+# The preview is drawn on Apple's macOS icon grid: an 824pt rounded square
+# centred on the canvas.
 BODY = 824
 INSET = (CANVAS - BODY) // 2
 RADIUS = 185
 
-# Background fills: a soft top-lit gradient, (top, bottom).
+# Background fill: a soft top-lit gradient, (top, bottom).
 SAND = ("#F8ECD4", "#EDD7AA")
-SAND_DARK = ("#4A3C29", "#2A2117")
 BOX_TOP = "#5AACF2"
 BOX_LEFT = "#2A6EEF"
 BOX_RIGHT = "#1C5CDB"
@@ -95,10 +88,9 @@ def svg(body, defs=""):
 
 def write_layers():
     LAYERS.mkdir(parents=True, exist_ok=True)
-    for name, fill in (("Background", SAND), ("Background-Dark", SAND_DARK)):
-        (LAYERS / f"{name}.svg").write_text(
-            svg(f'  <rect width="{CANVAS}" height="{CANVAS}" fill="url(#fill)"/>', gradient_def(fill))
-        )
+    (LAYERS / "Background.svg").write_text(
+        svg(f'  <rect width="{CANVAS}" height="{CANVAS}" fill="url(#fill)"/>', gradient_def(SAND))
+    )
     (LAYERS / "Box.svg").write_text(svg(polygons(BOX, CANVAS)))
     (LAYERS / "Tape.svg").write_text(svg(polygons([(TAPE, TAPE_SHAPE)], CANVAS)))
 
@@ -114,55 +106,6 @@ def write_preview():
     (DESIGN / "AppIcon.svg").write_text(svg(body, gradient_def(SAND)))
 
 
-def gradient(size, fill):
-    top, bottom = (Image.new("RGB", (1, 1), c).getpixel((0, 0)) for c in fill)
-    column = Image.new("RGB", (1, size))
-    for y in range(size):
-        t = y / max(1, size - 1)
-        column.putpixel((0, y), tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)))
-    return column.resize((size, size))
-
-
-def render(size, fill=SAND):
-    # Draw at 4x and scale down for smooth edges.
-    big = 4 * size
-    scale = big / CANVAS
-    inset, body = INSET * scale, BODY * scale
-
-    art = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    body_art = gradient(round(body), fill).convert("RGBA")
-    art.paste(body_art, (round(inset), round(inset)))
-    draw = ImageDraw.Draw(art)
-    for colour, points in BOX + [(TAPE, TAPE_SHAPE)]:
-        draw.polygon([cube_point(*p, body, inset) for p in points], fill=colour)
-
-    mask = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(mask).rounded_rectangle(
-        [inset, inset, inset + body, inset + body], RADIUS * scale, fill=255
-    )
-    icon = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    icon.paste(art, (0, 0), mask)
-    return icon.resize((size, size), Image.LANCZOS)
-
-
-def write_iconset():
-    ICONSET.mkdir(parents=True, exist_ok=True)
-    images = []
-    for point in (16, 32, 128, 256, 512):
-        for factor in (1, 2):
-            pixels = point * factor
-            name = f"icon_{point}x{point}{'@2x' if factor == 2 else ''}.png"
-            render(pixels).save(ICONSET / name, optimize=True)
-            images.append(
-                {"filename": name, "idiom": "mac", "scale": f"{factor}x", "size": f"{point}x{point}"}
-            )
-    contents = {"images": images, "info": {"author": "xcode", "version": 1}}
-    (ICONSET / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n")
-    catalog = ICONSET.parent / "Contents.json"
-    catalog.write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
-
-
 if __name__ == "__main__":
     write_layers()
     write_preview()
-    write_iconset()
