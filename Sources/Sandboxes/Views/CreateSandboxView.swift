@@ -494,8 +494,10 @@ private struct KitDraft {
     }
 }
 
-/// A form section that folds away to its header, which shows `summary` while
-/// it's collapsed.
+/// A form section that folds away to a single row showing `summary`. The
+/// toggle is a row rather than the section header so the section is never
+/// empty: an empty section makes the grouped form style the headers that
+/// follow it differently.
 private struct CollapsibleSection<Content: View, Footer: View>: View {
     let title: String
     let summary: String
@@ -505,19 +507,17 @@ private struct CollapsibleSection<Content: View, Footer: View>: View {
 
     var body: some View {
         Section {
-            if isExpanded {
-                content
-            }
-        } header: {
             Button {
                 withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 12)
                     Text(title)
+                        .fontWeight(.semibold)
                     Spacer()
                     if !isExpanded {
                         Text(summary)
@@ -528,6 +528,10 @@ private struct CollapsibleSection<Content: View, Footer: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summary)")
+
+            if isExpanded {
+                content
+            }
         } footer: {
             if isExpanded {
                 footer
