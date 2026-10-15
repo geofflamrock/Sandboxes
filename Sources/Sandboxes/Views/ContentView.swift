@@ -225,8 +225,13 @@ struct SandboxActionButtons: View {
         }
         switch placement {
         case .menu:
-            // Menus can't hold a split button, so list every place to open.
-            OpenTargetButtons(sandbox: sandbox)
+            // Menus can't hold a split button, so offer every place to open
+            // in a submenu. Double-clicking opens in the default.
+            Menu {
+                OpenTargetButtons(sandbox: sandbox, showsTargetNameOnly: true)
+            } label: {
+                Label("Open In", systemImage: "arrow.up.forward.app")
+            }
             Divider()
         case .toolbar:
             OpenSplitButton(sandbox: sandbox)
@@ -261,6 +266,8 @@ struct OpenSplitButton: View {
 /// A button for each place a sandbox can be opened.
 struct OpenTargetButtons: View {
     let sandbox: Sandbox
+    /// Shows "Terminal" rather than "Open in Terminal", for an "Open In" submenu.
+    var showsTargetNameOnly = false
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
@@ -268,7 +275,7 @@ struct OpenTargetButtons: View {
             Button {
                 Task { await store.open(sandbox, in: target) }
             } label: {
-                OpenTargetLabel(target: target)
+                OpenTargetLabel(target: target, showsTargetNameOnly: showsTargetNameOnly)
             }
             .disabled(!store.canOpen(sandbox, in: target))
         }
@@ -277,10 +284,11 @@ struct OpenTargetButtons: View {
 
 struct OpenTargetLabel: View {
     let target: OpenTarget
+    var showsTargetNameOnly = false
 
     var body: some View {
         Label {
-            Text(target.title)
+            Text(showsTargetNameOnly ? target.name : target.title)
         } icon: {
             switch target {
             case .terminal: Image(systemName: "apple.terminal")

@@ -7,10 +7,14 @@ enum OpenTarget: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    var title: String {
+    var name: String {
         switch self {
-        case .terminal: "Open in Terminal"
-        case .claudeDesktop: "Open in Claude Desktop"
+        case .terminal: "Terminal"
+        case .claudeDesktop: "Claude Desktop"
         }
+    }
+
+    var title: String {
+        "Open in \(name)"
     }
 }
