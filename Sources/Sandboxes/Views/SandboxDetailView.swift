@@ -48,8 +48,9 @@ struct SandboxDetailView: View {
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
 
+            // Not given an `.id` like the resources section: two siblings with
+            // the same id confuse the Form's row identity.
             SandboxNetworkSection(sandbox: sandbox)
-                .id(sandbox.name)
         }
         .formStyle(.grouped)
         .navigationTitle(sandbox.name)
@@ -235,7 +236,9 @@ private struct SandboxNetworkSection: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .task {
+        .task(id: sandbox.name) {
+            network = nil
+            networkError = nil
             while !Task.isCancelled {
                 do {
                     let latest = try await SandboxNetwork.fetch(for: sandbox)
