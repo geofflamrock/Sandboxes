@@ -9,7 +9,76 @@ struct SandboxDetailView: View {
     @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
+        ScrollViewReader { proxy in
+            form
+                .onChange(of: store.approvalsToReveal, initial: true) { _, name in
+                    guard name == sandbox.name else { return }
+                    store.approvalsToReveal = nil
+                    // Wait a turn so a newly shown sandbox's form is laid out.
+                    Task {
+                        withAnimation { proxy.scrollTo(DetailAnchor.approvals, anchor: .top) }
+                    }
+                }
+        }
+        .task(id: sandbox.name) {
+            await refreshNetwork()
+        }
+        .approvalResponseDialog($approvalResponse)
+        .navigationTitle(sandbox.name)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("Home", systemImage: "chevron.backward") {
+                    store.selection = nil
+                }
+                .keyboardShortcut("[", modifiers: .command)
+                .help("Back to Home")
+            }
+            // Kept out of the actions' group so it doesn't widen it, and always
+            // laid out so the toolbar doesn't shift when it appears.
+            ToolbarItem {
+                ProgressView()
+                    .controlSize(.small)
+                    .opacity(store.isBusy(sandbox) ? 1 : 0)
+                    .accessibilityHidden(!store.isBusy(sandbox))
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItemGroup {
+                SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
+                    .labelStyle(.iconOnly)
+            }
+        }
+    }
+
+    private var form: some View {
         Form {
+            let approvals = store.approvals(for: sandbox)
+            if !approvals.isEmpty {
+                Section {
+                    ForEach(approvals) { approval in
+                        NetworkApprovalRow(approval: approval) { action in
+                            switch action {
+                            case let .approve(option):
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
+                            case .deny:
+                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
+                            case let .dismiss(option):
+                                Task { await store.respond(to: approval, with: option) }
+                            }
+                        }
+                        .disabled(store.isResponding(to: approval))
+                    }
+                } header: {
+                    SectionHeader(
+                        title: "Pending Approvals (\(approvals.count.formatted()))",
+                        isLoading: approvals.contains { store.isResponding(to: $0) }
+                    )
+                } footer: {
+                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
+                        .foregroundStyle(.secondary)
+                }
+                .id(DetailAnchor.approvals)
+            }
+
             Section {
                 LabeledContent("Status") {
                     HStack(spacing: 6) {
@@ -50,33 +119,6 @@ struct SandboxDetailView: View {
 
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
-
-            let approvals = store.approvals(for: sandbox)
-            if !approvals.isEmpty {
-                Section {
-                    ForEach(approvals) { approval in
-                        NetworkApprovalRow(approval: approval) { action in
-                            switch action {
-                            case let .approve(option):
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
-                            case .deny:
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
-                            case let .dismiss(option):
-                                Task { await store.respond(to: approval, with: option) }
-                            }
-                        }
-                        .disabled(store.isResponding(to: approval))
-                    }
-                } header: {
-                    SectionHeader(
-                        title: "Pending Approvals (\(approvals.count.formatted()))",
-                        isLoading: approvals.contains { store.isResponding(to: $0) }
-                    )
-                } footer: {
-                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
-                        .foregroundStyle(.secondary)
-                }
-            }
 
             Section {
                 if network == nil {
@@ -121,33 +163,6 @@ struct SandboxDetailView: View {
             }
         }
         .formStyle(.grouped)
-        .task(id: sandbox.name) {
-            await refreshNetwork()
-        }
-        .approvalResponseDialog($approvalResponse)
-        .navigationTitle(sandbox.name)
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
-            // Kept out of the actions' group so it doesn't widen it, and always
-            // laid out so the toolbar doesn't shift when it appears.
-            ToolbarItem {
-                ProgressView()
-                    .controlSize(.small)
-                    .opacity(store.isBusy(sandbox) ? 1 : 0)
-                    .accessibilityHidden(!store.isBusy(sandbox))
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItemGroup {
-                SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
-                    .labelStyle(.iconOnly)
-            }
-        }
     }
 
     @ViewBuilder
@@ -447,4 +462,9 @@ struct StatusDot: View {
             .fill(color)
             .frame(width: 8, height: 8)
     }
+}
+
+/// Places in the detail view to scroll to.
+private enum DetailAnchor: Hashable {
+    case approvals
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var store = store
@@ -50,8 +51,13 @@ struct ContentView: View {
         } message: { error in
             Text(error.message)
         }
-        .task {
-            await store.refreshPeriodically()
+        .background(WindowReader(kind: .main))
+        .onAppear {
+            AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
+            store.windowDidOpen()
+        }
+        .onDisappear {
+            store.windowDidClose()
         }
     }
 }
