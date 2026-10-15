@@ -103,7 +103,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
-| Approve a request | `sbx policy approval respond ID --option allow` (after confirming in the app) |
+| Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option allow` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |
 | Dismiss a request | `sbx policy approval respond ID --option dismiss` |
 | Open Shell | `sbx exec -it NAME bash`, in Terminal |
