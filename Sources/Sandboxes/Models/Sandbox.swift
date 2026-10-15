@@ -165,7 +165,7 @@ enum SandboxListParser {
 
     /// Accepts RFC 3339 timestamps (with any number of fractional digits) and
     /// Unix timestamps in seconds or milliseconds.
-    private static func date(_ value: Any?) -> Date? {
+    static func date(_ value: Any?) -> Date? {
         if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
             let seconds = number.doubleValue
             return Date(timeIntervalSince1970: seconds > 100_000_000_000 ? seconds / 1000 : seconds)
@@ -203,7 +203,7 @@ enum SandboxListParser {
         .filter { !$0.isEmpty }
     }
 
-    private static func number(_ value: Any?) -> Double? {
+    static func number(_ value: Any?) -> Double? {
         if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
             return number.doubleValue
         }
@@ -211,7 +211,7 @@ enum SandboxListParser {
     }
 
     /// Looks up a value ignoring case, underscores and hyphens.
-    private static func value(in record: [String: Any], for keys: [String]) -> Any? {
+    static func value(in record: [String: Any], for keys: [String]) -> Any? {
         func normalize(_ key: String) -> String {
             key.lowercased().filter { $0 != "_" && $0 != "-" }
         }
@@ -231,7 +231,7 @@ enum SandboxListParser {
         return string(value).map { [$0] }?.filter { !$0.isEmpty } ?? []
     }
 
-    private static func string(_ value: Any?) -> String? {
+    static func string(_ value: Any?) -> String? {
         switch value {
         case let string as String:
             return string

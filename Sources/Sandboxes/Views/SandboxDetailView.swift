@@ -47,6 +47,9 @@ struct SandboxDetailView: View {
 
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
+
+            SandboxNetworkSection(sandbox: sandbox)
+                .id(sandbox.name)
         }
         .formStyle(.grouped)
         .navigationTitle(sandbox.name)
@@ -162,6 +165,188 @@ private struct SandboxResourcesSection: View {
             Text("Unknown")
         } else {
             ProgressView().controlSize(.small)
+        }
+    }
+}
+
+/// The network policy, the rules that apply to the sandbox and the hosts it
+/// has contacted, from `sbx policy`. Refreshed every few seconds.
+private struct SandboxNetworkSection: View {
+    let sandbox: Sandbox
+    @State private var network: SandboxNetwork?
+    @State private var networkError: String?
+    @State private var showsRules = false
+    @State private var showsTraffic = true
+
+    var body: some View {
+        Section {
+            LabeledContent("Policy") {
+                if let network {
+                    HStack(spacing: 6) {
+                        DecisionLabel(decision: network.defaultDecision, style: .policy)
+                        if let preset = network.presetLabel {
+                            Text("(\(preset))").foregroundStyle(.secondary)
+                        }
+                    }
+                } else if networkError != nil {
+                    Text("Unknown")
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            if let network {
+                DisclosureGroup(isExpanded: $showsRules) {
+                    if network.rules.isEmpty {
+                        Text("No rules apply to this sandbox.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(network.rules) { rule in
+                            NetworkRuleRow(rule: rule)
+                        }
+                    }
+                } label: {
+                    LabeledContent("Rules") {
+                        Text(network.rules.count.formatted())
+                    }
+                }
+                DisclosureGroup(isExpanded: $showsTraffic) {
+                    if network.log.isEmpty {
+                        Text("No requests yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(network.log) { entry in
+                            NetworkLogRow(entry: entry)
+                        }
+                    }
+                } label: {
+                    LabeledContent("Traffic") {
+                        Text(network.log.count == 1 ? "1 host" : "\(network.log.count.formatted()) hosts")
+                    }
+                }
+            }
+        } header: {
+            Text("Network")
+        } footer: {
+            if let networkError {
+                Text("Couldn't read the network policy: \(networkError)")
+                    .foregroundStyle(.secondary)
+            } else if network?.defaultDecision == .deny {
+                Text("Requests that no rule allows are blocked, or wait for your approval.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                do {
+                    let latest = try await SandboxNetwork.fetch(for: sandbox)
+                    guard !Task.isCancelled else { return }
+                    if latest != network {
+                        network = latest
+                    }
+                    networkError = nil
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    networkError = error.localizedDescription
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
+private struct NetworkRuleRow: View {
+    let rule: NetworkRule
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            DecisionLabel(decision: rule.decision, style: .rule)
+                .frame(width: 64, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rule.resources.joined(separator: ", "))
+                    .textSelection(.enabled)
+                if rule.method != nil || rule.path != nil {
+                    Text([rule.method, rule.path].compactMap { $0 }.joined(separator: " "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Text(origin)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// For example "Kit · This sandbox" or "Local · All sandboxes".
+    private var origin: String {
+        var parts: [String] = []
+        if let source = rule.source, !source.isEmpty {
+            parts.append(source.lowercased() == "org" ? "Organization" : source.capitalized)
+        }
+        if let appliesTo = rule.appliesTo?.lowercased() {
+            if appliesTo == "all" || appliesTo == "global" {
+                parts.append("All sandboxes")
+            } else if appliesTo.hasPrefix("sandbox") {
+                parts.append("This sandbox")
+            }
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct NetworkLogRow: View {
+    let entry: NetworkLogEntry
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            DecisionLabel(decision: entry.decision, style: .traffic)
+                .frame(width: 72, alignment: .leading)
+            Text(entry.host)
+                .textSelection(.enabled)
+            Spacer()
+            Text(entry.count == 1 ? "1 request" : "\(entry.count.formatted()) requests")
+                .monospacedDigit()
+            if let lastSeen = entry.lastSeen {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    Text("\(DurationFormat.short(context.date.timeIntervalSince(lastSeen))) ago")
+                        .foregroundStyle(.secondary)
+                        .help(lastSeen.formatted(date: .abbreviated, time: .standard))
+                }
+                .frame(minWidth: 64, alignment: .trailing)
+            }
+        }
+    }
+}
+
+private struct DecisionLabel: View {
+    enum Style {
+        /// "Allow" or "Deny"
+        case policy
+        /// "Allow" or "Deny", compact
+        case rule
+        /// "Allowed" or "Denied", compact
+        case traffic
+    }
+
+    let decision: NetworkDecision
+    let style: Style
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: decision == .allow ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .foregroundStyle(decision == .allow ? .green : .red)
+        }
+        .font(style == .policy ? .body : .caption.weight(.semibold))
+    }
+
+    private var text: String {
+        switch (decision, style) {
+        case (.allow, .traffic): "Allowed"
+        case (.deny, .traffic): "Denied"
+        case (.allow, _): "Allow"
+        case (.deny, _): "Deny"
         }
     }
 }
