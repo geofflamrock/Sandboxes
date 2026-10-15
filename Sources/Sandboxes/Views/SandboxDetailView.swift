@@ -86,6 +86,9 @@ struct SandboxDetailView: View {
             }
 
             Section {
+                if network == nil {
+                    networkPlaceholder
+                }
                 if let network {
                     if network.rules.isEmpty {
                         Text("No rules apply to this sandbox.")
@@ -108,6 +111,9 @@ struct SandboxDetailView: View {
             }
 
             Section {
+                if network == nil {
+                    networkPlaceholder
+                }
                 if let network {
                     if network.log.isEmpty {
                         Text("No requests yet.")
@@ -174,6 +180,13 @@ struct SandboxDetailView: View {
         } else if networkError != nil {
             Text("Unknown")
         }
+    }
+
+    /// A row for the network sections until the first fetch finishes. A
+    /// section with no rows draws its header in a smaller style.
+    private var networkPlaceholder: some View {
+        Text(networkError == nil ? "Loading…" : "Unknown")
+            .foregroundStyle(.secondary)
     }
 
     /// Reads the network policy, rules and traffic from `sbx policy` every few
@@ -306,12 +319,13 @@ private struct SandboxResourcesSection: View {
     }
 }
 
-/// A section title, with an optional count in brackets, and a spinner while
-/// the section's data is loading or an action is running.
+/// A section title, with an optional count in brackets, and a spinner when
+/// loading the section's data or running an action takes more than a moment.
 private struct SectionHeader: View {
     let title: String
     var count: Int?
     let isLoading: Bool
+    @State private var showsSpinner = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -320,9 +334,21 @@ private struct SectionHeader: View {
             } else {
                 Text(title)
             }
-            if isLoading {
+            if showsSpinner {
                 ProgressView()
                     .controlSize(.mini)
+            }
+        }
+        .task(id: isLoading) {
+            guard isLoading else {
+                showsSpinner = false
+                return
+            }
+            do {
+                try await Task.sleep(for: .milliseconds(600))
+                showsSpinner = true
+            } catch {
+                // Loading finished before the delay was up.
             }
         }
     }
