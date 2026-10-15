@@ -11,9 +11,21 @@ struct SandboxDetailView: View {
     var body: some View {
         Form {
             Section {
+                LabeledContent("Status") {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(sandbox.state.color)
+                            .frame(width: 8, height: 8)
+                        Text(sandbox.statusLabel)
+                    }
+                }
                 if let agent = sandbox.agent {
                     LabeledContent("Agent") {
-                        Text(agent).textSelection(.enabled)
+                        HStack(spacing: 6) {
+                            AgentIcon(agent: sandbox.knownAgent, size: 14)
+                                .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
+                            Text(agent).textSelection(.enabled)
+                        }
                     }
                 }
                 if let createdAt = sandbox.createdAt {
@@ -139,7 +151,6 @@ struct SandboxDetailView: View {
             Text(response.message)
         }
         .navigationTitle(sandbox.name)
-        .navigationSubtitle(sandbox.statusLabel)
         .toolbar {
             ToolbarItemGroup {
                 if store.isBusy(sandbox) {
