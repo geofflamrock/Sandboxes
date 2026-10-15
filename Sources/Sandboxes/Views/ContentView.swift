@@ -260,6 +260,10 @@ struct OpenSplitButton: View {
             Task { await store.open(sandbox, in: target) }
         }
         .help(target.title)
+        // A toolbar menu's AppKit item keeps the actions it was first built
+        // with, so after switching sandbox or default target its items and
+        // primary action would still open the old ones. Rebuild it instead.
+        .id("\(sandbox.id)/\(target.rawValue)")
     }
 }
 
