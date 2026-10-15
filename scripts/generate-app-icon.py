@@ -32,7 +32,8 @@ CUBE_LEFT = "#1D63ED"
 CUBE_RIGHT = "#0B4BC4"
 TAPE = "#9DD2F8"
 
-# Cube faces on a 120-unit design grid, scaled up to the icon body.
+# Cube faces on a 120-unit design grid, scaled up to the icon body and moved so
+# the cube's centre lands on the grid's centre (60, 60).
 CUBE_SCALE = 1.15
 CUBE_CENTRE = (60, 55)
 FACES = [
@@ -45,7 +46,7 @@ FACES = [
 SEAM = [(45, 30), (75, 46)]
 SEAM_WIDTH = 1
 # Sand ripples: (start x, end x, baseline y) on the same grid.
-RIPPLES = [(12, 110, 101), (12, 110, 111), (12, 48, 18)]
+RIPPLES = [(12, 110, 104), (12, 110, 113), (12, 48, 16)]
 RIPPLE_WIDTH = 2
 
 
@@ -56,7 +57,7 @@ def to_canvas(x, y):
 
 def cube_point(x, y):
     cx, cy = CUBE_CENTRE
-    return to_canvas(cx + (x - cx) * CUBE_SCALE, cy + (y - cy) * CUBE_SCALE)
+    return to_canvas(60 + (x - cx) * CUBE_SCALE, 60 + (y - cy) * CUBE_SCALE)
 
 
 def ripple_points(x0, x1, y, steps=120):
