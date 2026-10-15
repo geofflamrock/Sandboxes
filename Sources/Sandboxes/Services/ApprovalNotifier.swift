@@ -16,9 +16,6 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
     /// already waiting when the app starts are on screen, so they don't notify.
     @MainActor private var knownIDs: Set<NetworkApproval.ID>?
     @MainActor private weak var store: SandboxStore?
-    /// A click that arrived before the store was attached, such as the one
-    /// that launched the app. The inner nil means no sandbox was named.
-    @MainActor private var pendingReview: String??
 
     @MainActor static var isEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
@@ -26,7 +23,8 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     /// Call before the app finishes launching, so a click that launches the
     /// app is delivered.
-    @MainActor func register() {
+    @MainActor func register(_ store: SandboxStore) {
+        self.store = store
         center.delegate = self
         let review = UNNotificationAction(identifier: Self.reviewActionID, title: "Review", options: [.foreground])
         let category = UNNotificationCategory(identifier: Self.categoryID, actions: [review], intentIdentifiers: [])
@@ -38,14 +36,6 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     func requestAuthorization() {
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
-    }
-
-    @MainActor func attach(_ store: SandboxStore) {
-        self.store = store
-        if let pendingReview {
-            self.pendingReview = nil
-            store.showApprovals(forSandbox: pendingReview)
-        }
     }
 
     /// Notifies about requests that weren't in the last list, and withdraws
@@ -80,15 +70,8 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     @MainActor private func review(sandbox: String?) {
-        NSApp.activate()
-        for window in NSApp.windows where window.isMiniaturized {
-            window.deminiaturize(nil)
-        }
-        if let store {
-            store.showApprovals(forSandbox: sandbox)
-        } else {
-            pendingReview = .some(sandbox)
-        }
+        store?.showApprovals(forSandbox: sandbox)
+        MainWindow.show()
     }
 
     // MARK: UNUserNotificationCenterDelegate
@@ -118,7 +101,8 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
     ) {
         let sandbox = notification.request.content.userInfo[Self.sandboxKey] as? String
         Task { @MainActor in
-            let isShowing = NSApp.isActive && sandbox != nil && self.store?.selectedSandbox?.name == sandbox
+            let isShowing = NSApp.isActive && sandbox != nil
+                && self.store?.isWindowOpen == true && self.store?.selectedSandbox?.name == sandbox
             completionHandler(isShowing ? [] : [.banner, .list, .sound])
         }
     }

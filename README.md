@@ -11,6 +11,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in Terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download). The open button and double-clicking a sandbox use whichever you picked last.
 - Approve or deny network requests made by agents.
 - Get a notification when an agent's network request is waiting for approval. Click it, or its **Review** button, to open that sandbox and respond. You can turn notifications off in **Settings**.
+- Keeps running in the menu bar when you close its window, showing how many requests are waiting for approval, so notifications still arrive. Turn on **Open at login** in **Settings** to have it running from the start.
 
 ## Getting started
 
