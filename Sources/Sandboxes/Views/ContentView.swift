@@ -200,7 +200,7 @@ struct SandboxRow: View {
     }
 }
 
-/// Start/stop, open and remove actions, shared by menus and the toolbar.
+/// Start/stop, shell, open and remove actions, shared by menus and the toolbar.
 struct SandboxActionButtons: View {
     enum Placement {
         case menu
@@ -223,6 +223,11 @@ struct SandboxActionButtons: View {
             }
             .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         }
+        Button("Open Shell", systemImage: "terminal") {
+            store.openShell(in: sandbox)
+        }
+        .help("Open an interactive shell inside the sandbox in Terminal")
+        .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         switch placement {
         case .menu:
             // Menus can't hold a split button, so offer every place to open

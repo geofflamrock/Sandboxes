@@ -84,6 +84,16 @@ final class SandboxStore {
         await perform(["rm", "--force", sandbox.name], on: sandbox, failure: "Couldn't Remove “\(sandbox.name)”")
     }
 
+    /// Opens an interactive shell inside `sandbox` in Terminal. `sbx exec`
+    /// starts the sandbox first if it's stopped.
+    func openShell(in sandbox: Sandbox) {
+        do {
+            try TerminalLauncher.open(sbxArguments: ["exec", "-it", sandbox.name, "bash"])
+        } catch {
+            actionError = ActionError(title: "Couldn't Open a Shell in “\(sandbox.name)”", message: error.localizedDescription)
+        }
+    }
+
     /// Opens `sandbox` in `target` and makes `target` the default.
     func open(_ sandbox: Sandbox, in target: OpenTarget) async {
         guard canOpen(sandbox, in: target) else { return }
