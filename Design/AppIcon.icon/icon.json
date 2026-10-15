@@ -25,7 +25,7 @@
           "image-name": "Tape.svg",
           "name": "Tape",
           "position": {
-            "scale": 1.25,
+            "scale": 1.2,
             "translation-in-points": [
               0,
               0
@@ -48,7 +48,7 @@
           "image-name": "Box.svg",
           "name": "Box",
           "position": {
-            "scale": 1.25,
+            "scale": 1.2,
             "translation-in-points": [
               0,
               0
