@@ -8,7 +8,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Create new sandboxes quickly and easily. 
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in Terminal.
-- Open a session in a sandbox in Terminal or [Claude Desktop](https://claude.ai/download). The open button and double-clicking a sandbox use whichever you picked last.
+- Run a sandbox's agent in Terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download). The open button and double-clicking a sandbox use whichever you picked last.
 - Approve or deny network requests made by agents.
 
 ## Getting started
@@ -104,7 +104,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |
 | Dismiss a request | `sbx policy approval respond ID --option dismiss` |
 | Open Shell | `sbx exec -it NAME bash`, in Terminal |
-| Open in Terminal | `sbx run --name NAME` |
+| Run the agent (in Terminal) | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |
 
 Agent logos are from [Simple Icons](https://simpleicons.org) (CC0).
