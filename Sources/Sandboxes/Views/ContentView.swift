@@ -253,7 +253,7 @@ struct OpenSplitButton: View {
     var body: some View {
         let target = store.defaultOpenTarget
         Menu {
-            OpenTargetButtons(sandbox: sandbox, showsApp: true)
+            OpenTargetButtons(sandbox: sandbox)
                 .labelStyle(.titleAndIcon)
         } label: {
             OpenTargetLabel(target: target, agent: sandbox.knownAgent)
@@ -271,9 +271,6 @@ struct OpenSplitButton: View {
 /// A button for each way a sandbox can be opened.
 struct OpenTargetButtons: View {
     let sandbox: Sandbox
-    /// Shows "Run Codex in Terminal" rather than "Run Codex", for the open
-    /// button's menu.
-    var showsApp = false
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
@@ -281,7 +278,7 @@ struct OpenTargetButtons: View {
             Button {
                 Task { await store.open(sandbox, in: target) }
             } label: {
-                OpenTargetLabel(target: target, agent: sandbox.knownAgent, showsApp: showsApp)
+                OpenTargetLabel(target: target, agent: sandbox.knownAgent)
             }
             .disabled(!store.canOpen(sandbox, in: target))
         }
@@ -292,11 +289,10 @@ struct OpenTargetLabel: View {
     let target: OpenTarget
     /// Terminal runs the agent, so it's named after it and shows its logo.
     var agent: Agent?
-    var showsApp = false
 
     var body: some View {
         Label {
-            Text(showsApp ? target.detailedTitle(for: agent) : target.title(for: agent))
+            Text(target.title(for: agent))
         } icon: {
             switch target {
             case .terminal: agent?.menuIcon ?? Image(systemName: "apple.terminal")

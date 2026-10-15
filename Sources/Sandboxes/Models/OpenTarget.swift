@@ -15,12 +15,4 @@ enum OpenTarget: String, CaseIterable, Identifiable {
         case .claudeDesktop: "Open in Claude Desktop"
         }
     }
-
-    /// The title with the app it opens in, for the open button's menu.
-    func detailedTitle(for agent: Agent?) -> String {
-        switch self {
-        case .terminal: "\(title(for: agent)) in Terminal"
-        case .claudeDesktop: title(for: agent)
-        }
-    }
 }
