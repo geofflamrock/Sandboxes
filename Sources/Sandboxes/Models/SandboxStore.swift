@@ -25,6 +25,17 @@ final class SandboxStore {
     private(set) var createWorkload: String?
     var removalCandidate: Sandbox?
     var actionError: ActionError?
+    /// Where the open button and double-clicking open a sandbox: the last
+    /// place one was opened, starting with Terminal.
+    private(set) var defaultOpenTarget: OpenTarget = UserDefaults.standard
+        .string(forKey: SandboxStore.defaultOpenTargetKey)
+        .flatMap(OpenTarget.init(rawValue:)) ?? .terminal {
+        didSet {
+            UserDefaults.standard.set(defaultOpenTarget.rawValue, forKey: Self.defaultOpenTargetKey)
+        }
+    }
+
+    nonisolated private static let defaultOpenTargetKey = "defaultOpenTarget"
 
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
@@ -73,7 +84,24 @@ final class SandboxStore {
         await perform(["rm", "--force", sandbox.name], on: sandbox, failure: "Couldn't Remove “\(sandbox.name)”")
     }
 
-    func openInTerminal(_ sandbox: Sandbox) {
+    /// Opens `sandbox` in `target` and makes `target` the default.
+    func open(_ sandbox: Sandbox, in target: OpenTarget) async {
+        guard canOpen(sandbox, in: target) else { return }
+        defaultOpenTarget = target
+        switch target {
+        case .terminal: openInTerminal(sandbox)
+        case .claudeDesktop: await openInClaudeDesktop(sandbox)
+        }
+    }
+
+    func canOpen(_ sandbox: Sandbox, in target: OpenTarget) -> Bool {
+        switch target {
+        case .terminal: true
+        case .claudeDesktop: !isBusy(sandbox)
+        }
+    }
+
+    private func openInTerminal(_ sandbox: Sandbox) {
         do {
             try TerminalLauncher.open(sbxArguments: ["run", "--name", sandbox.name])
         } catch {
@@ -81,7 +109,7 @@ final class SandboxStore {
         }
     }
 
-    func openInClaudeDesktop(_ sandbox: Sandbox) async {
+    private func openInClaudeDesktop(_ sandbox: Sandbox) async {
         busyNames.insert(sandbox.name)
         do {
             try await ClaudeDesktopLauncher.open(sandbox)

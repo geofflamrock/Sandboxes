@@ -84,7 +84,7 @@ struct SandboxSidebar: View {
             }
         } primaryAction: { ids in
             if let id = ids.first, let sandbox = store.sandboxes.first(where: { $0.id == id }) {
-                store.openInTerminal(sandbox)
+                Task { await store.open(sandbox, in: store.defaultOpenTarget) }
             }
         }
         .onDeleteCommand {
@@ -202,9 +202,13 @@ struct SandboxRow: View {
 
 /// Start/stop, open and remove actions, shared by menus and the toolbar.
 struct SandboxActionButtons: View {
+    enum Placement {
+        case menu
+        case toolbar
+    }
+
     let sandbox: Sandbox
-    /// Menus separate Remove from the other actions; the toolbar doesn't.
-    var showsDivider = true
+    var placement = Placement.menu
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
@@ -219,25 +223,69 @@ struct SandboxActionButtons: View {
             }
             .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         }
-        Button("Open in Terminal", systemImage: "apple.terminal") {
-            store.openInTerminal(sandbox)
-        }
-        Button {
-            Task { await store.openInClaudeDesktop(sandbox) }
-        } label: {
-            Label {
-                Text("Open in Claude Desktop")
-            } icon: {
-                ClaudeDesktopIcon()
-            }
-        }
-        .disabled(store.isBusy(sandbox))
-        if showsDivider {
+        switch placement {
+        case .menu:
+            // Menus can't hold a split button, so list every place to open.
+            OpenTargetButtons(sandbox: sandbox)
             Divider()
+        case .toolbar:
+            OpenSplitButton(sandbox: sandbox)
         }
         Button("Remove…", systemImage: "trash", role: .destructive) {
             store.removalCandidate = sandbox
         }
         .disabled(store.isBusy(sandbox))
+    }
+}
+
+/// Opens a sandbox in the last place one was opened, with every place to open
+/// it in the menu.
+struct OpenSplitButton: View {
+    let sandbox: Sandbox
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        let target = store.defaultOpenTarget
+        Menu {
+            OpenTargetButtons(sandbox: sandbox)
+                .labelStyle(.titleAndIcon)
+        } label: {
+            OpenTargetLabel(target: target)
+        } primaryAction: {
+            Task { await store.open(sandbox, in: target) }
+        }
+        .help(target.title)
+    }
+}
+
+/// A button for each place a sandbox can be opened.
+struct OpenTargetButtons: View {
+    let sandbox: Sandbox
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        ForEach(OpenTarget.allCases) { target in
+            Button {
+                Task { await store.open(sandbox, in: target) }
+            } label: {
+                OpenTargetLabel(target: target)
+            }
+            .disabled(!store.canOpen(sandbox, in: target))
+        }
+    }
+}
+
+struct OpenTargetLabel: View {
+    let target: OpenTarget
+
+    var body: some View {
+        Label {
+            Text(target.title)
+        } icon: {
+            switch target {
+            case .terminal: Image(systemName: "apple.terminal")
+            case .claudeDesktop: ClaudeDesktopIcon()
+            }
+        }
     }
 }

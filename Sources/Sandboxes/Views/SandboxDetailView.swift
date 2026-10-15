@@ -139,7 +139,7 @@ struct SandboxDetailView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
-                SandboxActionButtons(sandbox: sandbox, showsDivider: false)
+                SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
                     .labelStyle(.iconOnly)
             }
         }
