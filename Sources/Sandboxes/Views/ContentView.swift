@@ -232,7 +232,7 @@ struct SandboxActionButtons: View {
         Button("Open Shell", systemImage: "terminal") {
             store.openShell(in: sandbox)
         }
-        .help("Open an interactive shell inside the sandbox in Terminal")
+        .help("Open an interactive shell inside the sandbox in the default terminal")
         .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         switch placement {
         case .menu:

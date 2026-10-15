@@ -103,7 +103,7 @@ final class SandboxStore {
         await perform(["rm", "--force", sandbox.name], on: sandbox, failure: "Couldn't Remove “\(sandbox.name)”")
     }
 
-    /// Opens an interactive shell inside `sandbox` in Terminal. `sbx exec`
+    /// Opens an interactive shell inside `sandbox` in the default terminal. `sbx exec`
     /// starts the sandbox first if it's stopped.
     func openShell(in sandbox: Sandbox) {
         do {
