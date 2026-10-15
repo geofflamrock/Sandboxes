@@ -199,12 +199,12 @@ struct SandboxActionButtons: View {
 
     var body: some View {
         if sandbox.state == .running {
-            Button("Stop", systemImage: "stop.circle") {
+            Button("Stop", systemImage: "stop") {
                 Task { await store.stop(sandbox) }
             }
             .disabled(store.isBusy(sandbox))
         } else {
-            Button("Start", systemImage: "play.circle") {
+            Button("Start", systemImage: "play") {
                 Task { await store.start(sandbox) }
             }
             .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
