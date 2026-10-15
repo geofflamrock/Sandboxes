@@ -5,6 +5,7 @@ struct SandboxDetailView: View {
     @Environment(SandboxStore.self) private var store
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
+    @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
         Form {
@@ -53,6 +54,22 @@ struct SandboxDetailView: View {
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
 
+            let approvals = store.approvals(for: sandbox)
+            if !approvals.isEmpty {
+                Section {
+                    ForEach(approvals) { approval in
+                        NetworkApprovalRow(approval: approval) { option, approves in
+                            approvalResponse = ApprovalResponse(approval: approval, option: option, approves: approves)
+                        }
+                    }
+                } header: {
+                    Text("Pending Approvals (\(approvals.count.formatted()))")
+                } footer: {
+                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let network {
                 Section {
                     if network.rules.isEmpty {
@@ -85,6 +102,20 @@ struct SandboxDetailView: View {
         .formStyle(.grouped)
         .task(id: sandbox.name) {
             await refreshNetwork()
+        }
+        .confirmationDialog(
+            approvalResponse?.question ?? "",
+            isPresented: Binding(
+                get: { approvalResponse != nil },
+                set: { if !$0 { approvalResponse = nil } }
+            ),
+            presenting: approvalResponse
+        ) { response in
+            Button(response.approves ? "Approve" : "Deny", role: response.approves ? nil : .destructive) {
+                Task { await store.respond(to: response.approval, with: response.option) }
+            }
+        } message: { response in
+            Text(response.message)
         }
         .navigationTitle(sandbox.name)
         .toolbar {
@@ -238,6 +269,60 @@ private struct SandboxResourcesSection: View {
         } else {
             ProgressView().controlSize(.small)
         }
+    }
+}
+
+/// A response to a pending approval, waiting for the user to confirm it.
+private struct ApprovalResponse: Identifiable {
+    var id: String { "\(approval.id)|\(option.id)" }
+    let approval: NetworkApproval
+    let option: NetworkApproval.Option
+    let approves: Bool
+
+    var question: String {
+        approves ? "Allow access to “\(approval.title)”?" : "Deny access to “\(approval.title)”?"
+    }
+
+    var message: String {
+        let command = (["sbx"] + NetworkApproval.respondArguments(approval: approval, option: option)).joined(separator: " ")
+        let effect: String
+        if approves {
+            effect = "This adds a rule that lets “\(approval.sandbox ?? "this sandbox")” reach \(approval.title)."
+        } else if NetworkDecision(option.id) == .deny {
+            effect = "\(approval.title) stays blocked for this sandbox."
+        } else {
+            effect = "\(approval.title) stays blocked. The sandbox asks again the next time it tries to reach it."
+        }
+        return "\(effect)\n\nRuns: \(command)"
+    }
+}
+
+private struct NetworkApprovalRow: View {
+    let approval: NetworkApproval
+    let respond: (NetworkApproval.Option, Bool) -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Image(systemName: "hand.raised.fill")
+                .foregroundStyle(.orange)
+            Text(approval.title)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if let detail = approval.detail {
+                Text(detail)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if let option = approval.denyOption {
+                Button("Deny") { respond(option, false) }
+            }
+            if let option = approval.approveOption {
+                Button("Approve") { respond(option, true) }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .help([approval.title, approval.detail].compactMap { $0 }.joined(separator: "\n"))
     }
 }
 

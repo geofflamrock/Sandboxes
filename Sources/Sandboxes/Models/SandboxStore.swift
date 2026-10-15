@@ -14,6 +14,8 @@ final class SandboxStore {
     private(set) var hasLoaded = false
     private(set) var loadError: String?
     private(set) var busyNames: Set<String> = []
+    /// Pending network approvals for every sandbox.
+    private(set) var approvals: [NetworkApproval] = []
     var selection: Sandbox.ID?
     var isCreatePresented = false
     var removalCandidate: Sandbox?
@@ -78,11 +80,25 @@ final class SandboxStore {
         busyNames.remove(sandbox.name)
     }
 
+    func approvals(for sandbox: Sandbox) -> [NetworkApproval] {
+        approvals.filter { $0.sandbox == sandbox.name }
+    }
+
+    func respond(to approval: NetworkApproval, with option: NetworkApproval.Option) async {
+        do {
+            try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: approval, option: option))
+        } catch {
+            actionError = ActionError(title: "Couldn't Respond to the Request for “\(approval.title)”", message: error.localizedDescription)
+        }
+        await refresh()
+    }
+
     func isBusy(_ sandbox: Sandbox) -> Bool {
         busyNames.contains(sandbox.name)
     }
 
     private func load() async {
+        async let latestApprovals = try? NetworkApproval.fetch()
         do {
             let output = try await SbxCLI.runChecked(["ls", "--json"])
             sandboxes = try SandboxListParser.parse(output)
@@ -95,6 +111,10 @@ final class SandboxStore {
             loadError = error.localizedDescription
         }
         hasLoaded = true
+        // Approvals are an extra; if sbx can't list them, keep the last list.
+        if let latest = await latestApprovals, latest != approvals {
+            approvals = latest
+        }
     }
 
     private func perform(_ arguments: [String], on sandbox: Sandbox, failure title: String) async {
