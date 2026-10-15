@@ -25,7 +25,7 @@ Requires macOS 26 or later and the `sbx` CLI. The app looks for `sbx` on your lo
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
 | Approve a request | `sbx policy approval respond ID --option allow` (after confirming in the app) |
-| Deny a request | `sbx policy deny network --sandbox NAME HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` (after confirming in the app) |
+| Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |
 | Dismiss a request | `sbx policy approval respond ID --option dismiss` |
 | Open in Terminal | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |

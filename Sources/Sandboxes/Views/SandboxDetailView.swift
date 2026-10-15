@@ -124,8 +124,11 @@ struct SandboxDetailView: View {
                     Task { await store.respond(to: response.approval, with: option) }
                 }
             case .deny:
-                Button("Deny", role: .destructive) {
+                Button("Deny for This Sandbox", role: .destructive) {
                     Task { await store.deny(response.approval, in: response.sandbox) }
+                }
+                Button("Deny for All Sandboxes", role: .destructive) {
+                    Task { await store.deny(response.approval, in: nil) }
                 }
             }
         } message: { response in
@@ -305,21 +308,12 @@ private struct ApprovalResponse {
     }
 
     var message: String {
-        let effect: String
-        var commands: [[String]]
         switch action {
-        case let .approve(option):
-            effect = "This adds a rule that lets “\(sandbox.name)” reach \(approval.title)."
-            commands = [NetworkApproval.respondArguments(approval: approval, option: option)]
+        case .approve:
+            "This adds a rule that lets “\(sandbox.name)” reach \(approval.title)."
         case .deny:
-            effect = "This adds a rule that blocks “\(sandbox.name)” from reaching \(approval.title), and dismisses the request."
-            commands = [NetworkApproval.denyArguments(approval: approval, sandbox: sandbox.name)]
-            if let dismiss = approval.dismissOption {
-                commands.append(NetworkApproval.respondArguments(approval: approval, option: dismiss))
-            }
+            "This adds a rule that blocks \(approval.title) for “\(sandbox.name)” or for every sandbox, and dismisses the request. Denying for all sandboxes also dismisses other sandboxes' requests for \(approval.target.host)."
         }
-        let lines = commands.map { (["sbx"] + $0).joined(separator: " ") }
-        return "\(effect)\n\nRuns:\n\(lines.joined(separator: "\n"))"
     }
 }
 

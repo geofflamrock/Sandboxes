@@ -30,22 +30,33 @@ struct NetworkApproval: Identifiable, Hashable {
         ["policy", "approval", "respond", approval.id, "--option", option.id]
     }
 
-    /// Adds a deny rule for this sandbox covering what it asked for. A request
-    /// an HTTP rule matched is titled like `GET api.example.com:443/v1/data`,
-    /// so that becomes a rule for that method and path.
-    static func denyArguments(approval: NetworkApproval, sandbox: String) -> [String] {
-        var target = Substring(approval.title.trimmingCharacters(in: .whitespaces))
-        var method: Substring?
-        if let space = target.firstIndex(of: " ") {
-            method = target[..<space]
-            target = target[target.index(after: space)...].drop { $0 == " " }
+    /// What the sandbox asked for. A request an HTTP rule matched is titled
+    /// like `GET api.example.com:443/v1/data`; others are just the host.
+    var target: (host: String, method: String?, path: String?) {
+        var text = Substring(title.trimmingCharacters(in: .whitespaces))
+        var method: String?
+        if let space = text.firstIndex(of: " ") {
+            method = String(text[..<space])
+            text = text[text.index(after: space)...].drop { $0 == " " }
         }
-        var arguments = ["policy", "deny", "network", "--sandbox", sandbox]
-        guard let slash = target.firstIndex(of: "/") else {
-            return arguments + [String(target)]
+        guard let slash = text.firstIndex(of: "/") else {
+            return (String(text), nil, nil)
         }
-        arguments.append(String(target[..<slash]))
-        arguments += ["--method", String(method ?? "ANY"), "--path", String(target[slash...])]
+        return (String(text[..<slash]), method ?? "ANY", String(text[slash...]))
+    }
+
+    /// Adds a deny rule covering what the sandbox asked for, scoped to
+    /// `sandbox`, or for every sandbox when it's nil.
+    static func denyArguments(approval: NetworkApproval, sandbox: String?) -> [String] {
+        let target = approval.target
+        var arguments = ["policy", "deny", "network"]
+        if let sandbox {
+            arguments += ["--sandbox", sandbox]
+        }
+        arguments.append(target.host)
+        if let method = target.method, let path = target.path {
+            arguments += ["--method", method, "--path", path]
+        }
         return arguments
     }
 

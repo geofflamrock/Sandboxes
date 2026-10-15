@@ -93,13 +93,22 @@ final class SandboxStore {
         await refresh()
     }
 
-    /// Adds a deny rule for the destination, then dismisses the request so it
-    /// no longer shows as pending.
-    func deny(_ approval: NetworkApproval, in sandbox: Sandbox) async {
+    /// Adds a deny rule for the destination, for `sandbox` or for every sandbox
+    /// when it's nil, then dismisses the request so it no longer shows as
+    /// pending. Denying for every sandbox also dismisses other sandboxes'
+    /// requests for the same host.
+    func deny(_ approval: NetworkApproval, in sandbox: Sandbox?) async {
         do {
-            try await SbxCLI.runChecked(NetworkApproval.denyArguments(approval: approval, sandbox: sandbox.name))
-            if let dismiss = approval.dismissOption {
-                try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: approval, option: dismiss))
+            try await SbxCLI.runChecked(NetworkApproval.denyArguments(approval: approval, sandbox: sandbox?.name))
+            var dismissed = [approval]
+            if sandbox == nil {
+                let host = approval.target.host.lowercased()
+                dismissed += approvals.filter { $0.id != approval.id && $0.target.host.lowercased() == host }
+            }
+            for pending in dismissed {
+                if let dismiss = pending.dismissOption {
+                    try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: pending, option: dismiss))
+                }
             }
         } catch {
             actionError = ActionError(title: "Couldn't Deny Access to “\(approval.title)”", message: error.localizedDescription)
