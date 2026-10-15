@@ -61,6 +61,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+        .background(WindowReader(kind: .settings))
         .onChange(of: notifiesAboutApprovals) { _, isOn in
             if isOn {
                 ApprovalNotifier.shared.requestAuthorization()

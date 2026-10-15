@@ -19,7 +19,7 @@ struct MenuBarLabel: View {
         .onAppear {
             // The label is always shown, so the window can be reopened even
             // after it's closed.
-            MainWindow.open = { openWindow(id: MainWindow.id) }
+            AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
         }
     }
 }
@@ -36,18 +36,17 @@ struct MenuBarMenu: View {
                 ForEach(store.approvals) { approval in
                     Button("\(approval.sandbox ?? "Unknown Sandbox"): \(approval.title)") {
                         store.showApprovals(forSandbox: approval.sandbox)
-                        MainWindow.show()
+                        AppWindows.showMain()
                     }
                 }
             }
         }
         Divider()
         Button("Open Sandboxes") {
-            MainWindow.show()
+            AppWindows.showMain()
         }
         Button("Settings…") {
-            NSApp.activate()
-            openSettings()
+            AppWindows.showSettings(openSettings)
         }
         .keyboardShortcut(",")
         Divider()

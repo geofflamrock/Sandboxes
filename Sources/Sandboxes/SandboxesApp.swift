@@ -10,7 +10,7 @@ struct SandboxesApp: App {
     private var store: SandboxStore { appDelegate.store }
 
     var body: some Scene {
-        Window("Sandboxes", id: MainWindow.id) {
+        Window("Sandboxes", id: AppWindows.mainID) {
             ContentView()
                 .environment(store)
                 .environment(recents)
@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reopens the window when the app is opened again, such as from Finder.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard !flag else { return true }
-        MainWindow.show()
+        AppWindows.showMain()
         return false
     }
 }

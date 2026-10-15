@@ -51,14 +51,13 @@ struct ContentView: View {
         } message: { error in
             Text(error.message)
         }
+        .background(WindowReader(kind: .main))
         .onAppear {
-            MainWindow.open = { openWindow(id: MainWindow.id) }
-            MainWindow.didOpen()
+            AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
             store.windowDidOpen()
         }
         .onDisappear {
             store.windowDidClose()
-            MainWindow.didClose()
         }
     }
 }

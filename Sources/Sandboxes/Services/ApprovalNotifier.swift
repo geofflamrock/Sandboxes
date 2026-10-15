@@ -71,7 +71,7 @@ final class ApprovalNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     @MainActor private func review(sandbox: String?) {
         store?.showApprovals(forSandbox: sandbox)
-        MainWindow.show()
+        AppWindows.showMain()
     }
 
     // MARK: UNUserNotificationCenterDelegate
