@@ -28,8 +28,8 @@ struct CreateSandboxView: View {
         .frame(minWidth: 560, idealWidth: 620, minHeight: 520, idealHeight: 600)
         .interactiveDismissDisabled(run?.phase == .running)
         .onAppear {
-            if request.workload.isEmpty, let last = recents.workloads.first {
-                request.workload = last
+            if request.workload.isEmpty {
+                request.workload = recents.workloads.first ?? Agent.claude.workloadImage ?? ""
             }
         }
     }
@@ -59,19 +59,24 @@ private struct CreateSandboxForm: View {
     var body: some View {
         Form {
             Section {
+                AgentPicker(selection: Agent(workloadImage: request.workload)) { agent in
+                    if let image = agent.workloadImage {
+                        request.workload = image
+                    }
+                }
                 HStack {
                     TextField("Image", text: $request.workload, prompt: Text("docker/sbx-kit-claude"))
                         .font(.body.monospaced())
-                    RecentsMenu(title: "Recent Workloads", items: recents.workloads) {
+                    RecentsMenu(title: "Recent Images", items: recents.workloads) {
                         request.workload = $0
                     } onClear: {
                         recents.clearWorkloads()
                     }
                 }
             } header: {
-                Text("Workload")
+                Text("Agent")
             } footer: {
-                Text("A v3 sandbox kit from an OCI registry.")
+                Text("Pick an agent, or enter any v3 workload kit from an OCI registry.")
                     .foregroundStyle(.secondary)
             }
 
@@ -221,6 +226,64 @@ private struct CreateSandboxForm: View {
     private func create() {
         addTypedKit()
         onCreate()
+    }
+}
+
+/// A grid of agent tiles. The tile for the agent whose kit is in the image
+/// field is highlighted; a custom image highlights none.
+private struct AgentPicker: View {
+    let selection: Agent?
+    let onSelect: (Agent) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+            ForEach(Agent.creatable, id: \.self) { agent in
+                AgentTile(agent: agent, isSelected: agent == selection) {
+                    onSelect(agent)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct AgentTile: View {
+    let agent: Agent
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                AgentIcon(agent: agent, size: 26, filled: true)
+                    .foregroundStyle(agent.color ?? Color.primary)
+                Text(agent.displayName)
+                    .font(.callout)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 4)
+            .background(background, in: .rect(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.25),
+                                  lineWidth: isSelected ? 2 : 1)
+            }
+            .contentShape(.rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(agent.workloadImage ?? agent.displayName)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var background: Color {
+        if isSelected { return Color.accentColor.opacity(0.15) }
+        return isHovering ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.05)
     }
 }
 

@@ -65,6 +65,41 @@ enum Agent: CaseIterable {
         }
     }
 
+    /// The v3 workload kit Docker publishes for the agent, if there is one.
+    var workloadImage: String? {
+        switch self {
+        case .claude: "docker/sbx-kit-claude"
+        case .codex: "docker/sbx-kit-codex"
+        case .copilot: "docker/sbx-kit-copilot"
+        case .cursor: "docker/sbx-kit-cursor"
+        case .devin: "docker/sbx-kit-devin"
+        case .dockerAgent: "docker/sbx-kit-docker-agent"
+        case .droid: "docker/sbx-kit-droid"
+        case .gemini: nil
+        case .kiro: "docker/sbx-kit-kiro"
+        case .openCode: "docker/sbx-kit-opencode"
+        case .shell: "docker/sbx-kit-shell"
+        }
+    }
+
+    /// The creatable agent whose kit `image` is, ignoring a `docker.io/`
+    /// registry prefix and any tag or digest.
+    init?(workloadImage image: String) {
+        var name = Substring(image.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        if let at = name.firstIndex(of: "@") { name = name[..<at] }
+        if let colon = name.lastIndex(of: ":"), !name[colon...].contains("/") { name = name[..<colon] }
+        for prefix in ["docker.io/", "index.docker.io/"] where name.hasPrefix(prefix) {
+            name = name.dropFirst(prefix.count)
+        }
+        guard let agent = Self.creatable.first(where: { $0.workloadImage == String(name) }) else { return nil }
+        self = agent
+    }
+
+    /// Agents that can be picked when creating a sandbox, in the order shown.
+    static let creatable: [Agent] = [
+        .claude, .codex, .copilot, .cursor, .openCode, .dockerAgent, .devin, .droid, .kiro, .shell,
+    ]
+
     /// The agent's logo in the asset catalog, from Simple Icons (CC0). Agents
     /// without one there use an SF Symbol instead.
     fileprivate var image: Image {
