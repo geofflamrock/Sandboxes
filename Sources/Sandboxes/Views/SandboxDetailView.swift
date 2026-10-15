@@ -13,9 +13,7 @@ struct SandboxDetailView: View {
             Section {
                 LabeledContent("Status") {
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(sandbox.state.color)
-                            .frame(width: 8, height: 8)
+                        StatusDot(color: sandbox.state.color)
                         Text(sandbox.statusLabel)
                     }
                 }
@@ -166,12 +164,7 @@ struct SandboxDetailView: View {
     @ViewBuilder
     private var networkPolicy: some View {
         if let network {
-            HStack(spacing: 6) {
-                DecisionLabel(decision: network.defaultDecision, style: .policy)
-                if let preset = network.presetLabel {
-                    Text("(\(preset))").foregroundStyle(.secondary)
-                }
-            }
+            DecisionLabel(decision: network.defaultDecision, style: .policy, detail: network.presetLabel)
         } else if networkError != nil {
             Text("Unknown")
         }
@@ -503,13 +496,13 @@ private struct DecisionLabel: View {
 
     let decision: NetworkDecision
     let style: Style
+    /// Shown in parentheses after the decision, e.g. "Allow (Balanced)".
+    var detail: String?
 
     var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: decision == .allow ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                .foregroundStyle(decision == .allow ? .green : .red)
+        HStack(spacing: 6) {
+            StatusDot(color: decision == .allow ? .green : .red)
+            Text(detail.map { "\(text) (\($0))" } ?? text)
         }
     }
 
@@ -520,5 +513,16 @@ private struct DecisionLabel: View {
         case (.allow, _): "Allow"
         case (.deny, _): "Deny"
         }
+    }
+}
+
+/// A small coloured circle for a sandbox state or network decision.
+struct StatusDot: View {
+    let color: Color
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
     }
 }

@@ -182,9 +182,7 @@ struct SandboxRow: View {
                 ProgressView()
                     .controlSize(.small)
             } else {
-                Circle()
-                    .fill(sandbox.state.color)
-                    .frame(width: 8, height: 8)
+                StatusDot(color: sandbox.state.color)
                     .help(sandbox.statusLabel)
             }
         }
