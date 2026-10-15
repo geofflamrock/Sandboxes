@@ -2,6 +2,7 @@
 
 A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) with the `sbx` CLI.
 
+- Opens on a home page with network requests waiting for approval across every sandbox, and cards for creating a sandbox with an agent you've used recently or from scratch. **⌘[** or the back button returns to it from a sandbox.
 - Lists sandboxes and their state, refreshing every few seconds. Each sandbox shows its agent's logo (Claude Code, Codex, Copilot, Cursor, Docker Agent, Gemini, OpenCode), or a symbol for Devin, Droid, Kiro and Shell. Logos are from [Simple Icons](https://simpleicons.org) (CC0).
 - Starts, stops and removes sandboxes, and opens them in Terminal (double-click a sandbox to attach) or Claude Desktop.
 - Creates sandboxes for an agent picked from a list (Claude Code maps to `docker/sbx-kit-claude`, and so on) or any v3 workload kit image, with extra mixin kits, a workspace folder (optional), Direct or Clone mode and an optional name. The output of `sbx create` streams into the sheet.

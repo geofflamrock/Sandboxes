@@ -29,7 +29,7 @@ struct CreateSandboxView: View {
         .interactiveDismissDisabled(run?.phase == .running)
         .onAppear {
             if request.workload.isEmpty {
-                request.workload = recents.workloads.first ?? Agent.claude.workloadImage ?? ""
+                request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workloadImage ?? ""
             }
         }
     }
