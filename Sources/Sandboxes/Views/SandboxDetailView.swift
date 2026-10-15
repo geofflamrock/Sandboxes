@@ -3,6 +3,8 @@ import SwiftUI
 struct SandboxDetailView: View {
     let sandbox: Sandbox
     @Environment(SandboxStore.self) private var store
+    @State private var network: SandboxNetwork?
+    @State private var networkError: String?
 
     var body: some View {
         Form {
@@ -43,16 +45,47 @@ struct SandboxDetailView: View {
                 LabeledContent("Ports") {
                     lines(sandbox.ports)
                 }
+                LabeledContent("Network Policy") {
+                    networkPolicy
+                }
             }
 
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
 
-            // Not given an `.id` like the resources section: two siblings with
-            // the same id confuse the Form's row identity.
-            SandboxNetworkSection(sandbox: sandbox)
+            if let network {
+                Section {
+                    if network.rules.isEmpty {
+                        Text("No rules apply to this sandbox.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(network.rules) { rule in
+                        NetworkRuleRow(rule: rule)
+                    }
+                } header: {
+                    Text("Network Rules (\(network.rules.count.formatted()))")
+                } footer: {
+                    if network.defaultDecision == .deny {
+                        Text("Requests that no rule allows are blocked, or wait for your approval.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Network Traffic (\(network.log.count.formatted()))") {
+                    if network.log.isEmpty {
+                        Text("No requests yet.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(network.log) { entry in
+                        NetworkLogRow(entry: entry)
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
+        .task(id: sandbox.name) {
+            await refreshNetwork()
+        }
         .navigationTitle(sandbox.name)
         .toolbar {
             ToolbarItemGroup {
@@ -63,6 +96,44 @@ struct SandboxDetailView: View {
                 SandboxActionButtons(sandbox: sandbox, showsDivider: false)
                     .labelStyle(.iconOnly)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var networkPolicy: some View {
+        if let network {
+            HStack(spacing: 6) {
+                DecisionLabel(decision: network.defaultDecision, style: .policy)
+                if let preset = network.presetLabel {
+                    Text("(\(preset))").foregroundStyle(.secondary)
+                }
+            }
+        } else if let networkError {
+            Text("Unknown")
+                .help("Couldn't read the network policy: \(networkError)")
+        } else {
+            ProgressView().controlSize(.small)
+        }
+    }
+
+    /// Reads the network policy, rules and traffic from `sbx policy` every few
+    /// seconds until the task is cancelled.
+    private func refreshNetwork() async {
+        network = nil
+        networkError = nil
+        while !Task.isCancelled {
+            do {
+                let latest = try await SandboxNetwork.fetch(for: sandbox)
+                guard !Task.isCancelled else { return }
+                if latest != network {
+                    network = latest
+                }
+                networkError = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                networkError = error.localizedDescription
+            }
+            try? await Task.sleep(for: .seconds(5))
         }
     }
 
@@ -166,75 +237,6 @@ private struct SandboxResourcesSection: View {
             Text("Unknown")
         } else {
             ProgressView().controlSize(.small)
-        }
-    }
-}
-
-/// The network policy, the rules that apply to the sandbox and the hosts it
-/// has contacted, from `sbx policy`. Refreshed every few seconds.
-private struct SandboxNetworkSection: View {
-    let sandbox: Sandbox
-    @State private var network: SandboxNetwork?
-    @State private var networkError: String?
-
-    var body: some View {
-        Section {
-            LabeledContent("Policy") {
-                if let network {
-                    HStack(spacing: 6) {
-                        DecisionLabel(decision: network.defaultDecision, style: .policy)
-                        if let preset = network.presetLabel {
-                            Text("(\(preset))").foregroundStyle(.secondary)
-                        }
-                    }
-                } else if networkError != nil {
-                    Text("Unknown")
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            if let network {
-                LabeledContent("Rules") {
-                    Text(network.rules.isEmpty ? "None" : network.rules.count.formatted())
-                }
-                ForEach(network.rules) { rule in
-                    NetworkRuleRow(rule: rule)
-                }
-                LabeledContent("Traffic") {
-                    Text(network.log.isEmpty ? "No requests yet" : network.log.count == 1 ? "1 host" : "\(network.log.count.formatted()) hosts")
-                }
-                ForEach(network.log) { entry in
-                    NetworkLogRow(entry: entry)
-                }
-            }
-        } header: {
-            Text("Network")
-        } footer: {
-            if let networkError {
-                Text("Couldn't read the network policy: \(networkError)")
-                    .foregroundStyle(.secondary)
-            } else if network?.defaultDecision == .deny {
-                Text("Requests that no rule allows are blocked, or wait for your approval.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .task(id: sandbox.name) {
-            network = nil
-            networkError = nil
-            while !Task.isCancelled {
-                do {
-                    let latest = try await SandboxNetwork.fetch(for: sandbox)
-                    guard !Task.isCancelled else { return }
-                    if latest != network {
-                        network = latest
-                    }
-                    networkError = nil
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    networkError = error.localizedDescription
-                }
-                try? await Task.sleep(for: .seconds(5))
-            }
         }
     }
 }
