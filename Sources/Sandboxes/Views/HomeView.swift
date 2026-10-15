@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Shown when no sandbox is selected: requests waiting for approval across
 /// every sandbox, and shortcuts for creating a sandbox.
@@ -7,17 +8,120 @@ struct HomeView: View {
     @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                PendingApprovalsCard(approvalResponse: $approvalResponse)
-                QuickCreateSection()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    HomeHeader {
+                        withAnimation { proxy.scrollTo(HomeAnchor.approvals, anchor: .top) }
+                    }
+                    PendingApprovalsCard(approvalResponse: $approvalResponse)
+                        .id(HomeAnchor.approvals)
+                    QuickCreateSection()
+                }
+                .frame(maxWidth: 880, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: 880, alignment: .leading)
-            .padding(24)
-            .frame(maxWidth: .infinity)
         }
         .approvalResponseDialog($approvalResponse)
-        .navigationTitle("Home")
+        // The page has its own large title, so keep the window title for the
+        // Window menu and Mission Control but don't repeat it in the toolbar.
+        .navigationTitle("Sandboxes")
+        .toolbar(removing: .title)
+    }
+}
+
+private enum HomeAnchor: Hashable {
+    case approvals
+}
+
+/// The app icon, a large title and a line summarizing the sandboxes, or a
+/// friendlier line when there aren't any yet.
+private struct HomeHeader: View {
+    let showApprovals: () -> Void
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 64, height: 64)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.hasLoaded && store.sandboxes.isEmpty && store.loadError == nil ? "No sandboxes yet" : "Sandboxes")
+                    .font(.largeTitle.bold())
+                summary
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var summary: some View {
+        if !store.hasLoaded {
+            Text("Loading…")
+        } else if store.sandboxes.isEmpty {
+            if store.loadError != nil {
+                Text("Couldn't load your sandboxes.")
+            } else {
+                Text("Pick an agent below to create your first one.")
+            }
+        } else {
+            HStack(spacing: 6) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    if index > 0 {
+                        Text("·")
+                    }
+                    item
+                }
+            }
+        }
+    }
+
+    /// One entry per state that has sandboxes, then pending approvals.
+    private var items: [AnyView] {
+        let states: [(SandboxState, String)] = [
+            (.running, "running"),
+            (.transitioning, "starting or stopping"),
+            (.stopped, "stopped"),
+            (.failed, "failed"),
+            (.unknown, "unknown"),
+        ]
+        var items: [AnyView] = states.compactMap { state, label in
+            let count = store.sandboxes.filter { $0.state == state }.count
+            guard count > 0 else { return nil }
+            return AnyView(
+                HStack(spacing: 5) {
+                    StatusDot(color: state.color)
+                    Text("\(count.formatted()) \(label)")
+                }
+            )
+        }
+        if !store.approvals.isEmpty {
+            let count = store.approvals.count
+            items.append(AnyView(
+                Button(action: showApprovals) {
+                    Label("\(count.formatted()) waiting for approval", systemImage: "hand.raised.fill")
+                        .labelStyle(SummaryLabelStyle())
+                }
+                .buttonStyle(.plain)
+                .help("Show pending approvals")
+            ))
+        }
+        return items
+    }
+}
+
+/// An orange icon next to text in the summary's secondary style.
+private struct SummaryLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+                .foregroundStyle(.orange)
+            configuration.title
+        }
     }
 }
 
