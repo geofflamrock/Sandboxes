@@ -176,8 +176,6 @@ private struct SandboxNetworkSection: View {
     let sandbox: Sandbox
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
-    @State private var showsRules = false
-    @State private var showsTraffic = true
 
     var body: some View {
         Section {
@@ -196,33 +194,17 @@ private struct SandboxNetworkSection: View {
                 }
             }
             if let network {
-                DisclosureGroup(isExpanded: $showsRules) {
-                    if network.rules.isEmpty {
-                        Text("No rules apply to this sandbox.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(network.rules) { rule in
-                            NetworkRuleRow(rule: rule)
-                        }
-                    }
-                } label: {
-                    LabeledContent("Rules") {
-                        Text(network.rules.count.formatted())
-                    }
+                LabeledContent("Rules") {
+                    Text(network.rules.isEmpty ? "None" : network.rules.count.formatted())
                 }
-                DisclosureGroup(isExpanded: $showsTraffic) {
-                    if network.log.isEmpty {
-                        Text("No requests yet.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(network.log) { entry in
-                            NetworkLogRow(entry: entry)
-                        }
-                    }
-                } label: {
-                    LabeledContent("Traffic") {
-                        Text(network.log.count == 1 ? "1 host" : "\(network.log.count.formatted()) hosts")
-                    }
+                ForEach(network.rules) { rule in
+                    NetworkRuleRow(rule: rule)
+                }
+                LabeledContent("Traffic") {
+                    Text(network.log.isEmpty ? "No requests yet" : network.log.count == 1 ? "1 host" : "\(network.log.count.formatted()) hosts")
+                }
+                ForEach(network.log) { entry in
+                    NetworkLogRow(entry: entry)
                 }
             }
         } header: {
@@ -263,21 +245,30 @@ private struct NetworkRuleRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             DecisionLabel(decision: rule.decision, style: .rule)
-                .frame(width: 64, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rule.resources.joined(separator: ", "))
-                    .textSelection(.enabled)
-                if rule.method != nil || rule.path != nil {
-                    Text([rule.method, rule.path].compactMap { $0 }.joined(separator: " "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+                .frame(width: 80, alignment: .leading)
+            Text(target)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer()
             Text(origin)
-                .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
         }
+        .help(details)
+    }
+
+    /// The hosts, then any HTTP method and path, e.g. "api.github.com GET /repos/**".
+    private var target: String {
+        ([rule.resources.joined(separator: ", ")] + [rule.method, rule.path].compactMap { $0 }).joined(separator: " ")
+    }
+
+    private var details: String {
+        var lines = ["\(rule.decision == .allow ? "Allow" : "Deny") \(rule.resources.joined(separator: ", "))"]
+        if let method = rule.method { lines.append("Method: \(method)") }
+        if let path = rule.path { lines.append("Path: \(path)") }
+        if !origin.isEmpty { lines.append(origin) }
+        return lines.joined(separator: "\n")
     }
 
     /// For example "Kit · This sandbox" or "Local · All sandboxes".
@@ -303,9 +294,11 @@ private struct NetworkLogRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             DecisionLabel(decision: entry.decision, style: .traffic)
-                .frame(width: 72, alignment: .leading)
+                .frame(width: 100, alignment: .leading)
             Text(entry.host)
-                .textSelection(.enabled)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(entry.host)
             Spacer()
             Text(entry.count == 1 ? "1 request" : "\(entry.count.formatted()) requests")
                 .monospacedDigit()
@@ -325,9 +318,9 @@ private struct DecisionLabel: View {
     enum Style {
         /// "Allow" or "Deny"
         case policy
-        /// "Allow" or "Deny", compact
+        /// "Allow" or "Deny"
         case rule
-        /// "Allowed" or "Denied", compact
+        /// "Allowed" or "Denied"
         case traffic
     }
 
@@ -341,7 +334,6 @@ private struct DecisionLabel: View {
             Image(systemName: decision == .allow ? "checkmark.circle.fill" : "xmark.octagon.fill")
                 .foregroundStyle(decision == .allow ? .green : .red)
         }
-        .font(style == .policy ? .body : .caption.weight(.semibold))
     }
 
     private var text: String {
