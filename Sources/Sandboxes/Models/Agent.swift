@@ -103,17 +103,37 @@ enum Agent: CaseIterable {
     /// The agent's logo in the asset catalog, from Simple Icons (CC0). Agents
     /// without one there use an SF Symbol instead.
     fileprivate var image: Image {
-        switch self {
-        case .claude: Image("AgentClaude")
-        case .codex: Image("AgentCodex")
-        case .copilot: Image("AgentCopilot")
-        case .cursor: Image("AgentCursor")
-        case .dockerAgent: Image("AgentDocker")
-        case .gemini: Image("AgentGemini")
-        case .openCode: Image("AgentOpenCode")
-        case .devin, .droid, .kiro: Image(systemName: "sparkles")
-        case .shell: Image(systemName: "terminal")
+        if let assetName {
+            return Image(assetName)
         }
+        return symbol
+    }
+
+    /// The logo sized to match the SF Symbols beside it in menus and toolbars,
+    /// which draw an image at its own point size and ignore SwiftUI frames.
+    var menuIcon: Image {
+        guard let assetName, let logo = NSImage(named: assetName)?.copy() as? NSImage else {
+            return symbol
+        }
+        logo.size = NSSize(width: 16, height: 16)
+        return Image(nsImage: logo)
+    }
+
+    private var assetName: String? {
+        switch self {
+        case .claude: "AgentClaude"
+        case .codex: "AgentCodex"
+        case .copilot: "AgentCopilot"
+        case .cursor: "AgentCursor"
+        case .dockerAgent: "AgentDocker"
+        case .gemini: "AgentGemini"
+        case .openCode: "AgentOpenCode"
+        case .devin, .droid, .kiro, .shell: nil
+        }
+    }
+
+    private var symbol: Image {
+        Image(systemName: self == .shell ? "terminal" : "sparkles")
     }
 
     /// Brand colors that read in both light and dark mode. Black logos are

@@ -200,7 +200,7 @@ struct SandboxRow: View {
     }
 }
 
-/// Start/stop, open and remove actions, shared by menus and the toolbar.
+/// Start/stop, shell, run/open and remove actions, shared by menus and the toolbar.
 struct SandboxActionButtons: View {
     enum Placement {
         case menu
@@ -223,15 +223,16 @@ struct SandboxActionButtons: View {
             }
             .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         }
+        Button("Open Shell", systemImage: "terminal") {
+            store.openShell(in: sandbox)
+        }
+        .help("Open an interactive shell inside the sandbox in Terminal")
+        .disabled(store.isBusy(sandbox) || sandbox.state == .transitioning)
         switch placement {
         case .menu:
-            // Menus can't hold a split button, so offer every place to open
-            // in a submenu. Double-clicking opens in the default.
-            Menu {
-                OpenTargetButtons(sandbox: sandbox, showsTargetNameOnly: true)
-            } label: {
-                Label("Open In", systemImage: "arrow.up.forward.app")
-            }
+            // Menus can't hold a split button, so list each way to open.
+            // Double-clicking uses the default.
+            OpenTargetButtons(sandbox: sandbox)
             Divider()
         case .toolbar:
             OpenSplitButton(sandbox: sandbox)
@@ -243,8 +244,8 @@ struct SandboxActionButtons: View {
     }
 }
 
-/// Opens a sandbox in the last place one was opened, with every place to open
-/// it in the menu.
+/// Opens a sandbox the way one was last opened, with every way to open it in
+/// the menu.
 struct OpenSplitButton: View {
     let sandbox: Sandbox
     @Environment(SandboxStore.self) private var store
@@ -255,11 +256,11 @@ struct OpenSplitButton: View {
             OpenTargetButtons(sandbox: sandbox)
                 .labelStyle(.titleAndIcon)
         } label: {
-            OpenTargetLabel(target: target)
+            OpenTargetLabel(target: target, agent: sandbox.knownAgent)
         } primaryAction: {
             Task { await store.open(sandbox, in: target) }
         }
-        .help(target.title)
+        .help(target.title(for: sandbox.knownAgent))
         // A toolbar menu's AppKit item keeps the actions it was first built
         // with, so after switching sandbox or default target its items and
         // primary action would still open the old ones. Rebuild it instead.
@@ -267,11 +268,9 @@ struct OpenSplitButton: View {
     }
 }
 
-/// A button for each place a sandbox can be opened.
+/// A button for each way a sandbox can be opened.
 struct OpenTargetButtons: View {
     let sandbox: Sandbox
-    /// Shows "Terminal" rather than "Open in Terminal", for an "Open In" submenu.
-    var showsTargetNameOnly = false
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
@@ -279,7 +278,7 @@ struct OpenTargetButtons: View {
             Button {
                 Task { await store.open(sandbox, in: target) }
             } label: {
-                OpenTargetLabel(target: target, showsTargetNameOnly: showsTargetNameOnly)
+                OpenTargetLabel(target: target, agent: sandbox.knownAgent)
             }
             .disabled(!store.canOpen(sandbox, in: target))
         }
@@ -288,14 +287,15 @@ struct OpenTargetButtons: View {
 
 struct OpenTargetLabel: View {
     let target: OpenTarget
-    var showsTargetNameOnly = false
+    /// Terminal runs the agent, so it's named after it and shows its logo.
+    var agent: Agent?
 
     var body: some View {
         Label {
-            Text(showsTargetNameOnly ? target.name : target.title)
+            Text(target.title(for: agent))
         } icon: {
             switch target {
-            case .terminal: Image(systemName: "apple.terminal")
+            case .terminal: agent?.menuIcon ?? Image(systemName: "apple.terminal")
             case .claudeDesktop: ClaudeDesktopIcon()
             }
         }
