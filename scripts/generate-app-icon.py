@@ -12,6 +12,8 @@ Outputs:
   the layers are grouped, scaled and lit live in Design/AppIcon.icon/icon.json,
   which Icon Composer edits.
 - Design/AppIcon.svg: a flattened preview of the icon.
+- Design/Tape-Split.svg: an alternative tape layer, split down the middle
+  where the flaps meet, to try in Icon Composer in place of Tape.svg.
 
 Run from the repository root: python3 scripts/generate-app-icon.py
 """
@@ -48,6 +50,30 @@ BOX = [
 ]
 # Tape across the lid, where the two flaps meet.
 TAPE_SHAPE = [(41.4, 31.9), (48.6, 28.1), (78.6, 44.1), (71.4, 47.9)]
+# The gap between the two halves of the split tape, across the seam.
+SEAM_GAP = 1
+
+
+def split_tape():
+    # Cut the tape along its length, from the middle of one short end to the
+    # middle of the other, and pull the halves apart so the gap is SEAM_GAP
+    # wide.
+    a, b, c, d = TAPE_SHAPE
+    along = (d[0] - a[0], d[1] - a[1])
+    across = (b[0] - a[0], b[1] - a[1])
+    length = (along[0] ** 2 + along[1] ** 2) ** 0.5
+    normal = (along[1] / length, -along[0] / length)
+    # How far to move along the short ends for half the gap, measured square
+    # to the seam.
+    shift = (SEAM_GAP / 2) / abs(across[0] * normal[0] + across[1] * normal[1])
+
+    def at(p, q, t):
+        return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
+
+    return [
+        [a, at(a, b, 0.5 - shift), at(d, c, 0.5 - shift), d],
+        [at(a, b, 0.5 + shift), b, c, at(d, c, 0.5 + shift)],
+    ]
 
 
 def cube_point(x, y, size, inset=0):
@@ -92,6 +118,9 @@ def write_layers():
     LAYERS.mkdir(parents=True, exist_ok=True)
     (LAYERS / "Box.svg").write_text(svg(polygons(BOX, CANVAS)))
     (LAYERS / "Tape.svg").write_text(svg(polygons([(TAPE, TAPE_SHAPE)], CANVAS)))
+    (DESIGN / "Tape-Split.svg").write_text(
+        svg(polygons([(TAPE, half) for half in split_tape()], CANVAS))
+    )
 
 
 def write_preview():
