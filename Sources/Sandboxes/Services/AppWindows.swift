@@ -55,21 +55,29 @@ enum AppWindows {
         }
     }
 
-    /// Activating can be refused, or not take effect until the switch back to
-    /// a regular app has gone through, which left windows behind other apps'.
-    /// So put the window in front regardless, and activate again on the next
-    /// turn of the run loop.
+    /// The user asked for the window, so make the app active and put the
+    /// window in front. Without a window the app was menu bar only, and the
+    /// switch back to a regular app takes a moment to go through; activating
+    /// before then can be dropped, letting the app that was active take over
+    /// again when the menu closes. So activate again once it has gone through.
     private static func bringToFront(_ window: NSWindow) {
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
-        NSApp.activate()
+        activate()
         window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
-        DispatchQueue.main.async {
-            NSApp.activate()
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            activate()
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    /// `NSApp.activate()` only works when the active app yields to this one,
+    /// which nothing does for an app that was menu bar only, so windows ended
+    /// up behind other apps'. Force it, as the deprecated call still does.
+    private static func activate() {
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private static func leaveDockIfNoWindowsAreOpen() {
