@@ -18,6 +18,7 @@ Requires macOS 26 or later and the `sbx` CLI. The app looks for `sbx` on your lo
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
+| Resource usage (selected running sandbox) | `sbx exec NAME sh -c …` reading `/proc/stat`, `/proc/meminfo`, `/proc/uptime` and `df` |
 | Open in Terminal | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |
 
