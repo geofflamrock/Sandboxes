@@ -58,7 +58,7 @@ struct CreateSandboxRequest {
     /// Why the request can't be submitted yet, if it can't.
     var validationMessage: String? {
         if trimmedWorkload.isEmpty {
-            return "Enter a workload image."
+            return "Choose an agent or enter an image."
         }
         if !trimmedName.isEmpty {
             if trimmedName == "default" {
