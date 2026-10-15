@@ -58,12 +58,19 @@ struct ContentView: View {
 
 struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
+    @State private var searchText = ""
+
+    private var filteredSandboxes: [Sandbox] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return store.sandboxes }
+        return store.sandboxes.filter { $0.name.localizedStandardContains(query) }
+    }
 
     var body: some View {
         @Bindable var store = store
 
         List(selection: $store.selection) {
-            ForEach(store.sandboxes) { sandbox in
+            ForEach(filteredSandboxes) { sandbox in
                 SandboxRow(
                     sandbox: sandbox,
                     isBusy: store.isBusy(sandbox),
@@ -106,8 +113,11 @@ struct SandboxSidebar: View {
                             .buttonStyle(.glassProminent)
                     }
                 }
+            } else if filteredSandboxes.isEmpty {
+                ContentUnavailableView.search(text: searchText)
             }
         }
+        .searchable(text: $searchText, placement: .sidebar, prompt: "Search sandboxes")
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
                 if let error = store.loadError, !store.sandboxes.isEmpty {
