@@ -1,36 +1,11 @@
 # Sandboxes
 
-A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/). See all your sandboxes at a glance, create new ones for your favourite coding agent, and keep an eye on what they're doing on the network, without having to remember `sbx` commands.
+A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/).
 
-## Features
-
-### See everything at a glance
-
-- The home page shows how many sandboxes are running or stopped, and any network requests waiting for your approval across all of them.
-- The sidebar lists every sandbox with its state and its agent's logo (Claude Code, Codex, Copilot, Cursor, Docker Agent, Gemini, OpenCode, Devin, Droid, Kiro or Shell). It refreshes every few seconds.
-- Search the sidebar to filter sandboxes by name.
-- Press **⌘[** or the back button to return to the home page from a sandbox.
-
-### Create sandboxes in a few clicks
-
-- Start from a card on the home page for an agent you've used recently, or create one from scratch.
-- Pick an agent from a list, or use any v3 workload kit image.
-- Add extra mixin kits, choose a workspace folder (optional), pick Direct or Clone mode and give it a name if you like.
-- Watch the output as the sandbox is created.
-- The app remembers the agents and kits you've used, so they're quick to pick next time.
-
-### Work with your sandboxes
-
-- Start, stop and remove sandboxes. You're asked to confirm before anything is removed.
-- Double-click a sandbox to open it in Terminal.
-- Open a sandbox in [Claude Desktop](https://claude.ai/download) to work with it in Claude Code. You need Claude Desktop v2.110.0 or later, and it asks you to confirm the SSH connection the first time. Use a sandbox created with the Claude Code agent so it has Anthropic credentials and network access.
-- See each sandbox's details, including when it was created, its ports, and CPU, memory and disk usage while it's running.
-
-### Stay in control of network access
-
-- See each sandbox's network policy (allow or deny by default) and the rules that apply to it.
-- See which hosts a sandbox has contacted, how many requests it made and whether they were allowed or denied.
-- Approve, deny or dismiss network requests that are waiting for approval. Sandboxes with pending requests are marked in the sidebar.
+- See the details of your sandboxes, including resource usage while they're running.
+- Create, start, stop and remove sandboxes.
+- Open a session in a sandbox in Terminal or [Claude Desktop](https://claude.ai/download).
+- Approve or deny network requests made by agents.
 
 ## Getting started
 
@@ -38,6 +13,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/)
+- [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
 
