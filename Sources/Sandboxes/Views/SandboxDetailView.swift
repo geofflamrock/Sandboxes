@@ -134,12 +134,17 @@ struct SandboxDetailView: View {
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")
             }
+            // Kept out of the actions' group so it doesn't widen it, and always
+            // laid out so the toolbar doesn't shift when it appears.
+            ToolbarItem {
+                ProgressView()
+                    .controlSize(.small)
+                    .opacity(store.isBusy(sandbox) ? 1 : 0)
+                    .accessibilityHidden(!store.isBusy(sandbox))
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItemGroup {
-                if store.isBusy(sandbox) {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                SandboxActionButtons(sandbox: sandbox, showsDivider: false)
+                SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
                     .labelStyle(.iconOnly)
             }
         }
