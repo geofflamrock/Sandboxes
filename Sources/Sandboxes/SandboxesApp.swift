@@ -26,7 +26,7 @@ struct SandboxesApp: App {
             }
             CommandGroup(replacing: .newItem) {
                 Button("New Sandbox…") {
-                    store.isCreatePresented = true
+                    store.presentCreate()
                 }
                 .keyboardShortcut("n")
             }

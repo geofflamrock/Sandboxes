@@ -13,7 +13,7 @@ struct ContentView: View {
             if let sandbox = store.selectedSandbox {
                 SandboxDetailView(sandbox: sandbox)
             } else {
-                ContentUnavailableView("No Sandbox Selected", systemImage: "shippingbox")
+                HomeView()
             }
         }
         // The window starts with a non-scrolling detail view, so AppKit draws a
@@ -102,7 +102,7 @@ struct SandboxSidebar: View {
                     } description: {
                         Text("Create a sandbox to get started.")
                     } actions: {
-                        Button("New Sandbox") { store.isCreatePresented = true }
+                        Button("New Sandbox") { store.presentCreate() }
                             .buttonStyle(.glassProminent)
                     }
                 }
@@ -145,7 +145,7 @@ struct SandboxSidebar: View {
             // window's trailing toolbar for actions on the selected sandbox.
             ToolbarItem {
                 Button("New Sandbox", systemImage: "plus") {
-                    store.isCreatePresented = true
+                    store.presentCreate()
                 }
                 .help("Create a new sandbox")
             }

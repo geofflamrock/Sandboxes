@@ -20,6 +20,9 @@ final class SandboxStore {
     private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
     var selection: Sandbox.ID?
     var isCreatePresented = false
+    /// The workload image the create sheet starts with, or nil for the most
+    /// recently used one.
+    private(set) var createWorkload: String?
     var removalCandidate: Sandbox?
     var actionError: ActionError?
 
@@ -50,6 +53,12 @@ final class SandboxStore {
             await refresh()
             try? await Task.sleep(for: .seconds(5))
         }
+    }
+
+    /// Opens the create sheet, starting with `workload` when it's given.
+    func presentCreate(workload: String? = nil) {
+        createWorkload = workload
+        isCreatePresented = true
     }
 
     func start(_ sandbox: Sandbox) async {
