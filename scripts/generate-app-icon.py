@@ -7,9 +7,10 @@ separate layers, with no drawn shadows or highlights, since the system adds
 those itself.
 
 Outputs:
-- Design/AppIcon.icon/Assets/*.svg: the layers of the Icon Composer icon, on
-  its full-bleed 1024pt canvas. How they're grouped, scaled and lit lives in
-  Design/AppIcon.icon/icon.json, which Icon Composer edits.
+- Design/AppIcon.icon/Assets/*.svg: the foreground layers of the Icon
+  Composer icon, on its full-bleed 1024pt canvas. The background fill and how
+  the layers are grouped, scaled and lit live in Design/AppIcon.icon/icon.json,
+  which Icon Composer edits.
 - Design/AppIcon.svg: a flattened preview of the icon.
 
 Run from the repository root: python3 scripts/generate-app-icon.py
@@ -28,7 +29,8 @@ BODY = 824
 INSET = (CANVAS - BODY) // 2
 RADIUS = 185
 
-# Background fill: a soft top-lit gradient, (top, bottom).
+# The preview's background: the light fill from icon.json, a soft top-lit
+# gradient, (top, bottom). The dark fill is #4A3C29 to #2A2117.
 SAND = ("#F8ECD4", "#EDD7AA")
 BOX_TOP = "#5AACF2"
 BOX_LEFT = "#2A6EEF"
@@ -88,9 +90,6 @@ def svg(body, defs=""):
 
 def write_layers():
     LAYERS.mkdir(parents=True, exist_ok=True)
-    (LAYERS / "Background.svg").write_text(
-        svg(f'  <rect width="{CANVAS}" height="{CANVAS}" fill="url(#fill)"/>', gradient_def(SAND))
-    )
     (LAYERS / "Box.svg").write_text(svg(polygons(BOX, CANVAS)))
     (LAYERS / "Tape.svg").write_text(svg(polygons([(TAPE, TAPE_SHAPE)], CANVAS)))
 

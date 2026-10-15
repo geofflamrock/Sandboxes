@@ -70,7 +70,7 @@ The app icon is `Design/AppIcon.icon`, an [Icon Composer](https://developer.appl
 python3 scripts/generate-app-icon.py
 ```
 
-To change how the layers are grouped, scaled or lit, open `Design/AppIcon.icon` in Icon Composer.
+To change the background fill, or how the layers are grouped, scaled or lit, open `Design/AppIcon.icon` in Icon Composer.
 
 ### Test builds
 
