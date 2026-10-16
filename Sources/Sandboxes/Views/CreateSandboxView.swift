@@ -669,6 +669,9 @@ private struct CreationOutputView: View {
     let onBack: () -> Void
     let onDone: () -> Void
 
+    /// Briefly shows a checkmark after the approval command is copied.
+    @State private var copiedCommand = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -736,13 +739,26 @@ private struct CreationOutputView: View {
                         .font(.callout.monospaced())
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Copy Command", systemImage: "doc.on.doc") {
+                    Button {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(run.credentialApprovalCommandLine, forType: .string)
+                        copiedCommand = true
+                    } label: {
+                        Label(
+                            copiedCommand ? "Copied" : "Copy Command",
+                            systemImage: copiedCommand ? "checkmark" : "doc.on.doc"
+                        )
+                        .contentTransition(.symbolEffect(.replace))
+                        .foregroundStyle(copiedCommand ? Color.green : Color.secondary)
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
-                    .help("Copy Command")
+                    .help(copiedCommand ? "Copied" : "Copy Command")
+                    .task(id: copiedCommand) {
+                        guard copiedCommand else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        copiedCommand = false
+                    }
                 }
                 .padding(8)
                 .background(.background.secondary, in: .rect(cornerRadius: 6))
