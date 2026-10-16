@@ -34,9 +34,9 @@ INSET = (CANVAS - BODY) // 2
 RADIUS = 185
 FULL_BLEED = CANVAS / BODY
 
-# The preview's background, top to bottom: the system light fill that
-# icon.json uses.
-BACKGROUND = ("#FFFFFF", "#E4E4EA")
+# The preview's background: the light fill from icon.json, a lawn green
+# top-lit gradient, (top, bottom). The dark fill is the system's.
+BACKGROUND = ("#DDF0CC", "#B2DB8F")
 WOOD_TOP = "#E39B5B"
 WOOD_LEFT = "#C47A3C"
 WOOD_RIGHT = "#AE6530"
