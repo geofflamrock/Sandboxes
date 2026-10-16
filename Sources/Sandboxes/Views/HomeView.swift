@@ -255,15 +255,15 @@ private struct PendingApprovalsCard: View {
 
 // MARK: - sbx
 
-/// Which sbx is installed, or the command to install or upgrade it. The user
-/// runs the command themselves.
+/// Which sbx is installed and the results of `sbx diagnose`, or the command
+/// to install or upgrade it. The user runs the command themselves.
 private struct SbxStatusSection: View {
     @Environment(SbxStatus.self) private var sbxStatus
     @Environment(SandboxStore.self) private var store
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HomeSectionHeader(title: "Command Line Tool")
+            HomeSectionHeader(title: "sbx Health", isLoading: sbxStatus.isDiagnosing)
 
             VStack(alignment: .leading, spacing: 10) {
                 content
@@ -303,6 +303,8 @@ private struct SbxStatusSection: View {
             } else {
                 installedContent(installation)
             }
+            Divider()
+            SbxDiagnosticsView()
         }
     }
 
@@ -357,6 +359,190 @@ private struct SbxStatusSection: View {
             return "Unknown version"
         }
         return sbxStatus.latest == nil ? "Installed" : "Up to date"
+    }
+}
+
+/// A summary of the `sbx diagnose` checks. Failures and warnings are always
+/// listed with what to do about them; passed checks are behind a disclosure.
+private struct SbxDiagnosticsView: View {
+    @Environment(SbxStatus.self) private var sbxStatus
+    @State private var isShowingAll = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                summary
+                Spacer(minLength: 0)
+                Button("Run Again") {
+                    Task { await sbxStatus.diagnose() }
+                }
+                .disabled(sbxStatus.isDiagnosing)
+                .help("Run sbx diagnose again")
+            }
+
+            if let diagnostics = sbxStatus.diagnostics {
+                let needsAttention = diagnostics.checks.filter { $0.status == .fail || $0.status == .warn }
+                ForEach(needsAttention) { check in
+                    SbxDiagnosticRow(check: check)
+                }
+                let others = diagnostics.checks.filter { $0.status == .pass || $0.status == .skip }
+                if !others.isEmpty {
+                    DisclosureGroup(isExpanded: $isShowingAll) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Self.grouped(others), id: \.offset) { _, group in
+                                if let category = group.category {
+                                    Text(category)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 4)
+                                }
+                                ForEach(group.checks) { check in
+                                    SbxDiagnosticRow(check: check)
+                                }
+                            }
+                        }
+                        .padding(.top, 6)
+                    } label: {
+                        Text(needsAttention.isEmpty ? "Show all checks" : "Show passed checks")
+                            .font(.callout)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var summary: some View {
+        if let diagnostics = sbxStatus.diagnostics {
+            let failed = diagnostics.count(.fail)
+            let warned = diagnostics.count(.warn)
+            let passed = diagnostics.count(.pass)
+            let status: SbxDiagnostics.Check.Status = failed > 0 ? .fail : warned > 0 ? .warn : .pass
+            Label {
+                if failed == 0 && warned == 0 {
+                    Text(diagnostics.checks.count == 1 ? "The diagnostic check passed" : "All \(passed.formatted()) diagnostic checks passed")
+                } else {
+                    Text(Self.counts(failed: failed, warned: warned, passed: passed))
+                }
+            } icon: {
+                SbxStatusIcon(status: status)
+            }
+            .font(.headline)
+        } else if let error = sbxStatus.diagnosticsError {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Couldn't run sbx diagnose")
+                        .font(.headline)
+                    Text(error)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            } icon: {
+                SbxStatusIcon(status: .fail)
+            }
+        } else {
+            Text(sbxStatus.isDiagnosing ? "Running sbx diagnose…" : "sbx diagnose hasn't run yet.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Such as "1 failed · 2 warnings · 10 passed".
+    private static func counts(failed: Int, warned: Int, passed: Int) -> String {
+        var parts: [String] = []
+        if failed > 0 { parts.append("\(failed.formatted()) failed") }
+        if warned > 0 { parts.append(warned == 1 ? "1 warning" : "\(warned.formatted()) warnings") }
+        if passed > 0 { parts.append("\(passed.formatted()) passed") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Consecutive checks in the same category, in the order sbx gave them.
+    private static func grouped(_ checks: [SbxDiagnostics.Check]) -> [(offset: Int, element: (category: String?, checks: [SbxDiagnostics.Check]))] {
+        var groups: [(category: String?, checks: [SbxDiagnostics.Check])] = []
+        for check in checks {
+            if let last = groups.indices.last, groups[last].category == check.category {
+                groups[last].checks.append(check)
+            } else {
+                groups.append((check.category, [check]))
+            }
+        }
+        return Array(groups.enumerated())
+    }
+}
+
+/// One `sbx diagnose` check: its status, name and result, with the detail and,
+/// for warnings and failures, what to do.
+private struct SbxDiagnosticRow: View {
+    let check: SbxDiagnostics.Check
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            SbxStatusIcon(status: check.status)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(check.name)
+                        .fontWeight(.medium)
+                    if !check.message.isEmpty {
+                        Text(check.message)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !check.detail.isEmpty {
+                    Text(check.detail)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .truncationMode(.middle)
+                }
+                if !check.hint.isEmpty && (check.status == .fail || check.status == .warn) {
+                    Text(check.hint)
+                        .font(.callout)
+                }
+            }
+            .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(check.name), \(check.status.accessibilityName): \(check.message)")
+    }
+}
+
+/// Green for passed, orange for a warning, red for failed and grey for skipped.
+private struct SbxStatusIcon: View {
+    let status: SbxDiagnostics.Check.Status
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .foregroundStyle(color)
+            .accessibilityHidden(true)
+    }
+
+    private var systemImage: String {
+        switch status {
+        case .pass: "checkmark.circle.fill"
+        case .warn: "exclamationmark.triangle.fill"
+        case .fail: "xmark.circle.fill"
+        case .skip: "minus.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .pass: .green
+        case .warn: .orange
+        case .fail: .red
+        case .skip: .secondary
+        }
+    }
+}
+
+private extension SbxDiagnostics.Check.Status {
+    var accessibilityName: String {
+        switch self {
+        case .pass: "passed"
+        case .warn: "warning"
+        case .fail: "failed"
+        case .skip: "skipped"
+        }
     }
 }
 

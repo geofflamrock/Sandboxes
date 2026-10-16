@@ -37,9 +37,9 @@ struct SbxVersion: Comparable, CustomStringConvertible, Sendable {
     }
 }
 
-/// Whether sbx is installed, which version, and whether there's a newer
-/// release. The app only shows the commands to install or upgrade it; the
-/// user runs them.
+/// Whether sbx is installed, which version, whether there's a newer release,
+/// and the results of `sbx diagnose`. The app only shows the commands to
+/// install or upgrade it; the user runs them.
 @MainActor
 @Observable
 final class SbxStatus {
@@ -76,9 +76,19 @@ final class SbxStatus {
     /// The newest stable release on GitHub, or nil until it's been fetched or
     /// when it couldn't be.
     private(set) var latest: Release?
+    /// The last results of `sbx diagnose`, kept while it runs again.
+    private(set) var diagnostics: SbxDiagnostics?
+    /// Why `sbx diagnose` couldn't run last time, if it couldn't.
+    private(set) var diagnosticsError: String?
+    private(set) var isDiagnosing = false
 
     @ObservationIgnored private var latestCheckedAt: Date?
+    @ObservationIgnored private var diagnosedAt: Date?
     @ObservationIgnored private var isChecking = false
+
+    /// `sbx diagnose` collects a diagnostics bundle from the daemon, so it
+    /// isn't rerun every time the app becomes active.
+    private static let diagnosticsCacheDuration: TimeInterval = 5 * 60
 
     /// Unauthenticated GitHub API calls are limited to 60 an hour.
     private static let latestCacheDuration: TimeInterval = 6 * 60 * 60
@@ -96,14 +106,16 @@ final class SbxStatus {
         return latest
     }
 
-    /// Whether the user has something to do: install sbx or upgrade it.
+    /// Whether the user has something to do: install sbx, upgrade it, or fix
+    /// a failed diagnostic check.
     var needsAttention: Bool {
         if case .notInstalled = state { return true }
-        return availableUpgrade != nil
+        return availableUpgrade != nil || diagnostics?.failures.isEmpty == false
     }
 
-    /// Looks for sbx and its version again, and for the latest release when
-    /// the last look is out of date. Returns true when sbx was just installed.
+    /// Looks for sbx and its version again, and for the latest release and
+    /// runs `sbx diagnose` when the last results are out of date. Returns true
+    /// when sbx was just installed.
     @discardableResult
     func check() async -> Bool {
         guard !isChecking else { return false }
@@ -125,7 +137,36 @@ final class SbxStatus {
             state = .notInstalled
         }
         await latestRelease
+
+        if installation == nil {
+            diagnostics = nil
+            diagnosticsError = nil
+        } else if wasMissing || !diagnosticsAreRecent {
+            await diagnose()
+        }
         return wasMissing && installation != nil
+    }
+
+    /// Runs `sbx diagnose` now.
+    func diagnose() async {
+        guard !isDiagnosing else { return }
+        isDiagnosing = true
+        defer {
+            isDiagnosing = false
+            diagnosedAt = Date()
+        }
+        do {
+            diagnostics = try await SbxDiagnostics.run()
+            diagnosticsError = nil
+        } catch {
+            diagnostics = nil
+            diagnosticsError = error.localizedDescription
+        }
+    }
+
+    private var diagnosticsAreRecent: Bool {
+        guard let diagnosedAt else { return false }
+        return Date().timeIntervalSince(diagnosedAt) < Self.diagnosticsCacheDuration
     }
 
     private func fetchLatestIfNeeded() async {
