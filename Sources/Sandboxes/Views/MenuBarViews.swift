@@ -67,8 +67,8 @@ struct MenuBarMenu: View {
 }
 
 extension NSImage {
-    /// The app icon's taped box, drawn as a template image so the menu bar
-    /// tints it. Shapes are on the 120-unit grid in scripts/generate-app-icon.py.
+    /// The taped box from the earlier app icon, drawn as a template image so
+    /// the menu bar tints it. Shapes are on that icon's 120-unit grid.
     static let menuBarBox: NSImage = {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: true) { _ in
