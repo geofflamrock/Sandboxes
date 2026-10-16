@@ -427,26 +427,39 @@ private struct SbxDiagnosticsRows: View {
 
     var body: some View {
         SbxRow {
-            Button {
-                withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 12)
-                    Text("Diagnostics")
-                        .fontWeight(.semibold)
-                    Spacer()
-                    if !isExpanded {
-                        summary
+            // The toggle and Run Again are separate buttons, so the toggle
+            // stops short of Run Again; the summary toggles too.
+            HStack(spacing: 10) {
+                Button(action: toggle) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 12)
+                        Text("Diagnostics")
+                            .fontWeight(.semibold)
+                        Spacer(minLength: 0)
                     }
+                    .contentShape(.rect)
                 }
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summaryText)")
+
+                Button("Run Again") {
+                    Task { await sbxStatus.diagnose() }
+                }
+                .controlSize(.small)
+                .disabled(sbxStatus.isDiagnosing)
+                .help("Run sbx diagnose again")
+
+                if !isExpanded {
+                    summary
+                        .contentShape(.rect)
+                        .onTapGesture(perform: toggle)
+                        .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summaryText)")
         }
         .onChange(of: attentionCount, initial: true) { _, count in
             if count > 0 { isExpanded = true }
@@ -466,21 +479,11 @@ private struct SbxDiagnosticsRows: View {
                     }
                 }
             }
-            SbxRowDivider()
-            SbxRow {
-                HStack {
-                    Text("From sbx diagnose")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Run Again") {
-                        Task { await sbxStatus.diagnose() }
-                    }
-                    .disabled(sbxStatus.isDiagnosing)
-                    .help("Run sbx diagnose again")
-                }
-            }
         }
+    }
+
+    private func toggle() {
+        withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
     }
 
     private var attentionCount: Int {
