@@ -47,6 +47,8 @@ AGENT = "#2A6EEF"
 ANTENNA = "#1C5CDB"
 VISOR = "#132A5C"
 EYES = "#A6D5FA"
+# The light on top of the antenna, a terminal green to say the agent is running.
+ANTENNA_LIGHT = "#5BE38F"
 
 # The sandbox: a diamond W wide (half width) and W * SLOPE tall, with walls
 # WALL deep. The sand sits SAND_DROP below the rim, inside a rim that's
@@ -109,7 +111,7 @@ def agent():
     antenna = 70
     return [
         rect(cx - 7, top - antenna, 14, antenna + 10, 7, ANTENNA),
-        f'<circle cx="{cx}" cy="{top - antenna}" r="24" fill="{EYES}"/>',
+        f'<circle cx="{cx}" cy="{top - antenna}" r="24" fill="{ANTENNA_LIGHT}"/>',
         rect(cx - 125, top, 250, bottom - top, 78, AGENT),
         rect(cx - 98, top + 44, 196, 114, 52, VISOR),
         rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
