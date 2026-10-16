@@ -33,6 +33,9 @@ struct HomeView: View {
             }
         }
         .approvalResponseDialog($approvalResponse)
+        .sheet(item: Binding(get: { sbxStatus.commandRun }, set: { sbxStatus.commandRun = $0 })) { run in
+            SbxCommandSheet(run: run)
+        }
         .task { await checkSbx() }
         // The user installs or upgrades sbx in their terminal, so look again
         // when they come back.
@@ -310,12 +313,21 @@ private struct SbxRowDivider: View {
     }
 }
 
+/// A button in an sbx row, such as Start Daemon.
+private struct SbxRowAction {
+    let title: String
+    let help: String
+    var isDisabled = false
+    let perform: () -> Void
+}
+
 /// A name with an optional detail line underneath, and a status dot and
-/// value on the right.
+/// value on the right, with an optional button before the dot.
 private struct SbxValueRow<Title: View>: View {
     var detail: String = ""
     let color: Color
     let value: String
+    var action: SbxRowAction?
     @ViewBuilder let title: Title
 
     var body: some View {
@@ -332,6 +344,12 @@ private struct SbxValueRow<Title: View>: View {
                 }
             }
             Spacer(minLength: 0)
+            if let action {
+                Button(action.title, action: action.perform)
+                    .controlSize(.small)
+                    .disabled(action.isDisabled)
+                    .help(action.help)
+            }
             HStack(spacing: 6) {
                 StatusDot(color: color)
                 Text(value)
@@ -537,6 +555,8 @@ private struct SbxDiagnosticsRows: View {
 /// and result on the right. Warnings and failures also say what to do.
 private struct SbxDiagnosticRow: View {
     let check: SbxDiagnostics.Check
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(SandboxStore.self) private var store
 
     var body: some View {
         SbxRow {
@@ -544,7 +564,8 @@ private struct SbxDiagnosticRow: View {
                 SbxValueRow(
                     detail: check.detail,
                     color: color,
-                    value: check.message.isEmpty ? check.status.displayName : check.message
+                    value: check.message.isEmpty ? check.status.displayName : check.message,
+                    action: fixAction
                 ) {
                     Text(check.name)
                 }
@@ -555,8 +576,24 @@ private struct SbxDiagnosticRow: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(check.name), \(check.status.displayName): \(check.message)")
+    }
+
+    /// Starts the daemon or signs in, then reloads the sandboxes, which
+    /// couldn't load without either.
+    private var fixAction: SbxRowAction? {
+        guard let fix = check.fix else { return nil }
+        let isDisabled = sbxStatus.commandRun?.phase == .running
+        let perform = { [sbxStatus, store] in
+            sbxStatus.run(fix) {
+                Task { await store.refresh() }
+            }
+        }
+        switch fix {
+        case .startDaemon:
+            return SbxRowAction(title: "Start Daemon", help: "Run sbx daemon start --detach", isDisabled: isDisabled, perform: perform)
+        case .signIn:
+            return SbxRowAction(title: "Sign In…", help: "Sign in to Docker with sbx login", isDisabled: isDisabled, perform: perform)
+        }
     }
 
     /// Green for passed, orange for a warning, red for failed and grey for
@@ -583,7 +620,7 @@ private extension SbxDiagnostics.Check.Status {
 }
 
 /// A shell command in monospaced text with a button that copies it.
-private struct CopyableCommand: View {
+struct CopyableCommand: View {
     let command: String
     @State private var didCopy = false
 

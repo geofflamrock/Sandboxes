@@ -18,6 +18,18 @@ struct SbxDiagnostics: Sendable {
         let detail: String
         /// What to do about a warning or failure. May be empty.
         let hint: String
+
+        /// The command that fixes this check when it hasn't passed, if the
+        /// app can run one: starting the daemon, or signing in to Docker.
+        /// sbx doesn't document check names, so these are matched by name.
+        var fix: SbxCommandRun.Kind? {
+            guard status == .fail || status == .warn else { return nil }
+            switch name.lowercased() {
+            case "daemon": return .startDaemon
+            case "authentication": return .signIn
+            default: return nil
+            }
+        }
     }
 
     let checks: [Check]

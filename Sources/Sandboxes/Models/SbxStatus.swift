@@ -81,6 +81,8 @@ final class SbxStatus {
     /// Why `sbx diagnose` couldn't run last time, if it couldn't.
     private(set) var diagnosticsError: String?
     private(set) var isDiagnosing = false
+    /// A command fixing the setup, shown in a sheet while it runs and after.
+    var commandRun: SbxCommandRun?
 
     @ObservationIgnored private var latestCheckedAt: Date?
     @ObservationIgnored private var diagnosedAt: Date?
@@ -145,6 +147,19 @@ final class SbxStatus {
             await diagnose()
         }
         return wasMissing && installation != nil
+    }
+
+    /// Runs `kind` in the command sheet, then runs `sbx diagnose` again and
+    /// calls `onSuccess` if it worked.
+    func run(_ kind: SbxCommandRun.Kind, onSuccess: @escaping @MainActor () -> Void) {
+        let run = SbxCommandRun(kind: kind)
+        run.start { [weak self] in
+            Task {
+                await self?.diagnose()
+                onSuccess()
+            }
+        }
+        commandRun = run
     }
 
     /// Runs `sbx diagnose` now.
