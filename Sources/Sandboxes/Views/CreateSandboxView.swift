@@ -9,12 +9,19 @@ struct CreateSandboxView: View {
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
+    /// The sandbox the last successful run created, once the list shows it.
+    @State private var createdName: String?
 
     var body: some View {
         Group {
             if let run {
                 CreationOutputView(
                     run: run,
+                    createdName: createdName,
+                    onApproveInTerminal: { name in
+                        store.openInTerminal(named: name)
+                        dismiss()
+                    },
                     onBack: { self.run = nil },
                     onDone: { dismiss() }
                 )
@@ -38,9 +45,18 @@ struct CreateSandboxView: View {
     private func start() {
         let request = request
         let run = CreationRun(request: request)
+        let existingNames = Set(store.sandboxes.map(\.name))
+        createdName = nil
         run.start { [recents, store] in
             recents.record(workload: request.trimmedWorkload, kits: request.kits)
-            Task { await store.refresh() }
+            Task {
+                await store.refresh()
+                // Without a name, sbx chose one: the sandbox that wasn't there before.
+                let newNames = store.sandboxes.map(\.name).filter { !existingNames.contains($0) }
+                createdName = request.trimmedName.isEmpty
+                    ? (newNames.count == 1 ? newNames[0] : nil)
+                    : request.trimmedName
+            }
         }
         self.run = run
     }
@@ -666,6 +682,8 @@ private struct RecentsMenu: View {
 
 private struct CreationOutputView: View {
     let run: CreationRun
+    let createdName: String?
+    let onApproveInTerminal: (String) -> Void
     let onBack: () -> Void
     let onDone: () -> Void
 
@@ -692,6 +710,10 @@ private struct CreationOutputView: View {
                     .strokeBorder(.separator)
             }
 
+            if run.phase == .succeeded && run.withheldCredential {
+                credentialNotice
+            }
+
             HStack {
                 Button("Copy Output", systemImage: "doc.on.doc") {
                     NSPasteboard.general.clearContents()
@@ -703,9 +725,19 @@ private struct CreationOutputView: View {
                     Button("Cancel", role: .cancel) { run.cancel() }
                         .keyboardShortcut(.cancelAction)
                 case .succeeded:
-                    Button("Done", action: onDone)
+                    if run.withheldCredential, let createdName {
+                        Button("Done", action: onDone)
+                            .keyboardShortcut(.cancelAction)
+                        Button("Approve in Terminal", systemImage: "terminal") {
+                            onApproveInTerminal(createdName)
+                        }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.glassProminent)
+                    } else {
+                        Button("Done", action: onDone)
+                            .keyboardShortcut(.defaultAction)
+                            .buttonStyle(.glassProminent)
+                    }
                 case .failed, .cancelled:
                     Button("Close", action: onDone)
                         .keyboardShortcut(.cancelAction)
@@ -717,6 +749,24 @@ private struct CreationOutputView: View {
             .controlSize(.large)
         }
         .padding(20)
+    }
+
+    private var credentialNotice: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Approve the Kit’s Credentials")
+                    .font(.headline)
+                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials in a terminal\(createdName == nil ? ": open the sandbox in Terminal and approve it there" : ""). You only need to do this once on this Mac.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } icon: {
+            Image(systemName: "key.fill")
+                .foregroundStyle(.orange)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: 10))
     }
 
     @ViewBuilder

@@ -131,8 +131,14 @@ final class SandboxStore {
     }
 
     private func openInTerminal(_ sandbox: Sandbox) {
+        openInTerminal(named: sandbox.name)
+    }
+
+    /// Runs the sandbox named `name` in the default terminal, where sbx can
+    /// ask for anything it needs, such as approving a kit's credentials.
+    func openInTerminal(named name: String) {
         do {
-            try TerminalLauncher.open(sbxArguments: ["run", "--name", sandbox.name])
+            try TerminalLauncher.open(sbxArguments: ["run", "--name", name])
         } catch {
             actionError = ActionError(title: "Couldn't Open Terminal", message: error.localizedDescription)
         }

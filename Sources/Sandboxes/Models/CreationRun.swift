@@ -15,6 +15,10 @@ final class CreationRun {
     let commandLine: String
     let output = ConsoleOutput()
     private(set) var phase: Phase = .running
+    /// Whether sbx withheld a credential because it hasn't been approved on
+    /// this Mac. sbx only asks for approval in a terminal, so a run without
+    /// one declines.
+    private(set) var withheldCredential = false
 
     @ObservationIgnored private let arguments: [String]
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -38,6 +42,7 @@ final class CreationRun {
                 if Task.isCancelled {
                     phase = .cancelled
                 } else if exitCode == 0 {
+                    withheldCredential = output.lines.contains(where: CredentialBindingWarning.matches)
                     phase = .succeeded
                     onSuccess()
                 } else {
@@ -51,6 +56,17 @@ final class CreationRun {
 
     func cancel() {
         task?.cancel()
+    }
+}
+
+/// Recognizes the warning sbx prints when it starts a sandbox without a
+/// credential a kit asked for, because no binding approves it yet. The wording
+/// isn't documented, so this looks for the gist rather than an exact message.
+enum CredentialBindingWarning {
+    static func matches(_ line: String) -> Bool {
+        let line = line.lowercased()
+        guard line.contains("credential") || line.contains("secret") else { return false }
+        return ["binding", "approv", "not sent", "withheld"].contains { line.contains($0) }
     }
 }
 
