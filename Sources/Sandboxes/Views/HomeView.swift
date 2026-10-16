@@ -1,8 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// Shown when no sandbox is selected: requests waiting for approval across
-/// every sandbox, shortcuts for creating a sandbox, and the installed sbx.
+/// Shown when no sandbox is selected: anything to do before sandboxes work,
+/// requests waiting for approval across every sandbox, and shortcuts for
+/// creating a sandbox.
 struct HomeView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SbxStatus.self) private var sbxStatus
@@ -16,7 +17,7 @@ struct HomeView: View {
                         withAnimation { proxy.scrollTo(HomeAnchor.approvals, anchor: .top) }
                     }
                     // What the user needs to do comes first, without a
-                    // heading; the details stay in Setup at the bottom.
+                    // heading. The details are in Settings › sbx.
                     let actions = sbxStatus.actions
                     if !actions.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -28,7 +29,6 @@ struct HomeView: View {
                     PendingApprovalsCard(approvalResponse: $approvalResponse)
                         .id(HomeAnchor.approvals)
                     QuickCreateSection()
-                    SbxStatusSection()
                 }
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(24)
@@ -261,95 +261,6 @@ private struct PendingApprovalsCard: View {
 
 // MARK: - sbx
 
-/// Which sbx is installed and the results of `sbx diagnose`, laid out as rows
-/// like a grouped form, with the checks folding away like the sections of
-/// the create sheet. It stays at the bottom of the page: anything the user
-/// needs to do is in the action cards at the top.
-private struct SbxStatusSection: View {
-    @Environment(SbxStatus.self) private var sbxStatus
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HomeSectionHeader(title: "Setup", isLoading: sbxStatus.isDiagnosing)
-
-            VStack(alignment: .leading, spacing: 0) {
-                switch sbxStatus.state {
-                case .checking:
-                    SbxRow {
-                        Text("Looking for sbx…")
-                            .foregroundStyle(.secondary)
-                    }
-                case .notInstalled:
-                    SbxRow {
-                        SbxValueRow(color: .red, value: "Not installed") {
-                            Text("sbx")
-                                .font(.headline)
-                        }
-                    }
-                case let .installed(installation):
-                    SbxVersionRow(installation: installation)
-                    SbxRowDivider()
-                    SbxDiagnosticsRows()
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(CardBackground())
-        }
-    }
-}
-
-/// A row of the sbx card, padded like the pending approvals.
-private struct SbxRow<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        content
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-    }
-}
-
-private struct SbxRowDivider: View {
-    var body: some View {
-        Divider()
-            .padding(.leading, 14)
-    }
-}
-
-/// A name with an optional detail line underneath, and a status dot and
-/// value on the right.
-private struct SbxValueRow<Title: View>: View {
-    var detail: String = ""
-    let color: Color
-    let value: String
-    @ViewBuilder let title: Title
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                title
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
-            }
-            Spacer(minLength: 0)
-            HStack(spacing: 6) {
-                StatusDot(color: color)
-                Text(value)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .layoutPriority(1)
-        }
-    }
-}
-
 /// A card at the top of the page for something the user needs to do: install
 /// or upgrade sbx, start the daemon, or sign in. It shows the command, so it
 /// can be copied and run in Terminal, with a button below that runs it here
@@ -358,6 +269,7 @@ private struct SbxActionCard: View {
     let action: SbxStatus.Action
     @Environment(SbxStatus.self) private var sbxStatus
     @Environment(SandboxStore.self) private var store
+    @Environment(\.openSettings) private var openSettings
     @State private var hasHomebrew = true
 
     var body: some View {
@@ -467,199 +379,15 @@ private struct SbxActionCard: View {
                     Link("Install Homebrew", destination: Homebrew.installURL)
                 }
                 Link("Download from GitHub", destination: SbxStatus.releasesURL)
-                SettingsLink { Text("Already installed? Set its location in Settings…") }
-                    .buttonStyle(.link)
+                Button("Already installed? Set its location in Settings…") {
+                    SettingsTab.show(.sbx, openSettings)
+                }
+                .buttonStyle(.link)
             }
         case let .upgrade(installation, release):
             Link(installation.upgrade == nil ? "Download from GitHub" : "Release notes", destination: release.url)
         case .fix:
             EmptyView()
-        }
-    }
-}
-
-private struct SbxVersionRow: View {
-    let installation: SbxStatus.Installation
-    @Environment(SbxStatus.self) private var sbxStatus
-
-    var body: some View {
-        SbxRow {
-            SbxValueRow(detail: installation.path, color: status.color, value: status.text) {
-                Text(installation.version.map { "sbx \($0)" } ?? "sbx")
-                    .font(.headline)
-            }
-        }
-    }
-
-    private var status: (color: Color, text: String) {
-        if let upgrade = sbxStatus.availableUpgrade {
-            return (.orange, "\(upgrade.version) available")
-        }
-        if installation.version == nil {
-            return (.orange, "Unknown version")
-        }
-        return sbxStatus.latest == nil ? (.green, "Installed") : (.green, "Up to date")
-    }
-}
-
-/// A row that folds the `sbx diagnose` checks away, like the sections of the
-/// create sheet. It opens by itself when a check fails or warns.
-private struct SbxDiagnosticsRows: View {
-    @Environment(SbxStatus.self) private var sbxStatus
-    @AppStorage("homeShowsDiagnostics") private var isExpanded = false
-
-    var body: some View {
-        SbxRow {
-            // The toggle and Run Again are separate buttons, so the toggle
-            // stops short of Run Again; the summary toggles too.
-            HStack(spacing: 10) {
-                Button(action: toggle) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                            .frame(width: 12)
-                        Text("Diagnostics")
-                            .fontWeight(.semibold)
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summaryText)")
-
-                Button("Run Again") {
-                    Task { await sbxStatus.diagnose() }
-                }
-                .controlSize(.small)
-                .disabled(sbxStatus.isDiagnosing)
-                .help("Run sbx diagnose again")
-
-                if !isExpanded {
-                    summary
-                        .contentShape(.rect)
-                        .onTapGesture(perform: toggle)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .onChange(of: attentionCount, initial: true) { _, count in
-            if count > 0 { isExpanded = true }
-        }
-
-        if isExpanded {
-            if let diagnostics = sbxStatus.diagnostics {
-                ForEach(diagnostics.checks) { check in
-                    SbxRowDivider()
-                    SbxDiagnosticRow(check: check)
-                }
-            } else if let error = sbxStatus.diagnosticsError {
-                SbxRowDivider()
-                SbxRow {
-                    SbxValueRow(detail: error, color: .red, value: "Failed") {
-                        Text("sbx diagnose")
-                    }
-                }
-            }
-        }
-    }
-
-    private func toggle() {
-        withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
-    }
-
-    private var attentionCount: Int {
-        sbxStatus.diagnostics.map { $0.count(.fail) + $0.count(.warn) } ?? 0
-    }
-
-    @ViewBuilder
-    private var summary: some View {
-        if sbxStatus.diagnostics == nil && sbxStatus.diagnosticsError == nil {
-            Text(summaryText)
-                .foregroundStyle(.secondary)
-        } else {
-            HStack(spacing: 6) {
-                StatusDot(color: summaryColor)
-                Text(summaryText)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var summaryColor: Color {
-        guard let diagnostics = sbxStatus.diagnostics else { return .red }
-        if diagnostics.count(.fail) > 0 { return .red }
-        if diagnostics.count(.warn) > 0 { return .orange }
-        return .green
-    }
-
-    /// Such as "All 14 passed" or "1 failed · 2 warnings · 10 passed".
-    private var summaryText: String {
-        guard let diagnostics = sbxStatus.diagnostics else {
-            if sbxStatus.diagnosticsError != nil { return "Couldn't run" }
-            return sbxStatus.isDiagnosing ? "Running…" : "Not run yet"
-        }
-        let failed = diagnostics.count(.fail)
-        let warned = diagnostics.count(.warn)
-        let passed = diagnostics.count(.pass)
-        if failed == 0 && warned == 0 && passed == diagnostics.checks.count {
-            return "All \(passed.formatted()) passed"
-        }
-        var parts: [String] = []
-        if failed > 0 { parts.append("\(failed.formatted()) failed") }
-        if warned > 0 { parts.append(warned == 1 ? "1 warning" : "\(warned.formatted()) warnings") }
-        if passed > 0 { parts.append("\(passed.formatted()) passed") }
-        let skipped = diagnostics.count(.skip)
-        if skipped > 0 { parts.append("\(skipped.formatted()) skipped") }
-        return parts.joined(separator: " · ")
-    }
-}
-
-/// One `sbx diagnose` check: its name and detail on the left, and its status
-/// and result on the right. Warnings and failures also say what to do.
-private struct SbxDiagnosticRow: View {
-    let check: SbxDiagnostics.Check
-
-    var body: some View {
-        SbxRow {
-            VStack(alignment: .leading, spacing: 4) {
-                SbxValueRow(
-                    detail: check.detail,
-                    color: color,
-                    value: check.message.isEmpty ? check.status.displayName : check.message
-                ) {
-                    Text(check.name)
-                }
-                if !check.hint.isEmpty && (check.status == .fail || check.status == .warn) {
-                    Text(check.hint)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-    }
-
-
-    /// Green for passed, orange for a warning, red for failed and grey for
-    /// skipped.
-    private var color: Color {
-        switch check.status {
-        case .pass: .green
-        case .warn: .orange
-        case .fail: .red
-        case .skip: .secondary
-        }
-    }
-}
-
-private extension SbxDiagnostics.Check.Status {
-    var displayName: String {
-        switch self {
-        case .pass: "Passed"
-        case .warn: "Warning"
-        case .fail: "Failed"
-        case .skip: "Skipped"
         }
     }
 }

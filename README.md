@@ -10,7 +10,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
-- See what needs doing at the top of the home page: install or upgrade `sbx`, start its daemon, or sign in to Docker. Each card shows the command to copy and run yourself, or a button to run it in the app and see its output. The **Setup** section at the bottom shows the installed version and the results of `sbx diagnose`.
+- See what needs doing at the top of the home page: install or upgrade `sbx`, start its daemon, or sign in to Docker. Each card shows the command to copy and run yourself, or a button to run it in the app and see its output. **Settings › sbx** shows the installed version and the results of `sbx diagnose`; open it with **Help › Run sbx Diagnostics…**.
 
 ## Getting started
 
@@ -48,7 +48,7 @@ gh release download --repo geofflamrock/Sandboxes --pattern '*.dmg'
 
 ### Find `sbx`
 
-The app looks for `sbx` on your login shell's `PATH`. If it can't find it, set its location in **Sandboxes › Settings**.
+The app looks for `sbx` on your login shell's `PATH`. If it can't find it, set its location in **Settings › sbx**.
 
 ## Contributing
 
@@ -105,10 +105,10 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Action | Command |
 | --- | --- |
 | List | `sbx ls --json` |
-| Installed version (home page) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases` |
+| Installed version (home page and Settings › sbx) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases` |
 | Install sbx (home page) | `brew install docker/tap/sbx`, when you click **Install sbx** |
 | Upgrade sbx (home page) | `brew upgrade docker/tap/sbx` (or the cask it was installed from, such as `sbx@rc`), when you click **Upgrade sbx** |
-| Diagnostics (home page) | `sbx diagnose --json`, at most every 5 minutes or when you click **Run Again** |
+| Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
 | Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |

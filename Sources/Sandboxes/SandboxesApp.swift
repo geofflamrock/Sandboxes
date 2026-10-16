@@ -41,6 +41,9 @@ struct SandboxesApp: App {
                 }
                 .keyboardShortcut("r")
             }
+            CommandGroup(after: .help) {
+                RunDiagnosticsButton(sbxStatus: appDelegate.sbxStatus)
+            }
         }
 
         MenuBarExtra {
@@ -55,6 +58,7 @@ struct SandboxesApp: App {
         Settings {
             SettingsView()
                 .environment(updates)
+                .environment(appDelegate.sbxStatus)
         }
     }
 }
@@ -98,5 +102,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !flag else { return true }
         AppWindows.showMain()
         return false
+    }
+}
+
+/// Help › Run sbx Diagnostics…: opens Settings › sbx and runs the checks again.
+private struct RunDiagnosticsButton: View {
+    let sbxStatus: SbxStatus
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button("Run sbx Diagnostics…") {
+            SettingsTab.show(.sbx, openSettings)
+            Task { await sbxStatus.diagnose() }
+        }
     }
 }

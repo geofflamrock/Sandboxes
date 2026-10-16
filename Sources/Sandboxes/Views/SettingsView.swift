@@ -1,10 +1,24 @@
 import SwiftUI
 import ServiceManagement
 
+/// Settings, with general options in one tab and sbx in another.
 struct SettingsView: View {
-    @AppStorage(SbxCLI.executablePathKey) private var customPath = ""
-    @State private var resolvedPath: String?
-    @State private var hasResolved = false
+    @AppStorage(SettingsTab.key) private var tab = SettingsTab.general
+
+    var body: some View {
+        TabView(selection: $tab) {
+            Tab("General", systemImage: "gearshape", value: SettingsTab.general) {
+                GeneralSettingsView()
+            }
+            Tab("sbx", systemImage: "terminal", value: SettingsTab.sbx) {
+                SbxSettingsView()
+            }
+        }
+        .background(WindowReader(kind: .settings))
+    }
+}
+
+private struct GeneralSettingsView: View {
     @AppStorage(ApprovalNotifier.enabledKey) private var notifiesAboutApprovals = true
     @AppStorage(UpdateChecker.enabledKey) private var checksForUpdates = true
     @AppStorage(UpdateChecker.forceEnabledKey) private var forcesUpdateChecks = false
@@ -16,28 +30,6 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                TextField("sbx location", text: $customPath, prompt: Text("Automatic"))
-                    .font(.body.monospaced())
-                LabeledContent("Using") {
-                    if !hasResolved {
-                        ProgressView().controlSize(.small)
-                    } else if let resolvedPath {
-                        Text(resolvedPath)
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                    } else {
-                        Label("sbx not found", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
-            } header: {
-                Text("Command Line Tool")
-            } footer: {
-                Text("Leave empty to find sbx on your login shell's PATH.")
-                    .foregroundStyle(.secondary)
-            }
-
             Section {
                 Toggle("Notify me when a sandbox is waiting for approval", isOn: $notifiesAboutApprovals)
                 Toggle("Open at login", isOn: Binding(
@@ -103,7 +95,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
-        .background(WindowReader(kind: .settings))
         .onChange(of: notifiesAboutApprovals) { _, isOn in
             if isOn {
                 ApprovalNotifier.shared.requestAuthorization()
@@ -118,10 +109,6 @@ struct SettingsView: View {
         .onAppear {
             // It can change in System Settings while Settings is closed.
             loginItemStatus = SMAppService.mainApp.status
-        }
-        .task(id: customPath) {
-            resolvedPath = await Task.detached { SbxCLI.executableURL()?.path }.value
-            hasResolved = true
         }
     }
 
