@@ -9,15 +9,12 @@ struct CreateSandboxView: View {
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
-    /// The sandbox the last successful run created, once the list shows it.
-    @State private var createdName: String?
 
     var body: some View {
         Group {
             if let run {
                 CreationOutputView(
                     run: run,
-                    createdName: createdName,
                     onBack: { self.run = nil },
                     onDone: { dismiss() }
                 )
@@ -41,18 +38,9 @@ struct CreateSandboxView: View {
     private func start() {
         let request = request
         let run = CreationRun(request: request)
-        let existingNames = Set(store.sandboxes.map(\.name))
-        createdName = nil
         run.start { [recents, store] in
             recents.record(workload: request.trimmedWorkload, kits: request.kits)
-            Task {
-                await store.refresh()
-                // Without a name, sbx chose one: the sandbox that wasn't there before.
-                let newNames = store.sandboxes.map(\.name).filter { !existingNames.contains($0) }
-                createdName = request.trimmedName.isEmpty
-                    ? (newNames.count == 1 ? newNames[0] : nil)
-                    : request.trimmedName
-            }
+            Task { await store.refresh() }
         }
         self.run = run
     }
@@ -678,7 +666,6 @@ private struct RecentsMenu: View {
 
 private struct CreationOutputView: View {
     let run: CreationRun
-    let createdName: String?
     let onBack: () -> Void
     let onDone: () -> Void
 
@@ -736,27 +723,22 @@ private struct CreationOutputView: View {
         .padding(20)
     }
 
-    /// Runs the sandbox in a terminal, where sbx asks to approve the credential.
-    private var approvalCommand: String {
-        "sbx run --name \(createdName ?? "<name>")"
-    }
-
     private var credentialNotice: some View {
         Label {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Approve the Kit’s Credentials")
                     .font(.headline)
-                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials in a terminal, so run this in one\(createdName == nil ? ", with the sandbox’s name" : "") and approve the credential. You only need to do this once on this Mac.")
+                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials when you create a sandbox in a terminal. Run this in one and approve the credential: it creates an empty sandbox you can remove afterwards. You only need to do this once on this Mac.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Text(approvalCommand)
+                    Text(run.credentialApprovalCommandLine)
                         .font(.callout.monospaced())
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button("Copy Command", systemImage: "doc.on.doc") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(approvalCommand, forType: .string)
+                        NSPasteboard.general.setString(run.credentialApprovalCommandLine, forType: .string)
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)

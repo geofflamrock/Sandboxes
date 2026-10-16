@@ -13,6 +13,8 @@ final class CreationRun {
     }
 
     let commandLine: String
+    /// What to run in a terminal to approve a withheld credential.
+    let credentialApprovalCommandLine: String
     let output = ConsoleOutput()
     private(set) var phase: Phase = .running
     /// Whether sbx withheld a credential because it hasn't been approved on
@@ -25,6 +27,7 @@ final class CreationRun {
 
     init(request: CreateSandboxRequest) {
         commandLine = request.commandLine
+        credentialApprovalCommandLine = request.credentialApprovalCommandLine
         arguments = request.arguments
     }
 

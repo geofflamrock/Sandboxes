@@ -108,6 +108,17 @@ struct CreateSandboxRequest {
         (["sbx"] + arguments).map(Self.quoteIfNeeded).joined(separator: " ")
     }
 
+    /// Creates an empty sandbox with the same agent and kits, which is where
+    /// sbx asks to approve their credentials: `sbx run` doesn't ask.
+    var credentialApprovalCommandLine: String {
+        var arguments = ["sbx", "create"]
+        for kit in kits {
+            arguments += ["--kit", kit]
+        }
+        arguments.append(trimmedWorkload)
+        return arguments.map(Self.quoteIfNeeded).joined(separator: " ")
+    }
+
     /// Why the request can't be submitted yet, if it can't.
     var validationMessage: String? {
         if trimmedWorkload.isEmpty {
