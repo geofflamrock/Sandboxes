@@ -68,9 +68,21 @@ struct CreateSandboxRequest {
     var memoryGiB = 0
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
+    /// Whether to also save this setup as an environment once the sandbox is
+    /// created, and its name. An empty name uses the suggested one.
+    var savesEnvironment = false
+    var environmentName = ""
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var suggestedEnvironmentName: String { SandboxEnvironment.suggestedName(for: self) }
+
+    /// The environment name to save under: what's typed, or the suggestion.
+    var resolvedEnvironmentName: String {
+        let typed = environmentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? suggestedEnvironmentName : typed
+    }
 
     var arguments: [String] {
         var arguments = ["create"]
@@ -113,13 +125,8 @@ struct CreateSandboxRequest {
         if trimmedWorkload.isEmpty {
             return "Choose an agent or enter an image."
         }
-        if !trimmedName.isEmpty {
-            if trimmedName == "default" {
-                return "The name “default” is reserved."
-            }
-            if trimmedName.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
-                return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
-            }
+        if let message = Self.nameValidationMessage(trimmedName) {
+            return message
         }
         for variable in environment where !variable.isBlank {
             if variable.trimmedKey.isEmpty {
@@ -132,7 +139,19 @@ struct CreateSandboxRequest {
         return nil
     }
 
-    private static func quoteIfNeeded(_ value: String) -> String {
+    /// Why sbx won't accept `name` for a sandbox, if it won't. Empty lets sbx choose.
+    static func nameValidationMessage(_ name: String) -> String? {
+        guard !name.isEmpty else { return nil }
+        if name == "default" {
+            return "The name “default” is reserved."
+        }
+        if name.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
+            return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
+        }
+        return nil
+    }
+
+    static func quoteIfNeeded(_ value: String) -> String {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:@=+,~"))
         if !value.isEmpty && value.unicodeScalars.allSatisfy(safe.contains) {
             return value

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 struct SettingsView: View {
@@ -8,6 +9,8 @@ struct SettingsView: View {
     @AppStorage(ApprovalNotifier.enabledKey) private var notifiesAboutApprovals = true
     @State private var loginItemStatus = SMAppService.mainApp.status
     @State private var loginItemError: String?
+    @AppStorage(EnvironmentStore.directoryKey) private var environmentsPath = ""
+    @State private var environmentsError: String?
 
     var body: some View {
         Form {
@@ -31,6 +34,35 @@ struct SettingsView: View {
             } footer: {
                 Text("Leave empty to find sbx on your login shell's PATH.")
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Folder") {
+                    HStack {
+                        TextField(
+                            "Folder",
+                            text: $environmentsPath,
+                            prompt: Text((EnvironmentStore.defaultDirectory.path as NSString).abbreviatingWithTildeInPath)
+                        )
+                        .labelsHidden()
+                        .font(.body.monospaced())
+                        Button("Choose…", action: chooseEnvironmentsFolder)
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Show in Finder", action: showEnvironmentsFolder)
+                }
+            } header: {
+                Text("Environments")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let environmentsError {
+                        Text("Couldn't open the folder: \(environmentsError)")
+                    }
+                    Text("Environments saved from the create sheet go here, each as a folder with an sbxenv.yaml file for sbx env create. Leave empty to use the default folder.")
+                }
+                .foregroundStyle(.secondary)
             }
 
             Section {
@@ -74,6 +106,28 @@ struct SettingsView: View {
         .task(id: customPath) {
             resolvedPath = await Task.detached { SbxCLI.executableURL()?.path }.value
             hasResolved = true
+        }
+    }
+
+    private func chooseEnvironmentsFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = EnvironmentStore.directory
+        panel.prompt = "Choose"
+        panel.message = "Choose the folder to save sandbox environments in."
+        if panel.runModal() == .OK, let url = panel.url {
+            environmentsPath = (url.path as NSString).abbreviatingWithTildeInPath
+        }
+    }
+
+    private func showEnvironmentsFolder() {
+        do {
+            NSWorkspace.shared.open(try EnvironmentStore.createDirectory())
+            environmentsError = nil
+        } catch {
+            environmentsError = error.localizedDescription
         }
     }
 

@@ -6,6 +6,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage and network traffic.
 - Create new sandboxes quickly and easily.
+- Save a sandbox's setup as an [environment](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and create more sandboxes like it from the home page. Environments are saved to `~/.config/sandboxes/environments` unless you choose another folder in Settings.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).

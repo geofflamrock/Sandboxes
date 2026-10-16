@@ -29,6 +29,8 @@ final class SandboxStore {
     /// The workload image the create sheet starts with, or nil for the most
     /// recently used one.
     private(set) var createWorkload: String?
+    /// The saved environment the create-from-environment sheet is open for.
+    var environmentToCreate: SandboxEnvironment?
     var removalCandidate: Sandbox?
     var actionError: ActionError?
     /// Where the open button and double-clicking open a sandbox: the last
@@ -89,6 +91,11 @@ final class SandboxStore {
     func presentCreate(workload: String? = nil) {
         createWorkload = workload
         isCreatePresented = true
+    }
+
+    /// Opens the sheet that creates a sandbox from a saved environment.
+    func presentCreate(environment: SandboxEnvironment) {
+        environmentToCreate = environment
     }
 
     func start(_ sandbox: Sandbox) async {

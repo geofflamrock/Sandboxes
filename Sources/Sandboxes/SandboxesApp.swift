@@ -5,6 +5,7 @@ import AppKit
 struct SandboxesApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var recents = RecentsStore()
+    @State private var environments = EnvironmentStore()
 
     /// Owned by the app delegate, since it outlives the window.
     private var store: SandboxStore { appDelegate.store }
@@ -14,6 +15,7 @@ struct SandboxesApp: App {
             ContentView()
                 .environment(store)
                 .environment(recents)
+                .environment(environments)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {

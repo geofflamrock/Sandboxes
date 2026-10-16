@@ -14,10 +14,17 @@ settings:
     # it to an empty string for releases.
     SANDBOXES_BUILD_LABEL: Local
     SWIFT_VERSION: "5.0"
+packages:
+  # Reads sbx environment files (sbxenv.yaml).
+  Yams:
+    url: https://github.com/jpsim/Yams
+    from: 5.1.0
 targets:
   Sandboxes:
     type: application
     platform: macOS
+    dependencies:
+      - package: Yams
     sources:
       - Sources/Sandboxes
       # The Icon Composer app icon. Xcode compiles it into the app icon.

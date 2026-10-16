@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// One run of `sbx create`, with its streamed output.
+/// One run of `sbx create` or `sbx env create`, with its streamed output.
 @MainActor
 @Observable
 final class CreationRun {
@@ -19,9 +19,13 @@ final class CreationRun {
     @ObservationIgnored private let arguments: [String]
     @ObservationIgnored private var task: Task<Void, Never>?
 
-    init(request: CreateSandboxRequest) {
-        commandLine = request.commandLine
-        arguments = request.arguments
+    init(arguments: [String], commandLine: String) {
+        self.arguments = arguments
+        self.commandLine = commandLine
+    }
+
+    convenience init(request: CreateSandboxRequest) {
+        self.init(arguments: request.arguments, commandLine: request.commandLine)
     }
 
     func start(onSuccess: @escaping @MainActor () -> Void) {
