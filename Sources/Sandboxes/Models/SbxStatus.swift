@@ -183,8 +183,8 @@ final class SbxStatus {
         run.start { [weak self] in
             Task {
                 guard let self else { return }
-                diagnosedAt = nil
-                await check()
+                self.diagnosedAt = nil
+                await self.check()
                 onSuccess()
             }
         }
