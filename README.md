@@ -10,13 +10,14 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
+- See which version of `sbx` is installed, and get the command to install or upgrade it when it's missing or out of date.
 
 ## Getting started
 
 ### Requirements
 
 - macOS 26 or later
-- The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/)
+- The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
@@ -104,6 +105,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Action | Command |
 | --- | --- |
 | List | `sbx ls --json` |
+| Installed version (home page) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases`. The app doesn't install or upgrade sbx; it shows the `brew` command to copy |
 | Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |

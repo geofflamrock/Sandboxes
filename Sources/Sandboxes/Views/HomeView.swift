@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 
 /// Shown when no sandbox is selected: requests waiting for approval across
-/// every sandbox, and shortcuts for creating a sandbox.
+/// every sandbox, shortcuts for creating a sandbox, and the installed sbx.
 struct HomeView: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(SbxStatus.self) private var sbxStatus
     @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
@@ -14,9 +15,17 @@ struct HomeView: View {
                     HomeHeader {
                         withAnimation { proxy.scrollTo(HomeAnchor.approvals, anchor: .top) }
                     }
+                    // At the top when sbx needs installing or upgrading,
+                    // otherwise out of the way at the bottom.
+                    if sbxStatus.needsAttention {
+                        SbxStatusSection()
+                    }
                     PendingApprovalsCard(approvalResponse: $approvalResponse)
                         .id(HomeAnchor.approvals)
                     QuickCreateSection()
+                    if !sbxStatus.needsAttention {
+                        SbxStatusSection()
+                    }
                 }
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(24)
@@ -24,10 +33,23 @@ struct HomeView: View {
             }
         }
         .approvalResponseDialog($approvalResponse)
+        .task { await checkSbx() }
+        // The user installs or upgrades sbx in their terminal, so look again
+        // when they come back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await checkSbx() }
+        }
         // The page has its own large title, so keep the window title for the
         // Window menu and Mission Control but don't repeat it in the toolbar.
         .navigationTitle("Sandboxes")
         .toolbar(removing: .title)
+    }
+
+    private func checkSbx() async {
+        if await sbxStatus.check() {
+            // It was just installed, so the sandboxes can load now.
+            await store.refresh()
+        }
     }
 }
 
@@ -227,6 +249,146 @@ private struct PendingApprovalsCard: View {
                 }
             }
             .disabled(store.isResponding(to: approval))
+        }
+    }
+}
+
+// MARK: - sbx
+
+/// Which sbx is installed, or the command to install or upgrade it. The user
+/// runs the command themselves.
+private struct SbxStatusSection: View {
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HomeSectionHeader(title: "Command Line Tool")
+
+            VStack(alignment: .leading, spacing: 10) {
+                content
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(CardBackground())
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch sbxStatus.state {
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Looking for sbx…")
+                    .foregroundStyle(.secondary)
+            }
+        case .notInstalled:
+            Label("sbx isn't installed", systemImage: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .symbolRenderingMode(.multicolor)
+            Text("Sandboxes uses the Docker Sandboxes command line tool, sbx. Install it with Homebrew by running this in Terminal:")
+                .foregroundStyle(.secondary)
+            CopyableCommand(command: SbxStatus.installCommand)
+            HStack(spacing: 16) {
+                Link("Download from GitHub", destination: SbxStatus.releasesURL)
+                SettingsLink { Text("Already installed? Set its location in Settings…") }
+                    .buttonStyle(.link)
+            }
+            .font(.callout)
+        case let .installed(installation):
+            if let upgrade = sbxStatus.availableUpgrade {
+                upgradeContent(installation, to: upgrade)
+            } else {
+                installedContent(installation)
+            }
+        }
+    }
+
+    private func upgradeContent(_ installation: SbxStatus.Installation, to upgrade: SbxStatus.Release) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("sbx \(upgrade.version) is available", systemImage: "arrow.up.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.tint)
+            if let command = installation.upgradeCommand {
+                Text("You have \(installation.version.map(String.init(describing:)) ?? "an older version"). Upgrade it by running this in Terminal:")
+                    .foregroundStyle(.secondary)
+                CopyableCommand(command: command)
+            } else {
+                Text("You have \(installation.version.map(String.init(describing:)) ?? "an older version"), which wasn't installed with Homebrew. Download the new version from GitHub.")
+                    .foregroundStyle(.secondary)
+            }
+            if store.sandboxes.contains(where: { $0.state == .running }) {
+                Label("Upgrading stops the sbx daemon, so your running sandboxes will stop.", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Link(installation.upgradeCommand == nil ? "Download from GitHub" : "Release notes", destination: upgrade.url)
+                .font(.callout)
+        }
+    }
+
+    private func installedContent(_ installation: SbxStatus.Installation) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.green)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(installation.version.map { "sbx \($0)" } ?? "sbx")
+                    .font(.headline)
+                Text(installation.path)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+            Text(summary(installation))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func summary(_ installation: SbxStatus.Installation) -> String {
+        if installation.version == nil {
+            return "Unknown version"
+        }
+        return sbxStatus.latest == nil ? "Installed" : "Up to date"
+    }
+}
+
+/// A shell command in monospaced text with a button that copies it.
+private struct CopyableCommand: View {
+    let command: String
+    @State private var didCopy = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(command)
+                .font(.body.monospaced())
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                didCopy = true
+            } label: {
+                Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .help("Copy the command")
+        }
+        .padding(.leading, 10)
+        .padding([.trailing, .vertical], 6)
+        .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 8))
+        .task(id: didCopy) {
+            guard didCopy else { return }
+            try? await Task.sleep(for: .seconds(2))
+            didCopy = false
         }
     }
 }

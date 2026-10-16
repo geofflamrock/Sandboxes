@@ -16,6 +16,7 @@ struct SandboxesApp: App {
                 .environment(store)
                 .environment(updates)
                 .environment(recents)
+                .environment(appDelegate.sbxStatus)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -62,6 +63,7 @@ struct SandboxesApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = SandboxStore()
     let updates = UpdateChecker()
+    let sbxStatus = SbxStatus()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
