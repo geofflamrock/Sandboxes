@@ -18,7 +18,8 @@ enum SettingsTab: String {
 }
 
 /// Settings › sbx: where sbx is, which version it is, and the results of
-/// `sbx diagnose`. What the user needs to do about them is on the home page.
+/// `sbx diagnose`, with how to upgrade sbx when there's a newer version.
+/// What else the user needs to do about them is on the home page.
 struct SbxSettingsView: View {
     /// How the app finds sbx: on the login shell's PATH, or at a path the
     /// user enters.
@@ -51,6 +52,10 @@ struct SbxSettingsView: View {
                 }
                 LabeledContent("Version") {
                     SbxStatusValue(color: version.color, text: version.text)
+                }
+                // Here as well as on the home page, where it can be dismissed.
+                if let installation = sbxStatus.installation, let release = sbxStatus.availableUpgrade {
+                    SbxUpgradeRow(installation: installation, release: release)
                 }
             } header: {
                 Text("CLI")
@@ -100,6 +105,9 @@ struct SbxSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 560)
+        .sheet(item: Binding(get: { sbxStatus.commandRun(in: .settings) }, set: { sbxStatus.commandRun = $0 })) { run in
+            SbxCommandSheet(run: run)
+        }
         .onAppear {
             pathMode = customPath.isEmpty ? .automatic : .custom
         }
@@ -170,6 +178,53 @@ struct SbxSettingsView: View {
         let skipped = diagnostics.count(.skip)
         if skipped > 0 { parts.append("\(skipped.formatted()) skipped") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// How to upgrade to a newer sbx: the Homebrew command with a button that
+/// runs it, or a link to download it when Homebrew didn't install it, as on
+/// the home page's upgrade card.
+private struct SbxUpgradeRow: View {
+    let installation: SbxStatus.Installation
+    let release: SbxStatus.Release
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(SandboxStore.self) private var store
+    @State private var hasHomebrew = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let command = installation.upgrade {
+                Text("Upgrade to sbx \(release.version) with Homebrew:")
+                CopyableCommand(command: command.commandLine)
+                if command.usesHomebrew && !hasHomebrew {
+                    Text("Homebrew isn't installed, so Sandboxes can't run this for you. Install Homebrew first, or download sbx from GitHub.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button("Upgrade sbx") {
+                        // Reload the sandboxes afterwards, as upgrading
+                        // restarts the daemon.
+                        sbxStatus.run(command, in: .settings) { [store] in
+                            Task { await store.refresh() }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(sbxStatus.commandRun?.phase == .running)
+                    .help("Run \(command.commandLine)")
+                }
+            } else {
+                Text("sbx \(release.version) is available. Your sbx wasn't installed with Homebrew, so download the new version from GitHub.")
+            }
+            if store.sandboxes.contains(where: { $0.state == .running }) {
+                Label("Upgrading stops the sbx daemon, so your running sandboxes will stop.", systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+            }
+            Link(installation.upgrade == nil ? "Download from GitHub" : "Release notes", destination: release.url)
+                .buttonStyle(.link)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .task {
+            hasHomebrew = await Task.detached { Homebrew.executableURL() != nil }.value
+        }
     }
 }
 

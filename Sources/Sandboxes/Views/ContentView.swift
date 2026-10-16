@@ -146,22 +146,19 @@ struct SandboxSidebar: View {
                     .glassEffect(.regular.interactive(), in: .capsule)
                     .help("Download Sandboxes \(update.version) from GitHub")
                 }
-                // Releases show their version; other builds show what they are
-                // built from, so it's obvious when this isn't a release.
-                Group {
-                    if let label = AppInfo.buildLabel {
-                        Label(label, systemImage: "hammer.fill")
-                            .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
-                    } else {
-                        Label("v\(AppInfo.version)", systemImage: "tag.fill")
-                            .help("Version \(AppInfo.version), build \(AppInfo.build)")
+                // On one line when they fit, otherwise the sbx badges go below.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        versionBadge
+                        SbxStatusBadges()
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        versionBadge
+                        HStack(spacing: 6) {
+                            SbxStatusBadges()
+                        }
                     }
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .glassEffect(.regular, in: .capsule)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
@@ -177,6 +174,117 @@ struct SandboxSidebar: View {
                 .help("Create a new sandbox")
             }
         }
+    }
+
+    /// Releases show their version; other builds show what they are built
+    /// from, so it's obvious when this isn't a release.
+    private var versionBadge: some View {
+        Group {
+            if let label = AppInfo.buildLabel {
+                Label(label, systemImage: "hammer.fill")
+                    .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
+            } else {
+                Label("v\(AppInfo.version)", systemImage: "tag.fill")
+                    .help("Version \(AppInfo.version), build \(AppInfo.build)")
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular, in: .capsule)
+    }
+}
+
+/// Capsules in the sidebar footer summarizing sbx: whether it's installed and
+/// whether `sbx diagnose` found problems, and a newer version when there is
+/// one. When a newer version is all there is to report, only it shows.
+private struct SbxStatusBadges: View {
+    @Environment(SbxStatus.self) private var sbxStatus
+
+    var body: some View {
+        let upgrade = self.upgrade
+        if let status = status(upgrade: upgrade) {
+            SbxBadge(color: status.color, text: status.text, help: status.help)
+        }
+        if let upgrade {
+            SbxBadge(color: .orange, text: upgrade, help: "\(upgrade). Click to see Settings › sbx.")
+        }
+    }
+
+    /// Such as "sbx 0.49.0 available", whether the app's own check for
+    /// releases or sbx diagnose found it.
+    private var upgrade: String? {
+        if let release = sbxStatus.availableUpgrade {
+            return "sbx \(release.version) available"
+        }
+        if sbxStatus.diagnostics?.checks.contains(where: \.isUpgradeWarning) == true {
+            return "sbx upgrade available"
+        }
+        return nil
+    }
+
+    /// The installation and diagnostics, or nil when there's nothing to say
+    /// besides the newer version.
+    private func status(upgrade: String?) -> (color: Color, text: String, help: String)? {
+        switch sbxStatus.state {
+        case .checking:
+            return (.secondary, "Checking sbx…", "Looking for sbx")
+        case .notInstalled:
+            return (.red, "sbx not installed", "sbx isn't installed. Click to see Settings › sbx.")
+        case .installed:
+            break
+        }
+        guard let diagnostics = sbxStatus.diagnostics else {
+            if let error = sbxStatus.diagnosticsError {
+                return (.red, "sbx diagnose failed", "Couldn't run sbx diagnose: \(error)")
+            }
+            if upgrade != nil { return nil }
+            return (.secondary, "Checking sbx…", "Running sbx diagnose")
+        }
+        let failures = diagnostics.failures
+        // The newer version has its own badge.
+        let warnings = diagnostics.warnings.filter { !$0.isUpgradeWarning }
+        let details = (failures + warnings)
+            .map { $0.message.isEmpty ? $0.name : "\($0.name): \($0.message)" }
+            .joined(separator: "\n")
+        if !failures.isEmpty {
+            let text = failures.count == 1 ? "1 problem" : "\(failures.count.formatted()) problems"
+            return (.red, text, details)
+        }
+        if !warnings.isEmpty {
+            let text = warnings.count == 1 ? "1 warning" : "\(warnings.count.formatted()) warnings"
+            return (.orange, text, details)
+        }
+        if upgrade != nil { return nil }
+        return (.green, "Healthy", "All \(diagnostics.count(.pass).formatted()) sbx diagnose checks passed")
+    }
+}
+
+/// A capsule with a status dot and a short summary that opens Settings › sbx.
+private struct SbxBadge: View {
+    let color: Color
+    let text: String
+    let help: String
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button {
+            SettingsTab.show(.sbx, openSettings)
+        } label: {
+            HStack(spacing: 5) {
+                StatusDot(color: color)
+                Text(text)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .help(help)
     }
 }
 
