@@ -1,110 +1,123 @@
 #!/usr/bin/env python3
 """Generates the app icon's layers and Design/AppIcon.svg.
 
-The icon is a container (an isometric cube, taped shut like a box) sitting in
-a sandbox. It follows the macOS 26 Liquid Glass style: flat, solid shapes in
-separate layers, with no drawn shadows or highlights, since the system adds
-those itself.
+The icon is a child's wooden sandbox, seen isometrically, with an agent (a
+little blue robot) poking its head out of the sand. It follows the macOS 26
+Liquid Glass style: flat, solid shapes in separate layers, with no drawn
+shadows or highlights, since the system adds those itself.
 
 Outputs:
 - Design/AppIcon.icon/Assets/*.svg: the foreground layers of the Icon
   Composer icon, on its full-bleed 1024pt canvas. The background fill and how
-  the layers are grouped, scaled and lit live in Design/AppIcon.icon/icon.json,
+  the layers are grouped, moved and lit live in Design/AppIcon.icon/icon.json,
   which Icon Composer edits.
-- Design/AppIcon.svg: a flattened preview of the icon.
+- Design/AppIcon.svg: a flattened preview of the icon. It follows icon.json's
+  layer order and offsets, so it matches what Icon Composer shows.
 
 Run from the repository root: python3 scripts/generate-app-icon.py
 """
 
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DESIGN = ROOT / "Design"
-LAYERS = DESIGN / "AppIcon.icon" / "Assets"
+ICON = DESIGN / "AppIcon.icon"
+LAYERS = ICON / "Assets"
 
 CANVAS = 1024
-# The preview is drawn on Apple's macOS icon grid: an 824pt rounded square
-# centred on the canvas.
+# The artwork is drawn on Apple's macOS icon grid: an 824pt rounded square
+# centred on the canvas. Icon Composer's canvas is the icon shape itself, so
+# the layers are scaled up by FULL_BLEED to fill it.
 BODY = 824
 INSET = (CANVAS - BODY) // 2
 RADIUS = 185
+FULL_BLEED = CANVAS / BODY
 
-# The preview's background: the light fill from icon.json, a soft top-lit
-# gradient, (top, bottom). The dark fill is #4A3C29 to #2A2117.
-SAND = ("#F8ECD4", "#EDD7AA")
-BOX_TOP = "#5AACF2"
-BOX_LEFT = "#2A6EEF"
-BOX_RIGHT = "#1C5CDB"
-TAPE = "#A6D5FA"
+# The preview's background, top to bottom: the system light fill that
+# icon.json uses.
+BACKGROUND = ("#FFFFFF", "#E4E4EA")
+WOOD_TOP = "#E39B5B"
+WOOD_LEFT = "#C47A3C"
+WOOD_RIGHT = "#AE6530"
+WOOD_INSIDE = "#9A5A2B"
+WOOD_SEAM = "#8F5226"
+SAND = "#EDC77F"
+AGENT = "#2A6EEF"
+ANTENNA = "#1C5CDB"
+VISOR = "#132A5C"
+EYES = "#A6D5FA"
 
-# Shapes on a 120-unit design grid that spans the icon, moved so the cube's
-# centre lands on the grid's centre (60, 60).
-CUBE_SCALE = 1.15
-CUBE_CENTRE = (60, 55)
-BOX = [
-    (BOX_TOP, [(60, 22), (90, 38), (60, 54), (30, 38)]),
-    (BOX_LEFT, [(30, 38), (60, 54), (60, 88), (30, 72)]),
-    (BOX_RIGHT, [(60, 54), (90, 38), (90, 72), (60, 88)]),
-]
-# Tape across the lid, where the two flaps meet. It's split down the middle
-# along the seam, so the lid shows through a SEAM_GAP wide gap.
-TAPE_SHAPE = [(41.4, 31.9), (48.6, 28.1), (78.6, 44.1), (71.4, 47.9)]
-SEAM_GAP = 1
+# The sandbox: a diamond W wide (half width) and W * SLOPE tall, with walls
+# WALL deep. The sand sits SAND_DROP below the rim, inside a rim that's
+# 1 - INNER of the box's width.
+CENTRE = (512, 548)
+W = 330
+SLOPE = 0.53
+WALL = 124
+INNER = 0.83
+SAND_DROP = 22
 
 
-def split_tape():
-    # Cut the tape along its length, from the middle of one short end to the
-    # middle of the other, and pull the halves apart so the gap is SEAM_GAP
-    # wide.
-    a, b, c, d = TAPE_SHAPE
-    along = (d[0] - a[0], d[1] - a[1])
-    across = (b[0] - a[0], b[1] - a[1])
-    length = (along[0] ** 2 + along[1] ** 2) ** 0.5
-    normal = (along[1] / length, -along[0] / length)
-    # How far to move along the short ends for half the gap, measured square
-    # to the seam.
-    shift = (SEAM_GAP / 2) / abs(across[0] * normal[0] + across[1] * normal[1])
+def diamond(cx, cy, w, h):
+    return [(cx, cy - h), (cx + w, cy), (cx, cy + h), (cx - w, cy)]
 
-    def at(p, q, t):
-        return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
 
+def polygon(points, fill):
+    return f'<polygon points="{" ".join(f"{x:.1f},{y:.1f}" for x, y in points)}" fill="{fill}"/>'
+
+
+def rect(x, y, width, height, radius, fill):
+    return f'<rect x="{x:g}" y="{y:g}" width="{width:g}" height="{height:g}" rx="{radius:g}" fill="{fill}"/>'
+
+
+def frame():
+    cx, cy = CENTRE
+    h = W * SLOPE
+    top, right, bottom, left = diamond(cx, cy, W, h)
+
+    def down(p, by):
+        return (p[0], p[1] + by)
+
+    shapes = [
+        polygon([left, bottom, down(bottom, WALL), down(left, WALL)], WOOD_LEFT),
+        polygon([bottom, right, down(right, WALL), down(bottom, WALL)], WOOD_RIGHT),
+    ]
+    # A seam between two planks, part way down each outside wall.
+    seam, thickness = WALL * 0.48, 10
+    for a, b in ((left, bottom), (bottom, right)):
+        shapes.append(polygon([down(a, seam), down(b, seam), down(b, seam + thickness), down(a, seam + thickness)], WOOD_SEAM))
+    shapes.append(polygon([top, right, bottom, left], WOOD_TOP))
+    shapes.append(polygon(diamond(cx, cy, W * INNER, h * INNER), WOOD_INSIDE))
+    return shapes
+
+
+def sand():
+    # The inside of the rim dropped by SAND_DROP, cut to the inside of the rim,
+    # so the back walls show above the sand.
+    cx, cy = CENTRE
+    w, h = W * INNER, W * SLOPE * INNER
+    side = w * (1 - SAND_DROP / 2 / h)
+    return [polygon([(cx, cy - h + SAND_DROP), (cx + side, cy + SAND_DROP / 2), (cx, cy + h), (cx - side, cy + SAND_DROP / 2)], SAND)]
+
+
+def agent():
+    # A rounded head with a visor and two eyes, and an antenna on top. Its
+    # bottom sits below the sand's surface.
+    cx = CENTRE[0]
+    top, bottom = CENTRE[1] - 262, CENTRE[1] - 10
+    antenna = 70
     return [
-        [a, at(a, b, 0.5 - shift), at(d, c, 0.5 - shift), d],
-        [at(a, b, 0.5 + shift), b, c, at(d, c, 0.5 + shift)],
+        rect(cx - 7, top - antenna, 14, antenna + 10, 7, ANTENNA),
+        f'<circle cx="{cx}" cy="{top - antenna}" r="24" fill="{EYES}"/>',
+        rect(cx - 125, top, 250, bottom - top, 78, AGENT),
+        rect(cx - 98, top + 44, 196, 114, 52, VISOR),
+        rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
+        rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
     ]
 
 
-def tape():
-    return [(TAPE, half) for half in split_tape()]
-
-
-def cube_point(x, y, size, inset=0):
-    unit = size / 120
-    cx, cy = CUBE_CENTRE
-    return (
-        inset + (60 + (x - cx) * CUBE_SCALE) * unit,
-        inset + (60 + (y - cy) * CUBE_SCALE) * unit,
-    )
-
-
-def pts(points):
-    return " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
-
-
-def polygons(shapes, size, inset=0, indent="  "):
-    return "\n".join(
-        f'{indent}<polygon points="{pts(cube_point(*p, size, inset) for p in points)}" fill="{colour}"/>'
-        for colour, points in shapes
-    )
-
-
-def gradient_def(fill, id="fill"):
-    top, bottom = fill
-    return (
-        f'<linearGradient id="{id}" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/>'
-        f"</linearGradient>"
-    )
+LAYER_SHAPES = {"Frame": frame, "Sand": sand, "Agent": agent}
 
 
 def svg(body, defs=""):
@@ -116,21 +129,38 @@ def svg(body, defs=""):
 """
 
 
+def group(shapes, transform, indent="  "):
+    inner = "\n".join(f"{indent}  {s}" for s in shapes)
+    return f'{indent}<g transform="{transform}">\n{inner}\n{indent}</g>'
+
+
 def write_layers():
     LAYERS.mkdir(parents=True, exist_ok=True)
-    (LAYERS / "Box.svg").write_text(svg(polygons(BOX, CANVAS)))
-    (LAYERS / "Tape-Split.svg").write_text(svg(polygons(tape(), CANVAS)))
+    scale = f"translate(512 512) scale({FULL_BLEED:.4f}) translate(-512 -512)"
+    for name, shapes in LAYER_SHAPES.items():
+        (LAYERS / f"{name}.svg").write_text(svg(group(shapes(), scale)))
 
 
 def write_preview():
-    body = f"""  <rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}" fill="url(#fill)"/>
-  <g id="box">
-{polygons(BOX, BODY, INSET, "    ")}
-  </g>
-  <g id="tape">
-{polygons(tape(), BODY, INSET, "    ")}
-  </g>"""
-    (DESIGN / "AppIcon.svg").write_text(svg(body, gradient_def(SAND)))
+    # Draw the layers bottom first, moved as icon.json moves them. Its offsets
+    # are in full-bleed points, with y increasing downwards.
+    groups = json.loads((ICON / "icon.json").read_text())["groups"]
+    layers = []
+    for g in reversed(groups):
+        for layer in g["layers"]:
+            name = Path(layer["image-name"]).stem
+            if layer.get("hidden") or name not in LAYER_SHAPES:
+                continue
+            dx, dy = (v / FULL_BLEED for v in layer["position"]["translation-in-points"])
+            layers.append(f'  <g id="{name.lower()}" transform="translate({dx:.1f} {dy:.1f})">\n'
+                          + "\n".join(f"    {s}" for s in LAYER_SHAPES[name]()) + "\n  </g>")
+    top, bottom = BACKGROUND
+    defs = (f'<linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/></linearGradient>\n'
+            f'    <clipPath id="shape"><rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}"/></clipPath>')
+    body = (f'  <rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}" fill="url(#fill)"/>\n'
+            '  <g clip-path="url(#shape)">\n' + "\n".join(layers) + "\n  </g>")
+    (DESIGN / "AppIcon.svg").write_text(svg(body, defs))
 
 
 if __name__ == "__main__":
