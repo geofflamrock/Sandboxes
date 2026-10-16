@@ -72,7 +72,15 @@ enum SbxCLI {
         guard let executable = executableURL() else {
             throw SbxError.executableNotFound
         }
+        return try await stream(executable: executable, arguments: arguments, onOutput: onOutput)
+    }
 
+    /// Runs another executable the same way, such as Homebrew to install sbx.
+    static func stream(
+        executable: URL,
+        arguments: [String],
+        onOutput: @escaping @Sendable (String) -> Void
+    ) async throws -> Int32 {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments

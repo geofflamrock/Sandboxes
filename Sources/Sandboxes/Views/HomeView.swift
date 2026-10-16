@@ -15,17 +15,20 @@ struct HomeView: View {
                     HomeHeader {
                         withAnimation { proxy.scrollTo(HomeAnchor.approvals, anchor: .top) }
                     }
-                    // At the top when sbx needs installing or upgrading,
-                    // otherwise out of the way at the bottom.
-                    if sbxStatus.needsAttention {
-                        SbxStatusSection()
+                    // What the user needs to do comes first, without a
+                    // heading; the details stay in Setup at the bottom.
+                    let actions = sbxStatus.actions
+                    if !actions.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(actions) { action in
+                                SbxActionCard(action: action)
+                            }
+                        }
                     }
                     PendingApprovalsCard(approvalResponse: $approvalResponse)
                         .id(HomeAnchor.approvals)
                     QuickCreateSection()
-                    if !sbxStatus.needsAttention {
-                        SbxStatusSection()
-                    }
+                    SbxStatusSection()
                 }
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(24)
@@ -37,8 +40,8 @@ struct HomeView: View {
             SbxCommandSheet(run: run)
         }
         .task { await checkSbx() }
-        // The user installs or upgrades sbx in their terminal, so look again
-        // when they come back.
+        // The user may install or upgrade sbx, or sign in, in their
+        // terminal, so look again when they come back.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await checkSbx() }
         }
@@ -258,22 +261,16 @@ private struct PendingApprovalsCard: View {
 
 // MARK: - sbx
 
-/// Which sbx is installed and the results of `sbx diagnose`, or the command
-/// to install or upgrade it. The user runs the command themselves. Laid out
-/// as rows like a grouped form, with the checks folding away like the
-/// sections of the create sheet.
+/// Which sbx is installed and the results of `sbx diagnose`, laid out as rows
+/// like a grouped form, with the checks folding away like the sections of
+/// the create sheet. It stays at the bottom of the page: anything the user
+/// needs to do is in the action cards at the top.
 private struct SbxStatusSection: View {
     @Environment(SbxStatus.self) private var sbxStatus
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HomeSectionHeader(title: "Setup", isLoading: sbxStatus.isDiagnosing)
-
-            // Things to fix before sandboxes work get their own cards first,
-            // like sbx not being installed.
-            ForEach(sbxStatus.fixes) { fix in
-                SbxFixCard(fix: fix)
-            }
 
             VStack(alignment: .leading, spacing: 0) {
                 switch sbxStatus.state {
@@ -283,13 +280,14 @@ private struct SbxStatusSection: View {
                             .foregroundStyle(.secondary)
                     }
                 case .notInstalled:
-                    SbxNotInstalledRow()
+                    SbxRow {
+                        SbxValueRow(color: .red, value: "Not installed") {
+                            Text("sbx")
+                                .font(.headline)
+                        }
+                    }
                 case let .installed(installation):
                     SbxVersionRow(installation: installation)
-                    if let upgrade = sbxStatus.availableUpgrade {
-                        SbxRowDivider()
-                        SbxUpgradeRow(installation: installation, upgrade: upgrade)
-                    }
                     SbxRowDivider()
                     SbxDiagnosticsRows()
                 }
@@ -352,95 +350,136 @@ private struct SbxValueRow<Title: View>: View {
     }
 }
 
-private struct SbxNotInstalledRow: View {
-    var body: some View {
-        SbxRow {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    StatusDot(color: .red)
-                    Text("sbx isn't installed")
-                        .font(.headline)
-                }
-                Text("Sandboxes uses the Docker Sandboxes command line tool, sbx. Install it with Homebrew by running this in Terminal:")
-                    .foregroundStyle(.secondary)
-                CopyableCommand(command: SbxStatus.installCommand)
-                HStack(spacing: 16) {
-                    Link("Download from GitHub", destination: SbxStatus.releasesURL)
-                    SettingsLink { Text("Already installed? Set its location in Settings…") }
-                        .buttonStyle(.link)
-                }
-                .font(.callout)
-            }
-        }
-    }
-}
-
-/// A card for something to fix before sandboxes work, found by
-/// `sbx diagnose`: the daemon isn't running, or the user isn't signed in.
-private struct SbxFixCard: View {
-    let fix: SbxStatus.Fix
+/// A card at the top of the page for something the user needs to do: install
+/// or upgrade sbx, start the daemon, or sign in. It shows the command, so it
+/// can be copied and run in Terminal, with a button below that runs it here
+/// and shows the output.
+private struct SbxActionCard: View {
+    let action: SbxStatus.Action
     @Environment(SbxStatus.self) private var sbxStatus
     @Environment(SandboxStore.self) private var store
+    @State private var hasHomebrew = true
 
     var body: some View {
-        SbxRow {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    StatusDot(color: .red)
-                    Text(title)
-                        .font(.headline)
-                }
-                Text(explanation)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                StatusDot(color: isUpgrade ? .orange : .red)
+                Text(title)
+                    .font(.headline)
+            }
+            Text(explanation)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if case let .fix(_, check) = action, !check.hint.isEmpty {
+                Text(check.hint)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !fix.check.hint.isEmpty {
-                    Text(fix.check.hint)
+                    .textSelection(.enabled)
+            }
+            if let command {
+                CopyableCommand(command: command.commandLine)
+                if command.usesHomebrew && !hasHomebrew {
+                    Text("Homebrew isn't installed, so Sandboxes can't run this for you. Install Homebrew first, or download sbx from GitHub.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-                Button(buttonTitle) {
-                    // Reload the sandboxes afterwards: they can't load
-                    // without the daemon, or sometimes without signing in.
-                    sbxStatus.run(fix.kind) { [store] in
-                        Task { await store.refresh() }
+                } else {
+                    Button(buttonTitle) {
+                        // Reload the sandboxes afterwards: they can't load
+                        // without sbx, its daemon, or sometimes signing in.
+                        sbxStatus.run(command) { [store] in
+                            Task { await store.refresh() }
+                        }
                     }
+                    .buttonStyle(.glassProminent)
+                    .disabled(sbxStatus.commandRun?.phase == .running)
+                    .help("Run \(command.commandLine)")
                 }
-                .buttonStyle(.glassProminent)
-                .disabled(sbxStatus.commandRun?.phase == .running)
-                .help(help)
             }
+            if isUpgrade, store.sandboxes.contains(where: { $0.state == .running }) {
+                Label("Upgrading stops the sbx daemon, so your running sandboxes will stop.", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            links
+                .font(.callout)
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(CardBackground())
+        .task {
+            hasHomebrew = await Task.detached { Homebrew.executableURL() != nil }.value
+        }
+    }
+
+    /// The command that does what the card asks, or nil when the app can't
+    /// run one: sbx wasn't installed with Homebrew, so it can't upgrade it.
+    private var command: SbxCommandRun.Kind? {
+        switch action {
+        case .install: .install
+        case let .upgrade(installation, _): installation.upgrade
+        case let .fix(kind, _): kind
+        }
+    }
+
+    private var isUpgrade: Bool {
+        guard case .upgrade = action else { return false }
+        return true
     }
 
     private var title: String {
-        switch fix.kind {
-        case .startDaemon: "The sbx daemon isn't running"
-        case .signIn: "You aren't signed in to Docker"
+        switch action {
+        case .install: "sbx isn't installed"
+        case let .upgrade(_, release): "sbx \(release.version) is available"
+        case .fix(.startDaemon, _): "The sbx daemon isn't running"
+        case .fix(.signIn, _): "You aren't signed in to Docker"
+        case .fix: "sbx needs attention"
         }
     }
 
     private var explanation: String {
-        switch fix.kind {
-        case .startDaemon:
-            "sbx runs your sandboxes through a background daemon. Start it to list, create and run sandboxes."
-        case .signIn:
-            "sbx needs you signed in to Docker to create and run sandboxes. You'll get a code to enter in your browser."
+        switch action {
+        case .install:
+            return "Sandboxes uses the Docker Sandboxes command line tool, sbx. Install it with Homebrew:"
+        case let .upgrade(installation, _):
+            let installed = installation.version.map { "sbx \($0)" } ?? "an older version"
+            return installation.upgrade == nil
+                ? "You have \(installed), which wasn't installed with Homebrew. Download the new version from GitHub."
+                : "You have \(installed). Upgrade it with Homebrew:"
+        case .fix(.startDaemon, _):
+            return "sbx runs your sandboxes through a background daemon. Start it to list, create and run sandboxes:"
+        case .fix(.signIn, _):
+            return "sbx needs you signed in to Docker to create and run sandboxes. You'll get a code to enter in your browser:"
+        case .fix:
+            return "Run this to fix it:"
         }
     }
 
     private var buttonTitle: String {
-        switch fix.kind {
+        switch command {
+        case .install: "Install sbx"
+        case .upgrade: "Upgrade sbx"
         case .startDaemon: "Start Daemon"
         case .signIn: "Sign In…"
+        case nil: ""
         }
     }
 
-    private var help: String {
-        switch fix.kind {
-        case .startDaemon: "Run sbx daemon start --detach"
-        case .signIn: "Sign in to Docker with sbx login"
+    @ViewBuilder
+    private var links: some View {
+        switch action {
+        case .install:
+            HStack(spacing: 16) {
+                if !hasHomebrew {
+                    Link("Install Homebrew", destination: Homebrew.installURL)
+                }
+                Link("Download from GitHub", destination: SbxStatus.releasesURL)
+                SettingsLink { Text("Already installed? Set its location in Settings…") }
+                    .buttonStyle(.link)
+            }
+        case let .upgrade(installation, release):
+            Link(installation.upgrade == nil ? "Download from GitHub" : "Release notes", destination: release.url)
+        case .fix:
+            EmptyView()
         }
     }
 }
@@ -466,35 +505,6 @@ private struct SbxVersionRow: View {
             return (.orange, "Unknown version")
         }
         return sbxStatus.latest == nil ? (.green, "Installed") : (.green, "Up to date")
-    }
-}
-
-/// The command to upgrade sbx, or where to download it.
-private struct SbxUpgradeRow: View {
-    let installation: SbxStatus.Installation
-    let upgrade: SbxStatus.Release
-    @Environment(SandboxStore.self) private var store
-
-    var body: some View {
-        SbxRow {
-            VStack(alignment: .leading, spacing: 10) {
-                if let command = installation.upgradeCommand {
-                    Text("Upgrade to sbx \(upgrade.version) by running this in Terminal:")
-                        .foregroundStyle(.secondary)
-                    CopyableCommand(command: command)
-                } else {
-                    Text("This sbx wasn't installed with Homebrew. Download sbx \(upgrade.version) from GitHub.")
-                        .foregroundStyle(.secondary)
-                }
-                if store.sandboxes.contains(where: { $0.state == .running }) {
-                    Label("Upgrading stops the sbx daemon, so your running sandboxes will stop.", systemImage: "info.circle")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                Link(installation.upgradeCommand == nil ? "Download from GitHub" : "Release notes", destination: upgrade.url)
-                    .font(.callout)
-            }
-        }
     }
 }
 

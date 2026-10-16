@@ -38,8 +38,8 @@ struct SbxVersion: Comparable, CustomStringConvertible, Sendable {
 }
 
 /// Whether sbx is installed, which version, whether there's a newer release,
-/// and the results of `sbx diagnose`. The app only shows the commands to
-/// install or upgrade it; the user runs them.
+/// and the results of `sbx diagnose`, with what the user needs to do about
+/// them: install or upgrade sbx, start the daemon, or sign in.
 @MainActor
 @Observable
 final class SbxStatus {
@@ -59,8 +59,8 @@ final class SbxStatus {
         let cask: String?
 
         /// The command that upgrades it, when Homebrew installed it.
-        var upgradeCommand: String? {
-            cask.map { "brew upgrade docker/tap/\($0)" }
+        var upgrade: SbxCommandRun.Kind? {
+            cask.map { .upgrade(cask: $0) }
         }
     }
 
@@ -69,16 +69,22 @@ final class SbxStatus {
         let url: URL
     }
 
-    /// Something `sbx diagnose` found that the app can fix by running a
-    /// command, with the check that found it.
-    struct Fix: Identifiable {
-        let kind: SbxCommandRun.Kind
-        let check: SbxDiagnostics.Check
+    /// Something the user needs to do before, or to keep, sandboxes working.
+    enum Action: Identifiable {
+        case install
+        case upgrade(Installation, to: Release)
+        /// Start the daemon or sign in, found by `check`.
+        case fix(SbxCommandRun.Kind, check: SbxDiagnostics.Check)
 
-        var id: Int { check.id }
+        var id: String {
+            switch self {
+            case .install: "install"
+            case .upgrade: "upgrade"
+            case let .fix(_, check): "fix-\(check.id)"
+            }
+        }
     }
 
-    static let installCommand = "brew install docker/tap/sbx"
     static let releasesURL = URL(string: "https://github.com/docker/sbx-releases/releases/latest")!
 
     private(set) var state: State = .checking
@@ -117,18 +123,23 @@ final class SbxStatus {
         return latest
     }
 
-    /// The daemon to start or the sign-in to do, from the last diagnostics.
-    var fixes: [Fix] {
-        diagnostics?.checks.compactMap { check in
-            check.fix.map { Fix(kind: $0, check: check) }
-        } ?? []
-    }
-
-    /// Whether the user has something to do: install sbx, upgrade it, or fix
-    /// a failed diagnostic check.
-    var needsAttention: Bool {
-        if case .notInstalled = state { return true }
-        return availableUpgrade != nil || diagnostics?.failures.isEmpty == false
+    /// What the user needs to do, most important first: install sbx, start
+    /// the daemon or sign in, then upgrade.
+    var actions: [Action] {
+        switch state {
+        case .checking:
+            return []
+        case .notInstalled:
+            return [.install]
+        case let .installed(installation):
+            var actions: [Action] = diagnostics?.checks.compactMap { check in
+                check.fix.map { .fix($0, check: check) }
+            } ?? []
+            if let availableUpgrade {
+                actions.append(.upgrade(installation, to: availableUpgrade))
+            }
+            return actions
+        }
     }
 
     /// Looks for sbx and its version again, and for the latest release and
@@ -165,13 +176,15 @@ final class SbxStatus {
         return wasMissing && installation != nil
     }
 
-    /// Runs `kind` in the command sheet, then runs `sbx diagnose` again and
-    /// calls `onSuccess` if it worked.
+    /// Runs `kind` in the command sheet. If it works, looks for sbx again
+    /// and runs `sbx diagnose`, then calls `onSuccess`.
     func run(_ kind: SbxCommandRun.Kind, onSuccess: @escaping @MainActor () -> Void) {
         let run = SbxCommandRun(kind: kind)
         run.start { [weak self] in
             Task {
-                await self?.diagnose()
+                guard let self else { return }
+                diagnosedAt = nil
+                await check()
                 onSuccess()
             }
         }

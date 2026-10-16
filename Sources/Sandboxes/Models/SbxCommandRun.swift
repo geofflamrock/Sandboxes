@@ -1,20 +1,40 @@
 import Foundation
 import Observation
 
-/// One run of an sbx command that fixes the setup, such as starting the
-/// daemon or signing in, with its streamed output for the command sheet.
+/// One run of a command that fixes the setup, such as installing sbx with
+/// Homebrew, starting the daemon or signing in, with its streamed output for
+/// the command sheet.
 @MainActor
 @Observable
 final class SbxCommandRun: Identifiable {
-    enum Kind {
+    enum Kind: Equatable {
+        case install
+        /// Upgrades the Homebrew cask that installed sbx, such as `sbx` or `sbx@rc`.
+        case upgrade(cask: String)
         case startDaemon
         case signIn
 
+        /// Whether it runs `brew` rather than `sbx`.
+        var usesHomebrew: Bool {
+            switch self {
+            case .install, .upgrade: true
+            case .startDaemon, .signIn: false
+            }
+        }
+
         var arguments: [String] {
             switch self {
+            case .install: ["install", "docker/tap/sbx"]
+            case let .upgrade(cask): ["upgrade", "docker/tap/\(cask)"]
             case .startDaemon: ["daemon", "start", "--detach"]
             case .signIn: ["login"]
             }
+        }
+
+        /// What to run in a terminal to do the same, such as
+        /// `brew install docker/tap/sbx`.
+        var commandLine: String {
+            ([usesHomebrew ? "brew" : "sbx"] + arguments).joined(separator: " ")
         }
     }
 
@@ -41,23 +61,30 @@ final class SbxCommandRun: Identifiable {
 
     @ObservationIgnored private var task: Task<Void, Never>?
 
-    var commandLine: String {
-        (["sbx"] + kind.arguments).joined(separator: " ")
-    }
+    var commandLine: String { kind.commandLine }
 
     init(kind: Kind) {
         self.kind = kind
     }
 
     func start(onSuccess: @escaping @MainActor () -> Void) {
-        let arguments = kind.arguments
+        let kind = kind
         output.append("$ \(commandLine)\n\n")
         task = Task {
             do {
-                let exitCode = try await SbxCLI.stream(arguments) { [weak self] text in
+                let onOutput: @Sendable (String) -> Void = { [weak self] text in
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated { self?.receive(text) }
                     }
+                }
+                let exitCode: Int32
+                if kind.usesHomebrew {
+                    guard let brew = Homebrew.executableURL() else {
+                        throw HomebrewNotFound()
+                    }
+                    exitCode = try await SbxCLI.stream(executable: brew, arguments: kind.arguments, onOutput: onOutput)
+                } else {
+                    exitCode = try await SbxCLI.stream(kind.arguments, onOutput: onOutput)
                 }
                 if Task.isCancelled {
                     phase = .cancelled
@@ -65,12 +92,16 @@ final class SbxCommandRun: Identifiable {
                     phase = .succeeded
                     onSuccess()
                 } else {
-                    phase = .failed("sbx exited with code \(exitCode).")
+                    phase = .failed("\(kind.usesHomebrew ? "brew" : "sbx") exited with code \(exitCode).")
                 }
             } catch {
                 phase = Task.isCancelled ? .cancelled : .failed(error.localizedDescription)
             }
         }
+    }
+
+    struct HomebrewNotFound: LocalizedError {
+        var errorDescription: String? { "Homebrew isn't installed." }
     }
 
     func cancel() {

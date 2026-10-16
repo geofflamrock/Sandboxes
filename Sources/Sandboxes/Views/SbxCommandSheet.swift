@@ -1,8 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// The output of a command that fixes the setup, such as starting the daemon
-/// or signing in, laid out like the output of creating a sandbox.
+/// The output of a command that fixes the setup, such as installing sbx,
+/// starting the daemon or signing in, laid out like the output of creating a
+/// sandbox.
 struct SbxCommandSheet: View {
     let run: SbxCommandRun
     @Environment(\.dismiss) private var dismiss
@@ -18,9 +19,9 @@ struct SbxCommandSheet: View {
 
             ConsoleOutputView(output: run.output)
 
-            if run.kind == .signIn, case .failed = run.phase {
+            if case .failed = run.phase {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("If signing in doesn't work here, run this in Terminal instead:")
+                    Text("If it doesn't work here, run this in Terminal instead:")
                         .foregroundStyle(.secondary)
                     CopyableCommand(command: run.commandLine)
                 }
@@ -79,6 +80,15 @@ struct SbxCommandSheet: View {
         .background(Color.accentColor.opacity(0.1), in: .rect(cornerRadius: 10))
     }
 
+    private var titles: (running: String, succeeded: String, failed: String) {
+        switch run.kind {
+        case .install: ("Installing sbx…", "sbx Installed", "Couldn't Install sbx")
+        case .upgrade: ("Upgrading sbx…", "sbx Upgraded", "Couldn't Upgrade sbx")
+        case .startDaemon: ("Starting the sbx Daemon…", "Daemon Started", "Couldn't Start the Daemon")
+        case .signIn: ("Signing In to Docker…", "Signed In", "Couldn't Sign In")
+        }
+    }
+
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 10) {
@@ -86,15 +96,15 @@ struct SbxCommandSheet: View {
             case .running:
                 ProgressView()
                     .controlSize(.small)
-                Text(run.kind == .startDaemon ? "Starting the sbx Daemon…" : "Signing In to Docker…")
+                Text(titles.running)
             case .succeeded:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text(run.kind == .startDaemon ? "Daemon Started" : "Signed In")
+                Text(titles.succeeded)
             case let .failed(message):
                 Image(systemName: "xmark.octagon.fill")
                     .foregroundStyle(.red)
-                Text(run.kind == .startDaemon ? "Couldn't Start the Daemon" : "Couldn't Sign In")
+                Text(titles.failed)
                 Text(message)
                     .font(.callout)
                     .foregroundStyle(.secondary)
