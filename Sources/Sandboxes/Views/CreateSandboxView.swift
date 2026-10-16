@@ -669,6 +669,9 @@ private struct CreationOutputView: View {
     let onBack: () -> Void
     let onDone: () -> Void
 
+    /// Briefly shows a checkmark after the approval command is copied.
+    @State private var copiedCommand = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -690,6 +693,10 @@ private struct CreationOutputView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(.separator)
+            }
+
+            if run.phase == .succeeded && run.withheldCredential {
+                credentialNotice
             }
 
             HStack {
@@ -717,6 +724,52 @@ private struct CreationOutputView: View {
             .controlSize(.large)
         }
         .padding(20)
+    }
+
+    private var credentialNotice: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Approve the Kit’s Credentials")
+                    .font(.headline)
+                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials when you create a sandbox in a terminal. Run this in one and approve the credential: it creates an empty sandbox you can remove afterwards. You only need to do this once on this Mac.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Text(run.credentialApprovalCommandLine)
+                        .font(.callout.monospaced())
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(run.credentialApprovalCommandLine, forType: .string)
+                        copiedCommand = true
+                    } label: {
+                        Label(
+                            copiedCommand ? "Copied" : "Copy Command",
+                            systemImage: copiedCommand ? "checkmark" : "doc.on.doc"
+                        )
+                        .contentTransition(.symbolEffect(.replace))
+                        .foregroundStyle(copiedCommand ? Color.green : Color.secondary)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(copiedCommand ? "Copied" : "Copy Command")
+                    .task(id: copiedCommand) {
+                        guard copiedCommand else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        copiedCommand = false
+                    }
+                }
+                .padding(8)
+                .background(.background.secondary, in: .rect(cornerRadius: 6))
+            }
+        } icon: {
+            Image(systemName: "key.fill")
+                .foregroundStyle(.orange)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: 10))
     }
 
     @ViewBuilder
