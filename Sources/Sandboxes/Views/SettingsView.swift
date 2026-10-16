@@ -6,6 +6,8 @@ struct SettingsView: View {
     @State private var resolvedPath: String?
     @State private var hasResolved = false
     @AppStorage(ApprovalNotifier.enabledKey) private var notifiesAboutApprovals = true
+    @AppStorage(UpdateChecker.enabledKey) private var checksForUpdates = true
+    @Environment(UpdateChecker.self) private var updates
     @State private var loginItemStatus = SMAppService.mainApp.status
     @State private var loginItemError: String?
 
@@ -57,6 +59,17 @@ struct SettingsView: View {
                 }
                 .foregroundStyle(.secondary)
             }
+
+            if UpdateChecker.isSupported {
+                Section {
+                    Toggle("Check for updates", isOn: $checksForUpdates)
+                } header: {
+                    Text("Updates")
+                } footer: {
+                    Text("Shows when a newer version is on GitHub, with a link to download it.")
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(width: 480)
@@ -66,6 +79,9 @@ struct SettingsView: View {
             if isOn {
                 ApprovalNotifier.shared.requestAuthorization()
             }
+        }
+        .onChange(of: checksForUpdates) {
+            Task { await updates.check() }
         }
         .onAppear {
             // It can change in System Settings while Settings is closed.

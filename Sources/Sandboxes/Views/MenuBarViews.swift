@@ -26,7 +26,9 @@ struct MenuBarLabel: View {
 
 struct MenuBarMenu: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(UpdateChecker.self) private var updates
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         if store.approvals.isEmpty {
@@ -42,6 +44,12 @@ struct MenuBarMenu: View {
             }
         }
         Divider()
+        if let update = updates.availableUpdate {
+            Button("Download Sandboxes \(update.version)…") {
+                openURL(update.url)
+            }
+            Divider()
+        }
         Button("Open Sandboxes") {
             AppWindows.showMain()
         }
