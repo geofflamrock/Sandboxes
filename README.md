@@ -67,20 +67,13 @@ Local builds show a "Local" badge at the bottom of the sidebar. The version live
 
 Release builds check the [latest GitHub release](https://github.com/geofflamrock/Sandboxes/releases/latest) at launch and every 6 hours. When it's newer, the sidebar and the menu bar menu link to it. Drafts and pre-releases are ignored.
 
-Other builds don't check. To try it out in one, pretend to be an older release with launch arguments:
+Other builds don't check. To try it out in one, open **Settings › Update Testing**, turn on **Check for updates in this build** and enter an older version to pretend to be, such as `0.0.1`. You can also check another repository's releases there.
+
+These settings are stored as the `UpdateCheckForceEnabled`, `UpdateCheckCurrentVersion` and `UpdateCheckRepository` defaults, so they also work as launch arguments:
 
 ```bash
 open Sandboxes.app --args -UpdateCheckForceEnabled YES -UpdateCheckCurrentVersion 0.0.1
 ```
-
-Or set them until you delete them again:
-
-```bash
-defaults write com.geofflamrock.sandboxes UpdateCheckForceEnabled -bool YES
-defaults write com.geofflamrock.sandboxes UpdateCheckCurrentVersion 0.0.1
-```
-
-Set `UpdateCheckRepository` to `owner/name` to check another repository's releases instead.
 
 ### App icon
 
