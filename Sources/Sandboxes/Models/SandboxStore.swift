@@ -43,6 +43,9 @@ final class SandboxStore {
 
     nonisolated private static let defaultOpenTargetKey = "defaultOpenTarget"
 
+    /// Called when the sandboxes stop loading, or don't load the first time,
+    /// but not on every failed refresh after that.
+    @ObservationIgnored var onLoadFailed: (@MainActor () -> Void)?
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
     /// A sandbox to select once the sandbox list next loads.
@@ -266,7 +269,11 @@ final class SandboxStore {
                 self.selection = nil
             }
         } catch {
+            let wasFailing = loadError != nil
             loadError = error.localizedDescription
+            if !wasFailing {
+                onLoadFailed?()
+            }
         }
         hasLoaded = true
         // Approvals are an extra; if sbx can't list them, keep the last list.

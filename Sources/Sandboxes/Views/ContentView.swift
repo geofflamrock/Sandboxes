@@ -146,22 +146,25 @@ struct SandboxSidebar: View {
                     .glassEffect(.regular.interactive(), in: .capsule)
                     .help("Download Sandboxes \(update.version) from GitHub")
                 }
-                // Releases show their version; other builds show what they are
-                // built from, so it's obvious when this isn't a release.
-                Group {
-                    if let label = AppInfo.buildLabel {
-                        Label(label, systemImage: "hammer.fill")
-                            .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
-                    } else {
-                        Label("v\(AppInfo.version)", systemImage: "tag.fill")
-                            .help("Version \(AppInfo.version), build \(AppInfo.build)")
+                HStack(spacing: 6) {
+                    // Releases show their version; other builds show what they are
+                    // built from, so it's obvious when this isn't a release.
+                    Group {
+                        if let label = AppInfo.buildLabel {
+                            Label(label, systemImage: "hammer.fill")
+                                .help("\(label) build \(AppInfo.build) of version \(AppInfo.version)")
+                        } else {
+                            Label("v\(AppInfo.version)", systemImage: "tag.fill")
+                                .help("Version \(AppInfo.version), build \(AppInfo.build)")
+                        }
                     }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .glassEffect(.regular, in: .capsule)
+                    SbxStatusBadge()
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .glassEffect(.regular, in: .capsule)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
@@ -177,6 +180,75 @@ struct SandboxSidebar: View {
                 .help("Create a new sandbox")
             }
         }
+    }
+}
+
+/// A capsule in the sidebar footer summarizing sbx: whether it's installed,
+/// whether `sbx diagnose` found problems, or a newer version. Clicking it
+/// opens Settings › sbx.
+private struct SbxStatusBadge: View {
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        let summary = self.summary
+        Button {
+            SettingsTab.show(.sbx, openSettings)
+        } label: {
+            HStack(spacing: 5) {
+                StatusDot(color: summary.color)
+                Text(summary.text)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .help(summary.help)
+    }
+
+    private var summary: (color: Color, text: String, help: String) {
+        switch sbxStatus.state {
+        case .checking:
+            return (.secondary, "Checking sbx…", "Looking for sbx")
+        case .notInstalled:
+            return (.red, "sbx not installed", "sbx isn't installed. Click to see Settings › sbx.")
+        case .installed:
+            break
+        }
+        let upgrade = sbxStatus.availableUpgrade
+        guard let diagnostics = sbxStatus.diagnostics else {
+            if let error = sbxStatus.diagnosticsError {
+                return (.red, "sbx diagnose failed", "Couldn't run sbx diagnose: \(error)")
+            }
+            if let upgrade {
+                return (.orange, "sbx \(upgrade.version) available", "sbx \(upgrade.version) is available. Click to see Settings › sbx.")
+            }
+            return (.secondary, "Checking sbx…", "Running sbx diagnose")
+        }
+        let failures = diagnostics.failures
+        let warnings = diagnostics.warnings
+        let details = (failures + warnings)
+            .map { $0.message.isEmpty ? $0.name : "\($0.name): \($0.message)" }
+            .joined(separator: "\n")
+        if !failures.isEmpty {
+            let text = failures.count == 1 ? "sbx: 1 problem" : "sbx: \(failures.count.formatted()) problems"
+            return (.red, text, details)
+        }
+        // A newer version on its own gets its own wording, whether sbx
+        // diagnose or the app's own check for releases found it.
+        if warnings.allSatisfy(\.isUpgradeWarning), upgrade != nil || !warnings.isEmpty {
+            let text = upgrade.map { "sbx \($0.version) available" } ?? "sbx upgrade available"
+            return (.orange, text, details.isEmpty ? "\(text). Click to see Settings › sbx." : details)
+        }
+        if !warnings.isEmpty {
+            let text = warnings.count == 1 ? "sbx: 1 warning" : "sbx: \(warnings.count.formatted()) warnings"
+            return (.orange, text, details)
+        }
+        return (.green, "sbx healthy", "All \(diagnostics.count(.pass).formatted()) sbx diagnose checks passed")
     }
 }
 

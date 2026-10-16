@@ -30,6 +30,12 @@ struct SbxDiagnostics: Sendable {
             default: return nil
             }
         }
+
+        /// Whether this is the warning that a newer sbx is available, which
+        /// sbx reports on its "Binary version" check.
+        var isUpgradeWarning: Bool {
+            status == .warn && name.lowercased() == "binary version"
+        }
     }
 
     let checks: [Check]

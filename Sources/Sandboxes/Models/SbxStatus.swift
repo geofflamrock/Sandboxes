@@ -98,6 +98,17 @@ final class SbxStatus {
     private(set) var isDiagnosing = false
     /// A command fixing the setup, shown in a sheet while it runs and after.
     var commandRun: SbxCommandRun?
+    /// The newest release the user dismissed the upgrade card for. The card
+    /// comes back when a newer one is released.
+    private(set) var dismissedUpgrade: SbxVersion? = UserDefaults.standard
+        .string(forKey: SbxStatus.dismissedUpgradeKey)
+        .flatMap(SbxVersion.init(in:)) {
+        didSet {
+            UserDefaults.standard.set(dismissedUpgrade?.description, forKey: Self.dismissedUpgradeKey)
+        }
+    }
+
+    nonisolated private static let dismissedUpgradeKey = "dismissedSbxUpgrade"
 
     @ObservationIgnored private var latestCheckedAt: Date?
     @ObservationIgnored private var diagnosedAt: Date?
@@ -135,7 +146,7 @@ final class SbxStatus {
             var actions: [Action] = diagnostics?.checks.compactMap { check in
                 check.fix.map { .fix($0, check: check) }
             } ?? []
-            if let availableUpgrade {
+            if let availableUpgrade, !isDismissed(availableUpgrade) {
                 actions.append(.upgrade(installation, to: availableUpgrade))
             }
             return actions
@@ -174,6 +185,31 @@ final class SbxStatus {
             await diagnose()
         }
         return wasMissing && installation != nil
+    }
+
+    /// Hides the upgrade card until a release newer than `release` comes out.
+    func dismissUpgrade(to release: Release) {
+        dismissedUpgrade = release.version
+    }
+
+    private func isDismissed(_ release: Release) -> Bool {
+        guard let dismissedUpgrade else { return false }
+        return release.version <= dismissedUpgrade
+    }
+
+    /// Called when the sandboxes stop loading: runs `sbx diagnose` straight
+    /// away, without waiting for the last results to go out of date, so the
+    /// home page can say to start the daemon or sign in.
+    func sandboxesFailedToLoad() async {
+        switch state {
+        case .checking:
+            // Diagnoses once it has found sbx, if it hasn't recently.
+            await check()
+        case .notInstalled:
+            break
+        case .installed:
+            await diagnose()
+        }
     }
 
     /// Runs `kind` in the command sheet. If it works, looks for sbx again

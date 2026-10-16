@@ -74,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         ApprovalNotifier.shared.register(store)
+        // When sbx stops listing sandboxes, find out why straight away, so
+        // the home page can say to start the daemon or sign in.
+        store.onLoadFailed = { [sbxStatus] in
+            Task { await sbxStatus.sandboxesFailedToLoad() }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

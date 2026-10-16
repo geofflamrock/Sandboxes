@@ -11,6 +11,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
+- See at a glance in the sidebar whether `sbx` is healthy or has an update.
 
 ## Getting started
 
@@ -108,7 +109,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Installed version (home page and Settings › sbx) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases` |
 | Install sbx (home page) | `brew install docker/tap/sbx`, when you click **Install sbx** |
 | Upgrade sbx (home page) | `brew upgrade docker/tap/sbx` (or the cask it was installed from, such as `sbx@rc`), when you click **Upgrade sbx** |
-| Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
+| Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
 | Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |

@@ -278,6 +278,17 @@ private struct SbxActionCard: View {
                 StatusDot(color: isUpgrade ? .orange : .red)
                 Text(title)
                     .font(.headline)
+                if let release = upgradeRelease {
+                    Spacer()
+                    // Hidden until a newer release comes out.
+                    Button("Dismiss", systemImage: "xmark") {
+                        withAnimation { sbxStatus.dismissUpgrade(to: release) }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Dismiss")
+                }
             }
             Text(explanation)
                 .foregroundStyle(.secondary)
@@ -331,8 +342,13 @@ private struct SbxActionCard: View {
     }
 
     private var isUpgrade: Bool {
-        guard case .upgrade = action else { return false }
-        return true
+        upgradeRelease != nil
+    }
+
+    /// The release the card offers to upgrade to, if it's the upgrade card.
+    private var upgradeRelease: SbxStatus.Release? {
+        guard case let .upgrade(_, release) = action else { return nil }
+        return release
     }
 
     private var title: String {
