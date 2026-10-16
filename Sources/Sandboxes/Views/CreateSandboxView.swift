@@ -18,10 +18,6 @@ struct CreateSandboxView: View {
                 CreationOutputView(
                     run: run,
                     createdName: createdName,
-                    onApproveInTerminal: { name in
-                        store.openInTerminal(named: name)
-                        dismiss()
-                    },
                     onBack: { self.run = nil },
                     onDone: { dismiss() }
                 )
@@ -683,7 +679,6 @@ private struct RecentsMenu: View {
 private struct CreationOutputView: View {
     let run: CreationRun
     let createdName: String?
-    let onApproveInTerminal: (String) -> Void
     let onBack: () -> Void
     let onDone: () -> Void
 
@@ -725,19 +720,9 @@ private struct CreationOutputView: View {
                     Button("Cancel", role: .cancel) { run.cancel() }
                         .keyboardShortcut(.cancelAction)
                 case .succeeded:
-                    if run.withheldCredential, let createdName {
-                        Button("Done", action: onDone)
-                            .keyboardShortcut(.cancelAction)
-                        Button("Approve in Terminal", systemImage: "terminal") {
-                            onApproveInTerminal(createdName)
-                        }
+                    Button("Done", action: onDone)
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.glassProminent)
-                    } else {
-                        Button("Done", action: onDone)
-                            .keyboardShortcut(.defaultAction)
-                            .buttonStyle(.glassProminent)
-                    }
                 case .failed, .cancelled:
                     Button("Close", action: onDone)
                         .keyboardShortcut(.cancelAction)
@@ -751,14 +736,34 @@ private struct CreationOutputView: View {
         .padding(20)
     }
 
+    /// Runs the sandbox in a terminal, where sbx asks to approve the credential.
+    private var approvalCommand: String {
+        "sbx run --name \(createdName ?? "<name>")"
+    }
+
     private var credentialNotice: some View {
         Label {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Approve the Kit’s Credentials")
                     .font(.headline)
-                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials in a terminal\(createdName == nil ? ": open the sandbox in Terminal and approve it there" : ""). You only need to do this once on this Mac.")
+                Text("The sandbox was created without a credential its kit uses, so signing in won’t work yet. sbx only asks to approve credentials in a terminal, so run this in one\(createdName == nil ? ", with the sandbox’s name" : "") and approve the credential. You only need to do this once on this Mac.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Text(approvalCommand)
+                        .font(.callout.monospaced())
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Copy Command", systemImage: "doc.on.doc") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(approvalCommand, forType: .string)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Copy Command")
+                }
+                .padding(8)
+                .background(.background.secondary, in: .rect(cornerRadius: 6))
             }
         } icon: {
             Image(systemName: "key.fill")
