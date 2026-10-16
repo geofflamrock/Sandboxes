@@ -269,6 +269,12 @@ private struct SbxStatusSection: View {
         VStack(alignment: .leading, spacing: 10) {
             HomeSectionHeader(title: "Setup", isLoading: sbxStatus.isDiagnosing)
 
+            // Things to fix before sandboxes work get their own cards first,
+            // like sbx not being installed.
+            ForEach(sbxStatus.fixes) { fix in
+                SbxFixCard(fix: fix)
+            }
+
             VStack(alignment: .leading, spacing: 0) {
                 switch sbxStatus.state {
                 case .checking:
@@ -313,21 +319,12 @@ private struct SbxRowDivider: View {
     }
 }
 
-/// A button in an sbx row, such as Start Daemon.
-private struct SbxRowAction {
-    let title: String
-    let help: String
-    var isDisabled = false
-    let perform: () -> Void
-}
-
 /// A name with an optional detail line underneath, and a status dot and
-/// value on the right, with an optional button before the dot.
+/// value on the right.
 private struct SbxValueRow<Title: View>: View {
     var detail: String = ""
     let color: Color
     let value: String
-    var action: SbxRowAction?
     @ViewBuilder let title: Title
 
     var body: some View {
@@ -344,12 +341,6 @@ private struct SbxValueRow<Title: View>: View {
                 }
             }
             Spacer(minLength: 0)
-            if let action {
-                Button(action.title, action: action.perform)
-                    .controlSize(.small)
-                    .disabled(action.isDisabled)
-                    .help(action.help)
-            }
             HStack(spacing: 6) {
                 StatusDot(color: color)
                 Text(value)
@@ -380,6 +371,76 @@ private struct SbxNotInstalledRow: View {
                 }
                 .font(.callout)
             }
+        }
+    }
+}
+
+/// A card for something to fix before sandboxes work, found by
+/// `sbx diagnose`: the daemon isn't running, or the user isn't signed in.
+private struct SbxFixCard: View {
+    let fix: SbxStatus.Fix
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        SbxRow {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    StatusDot(color: .red)
+                    Text(title)
+                        .font(.headline)
+                }
+                Text(explanation)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !fix.check.hint.isEmpty {
+                    Text(fix.check.hint)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                Button(buttonTitle) {
+                    // Reload the sandboxes afterwards: they can't load
+                    // without the daemon, or sometimes without signing in.
+                    sbxStatus.run(fix.kind) { [store] in
+                        Task { await store.refresh() }
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(sbxStatus.commandRun?.phase == .running)
+                .help(help)
+            }
+        }
+        .modifier(CardBackground())
+    }
+
+    private var title: String {
+        switch fix.kind {
+        case .startDaemon: "The sbx daemon isn't running"
+        case .signIn: "You aren't signed in to Docker"
+        }
+    }
+
+    private var explanation: String {
+        switch fix.kind {
+        case .startDaemon:
+            "sbx runs your sandboxes through a background daemon. Start it to list, create and run sandboxes."
+        case .signIn:
+            "sbx needs you signed in to Docker to create and run sandboxes. You'll get a code to enter in your browser."
+        }
+    }
+
+    private var buttonTitle: String {
+        switch fix.kind {
+        case .startDaemon: "Start Daemon"
+        case .signIn: "Sign In…"
+        }
+    }
+
+    private var help: String {
+        switch fix.kind {
+        case .startDaemon: "Run sbx daemon start --detach"
+        case .signIn: "Sign in to Docker with sbx login"
         }
     }
 }
@@ -555,8 +616,6 @@ private struct SbxDiagnosticsRows: View {
 /// and result on the right. Warnings and failures also say what to do.
 private struct SbxDiagnosticRow: View {
     let check: SbxDiagnostics.Check
-    @Environment(SbxStatus.self) private var sbxStatus
-    @Environment(SandboxStore.self) private var store
 
     var body: some View {
         SbxRow {
@@ -564,8 +623,7 @@ private struct SbxDiagnosticRow: View {
                 SbxValueRow(
                     detail: check.detail,
                     color: color,
-                    value: check.message.isEmpty ? check.status.displayName : check.message,
-                    action: fixAction
+                    value: check.message.isEmpty ? check.status.displayName : check.message
                 ) {
                     Text(check.name)
                 }
@@ -578,23 +636,6 @@ private struct SbxDiagnosticRow: View {
         }
     }
 
-    /// Starts the daemon or signs in, then reloads the sandboxes, which
-    /// couldn't load without either.
-    private var fixAction: SbxRowAction? {
-        guard let fix = check.fix else { return nil }
-        let isDisabled = sbxStatus.commandRun?.phase == .running
-        let perform = { [sbxStatus, store] in
-            sbxStatus.run(fix) {
-                Task { await store.refresh() }
-            }
-        }
-        switch fix {
-        case .startDaemon:
-            return SbxRowAction(title: "Start Daemon", help: "Run sbx daemon start --detach", isDisabled: isDisabled, perform: perform)
-        case .signIn:
-            return SbxRowAction(title: "Sign In…", help: "Sign in to Docker with sbx login", isDisabled: isDisabled, perform: perform)
-        }
-    }
 
     /// Green for passed, orange for a warning, red for failed and grey for
     /// skipped.

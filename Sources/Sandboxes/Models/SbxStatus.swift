@@ -69,6 +69,15 @@ final class SbxStatus {
         let url: URL
     }
 
+    /// Something `sbx diagnose` found that the app can fix by running a
+    /// command, with the check that found it.
+    struct Fix: Identifiable {
+        let kind: SbxCommandRun.Kind
+        let check: SbxDiagnostics.Check
+
+        var id: Int { check.id }
+    }
+
     static let installCommand = "brew install docker/tap/sbx"
     static let releasesURL = URL(string: "https://github.com/docker/sbx-releases/releases/latest")!
 
@@ -106,6 +115,13 @@ final class SbxStatus {
         guard let installed = installation?.version, let latest, installed < latest.version
         else { return nil }
         return latest
+    }
+
+    /// The daemon to start or the sign-in to do, from the last diagnostics.
+    var fixes: [Fix] {
+        diagnostics?.checks.compactMap { check in
+            check.fix.map { Fix(kind: $0, check: check) }
+        } ?? []
     }
 
     /// Whether the user has something to do: install sbx, upgrade it, or fix
