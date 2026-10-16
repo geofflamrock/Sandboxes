@@ -16,6 +16,7 @@ struct SandboxesApp: App {
                 .environment(store)
                 .environment(updates)
                 .environment(recents)
+                .environment(appDelegate.sbxStatus)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -40,6 +41,9 @@ struct SandboxesApp: App {
                 }
                 .keyboardShortcut("r")
             }
+            CommandGroup(after: .help) {
+                RunDiagnosticsButton(sbxStatus: appDelegate.sbxStatus)
+            }
         }
 
         MenuBarExtra {
@@ -54,6 +58,7 @@ struct SandboxesApp: App {
         Settings {
             SettingsView()
                 .environment(updates)
+                .environment(appDelegate.sbxStatus)
         }
     }
 }
@@ -62,6 +67,7 @@ struct SandboxesApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = SandboxStore()
     let updates = UpdateChecker()
+    let sbxStatus = SbxStatus()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
@@ -96,5 +102,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !flag else { return true }
         AppWindows.showMain()
         return false
+    }
+}
+
+/// Help › Run sbx Diagnostics…: opens Settings › sbx and runs the checks again.
+private struct RunDiagnosticsButton: View {
+    let sbxStatus: SbxStatus
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button("Run sbx Diagnostics…") {
+            SettingsTab.show(.sbx, openSettings)
+            Task { await sbxStatus.diagnose() }
+        }
     }
 }

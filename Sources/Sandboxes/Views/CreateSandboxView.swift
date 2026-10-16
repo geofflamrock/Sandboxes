@@ -676,24 +676,7 @@ private struct CreationOutputView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(run.output.lines.enumerated()), id: \.offset) { _, line in
-                        Text(line.isEmpty ? " " : line)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
-                .padding(12)
-            }
-            .defaultScrollAnchor(.bottom)
-            .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            .background(.background.secondary, in: .rect(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(.separator)
-            }
+            ConsoleOutputView(output: run.output)
 
             if run.phase == .succeeded && run.withheldCredential {
                 credentialNotice

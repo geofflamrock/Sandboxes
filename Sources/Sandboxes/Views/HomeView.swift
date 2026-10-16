@@ -1,10 +1,12 @@
 import SwiftUI
 import AppKit
 
-/// Shown when no sandbox is selected: requests waiting for approval across
-/// every sandbox, and shortcuts for creating a sandbox.
+/// Shown when no sandbox is selected: anything to do before sandboxes work,
+/// requests waiting for approval across every sandbox, and shortcuts for
+/// creating a sandbox.
 struct HomeView: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(SbxStatus.self) private var sbxStatus
     @State private var approvalResponse: ApprovalResponse?
 
     var body: some View {
@@ -13,6 +15,16 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     HomeHeader {
                         withAnimation { proxy.scrollTo(HomeAnchor.approvals, anchor: .top) }
+                    }
+                    // What the user needs to do comes first, without a
+                    // heading. The details are in Settings › sbx.
+                    let actions = sbxStatus.actions
+                    if !actions.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(actions) { action in
+                                SbxActionCard(action: action)
+                            }
+                        }
                     }
                     PendingApprovalsCard(approvalResponse: $approvalResponse)
                         .id(HomeAnchor.approvals)
@@ -24,10 +36,26 @@ struct HomeView: View {
             }
         }
         .approvalResponseDialog($approvalResponse)
+        .sheet(item: Binding(get: { sbxStatus.commandRun }, set: { sbxStatus.commandRun = $0 })) { run in
+            SbxCommandSheet(run: run)
+        }
+        .task { await checkSbx() }
+        // The user may install or upgrade sbx, or sign in, in their
+        // terminal, so look again when they come back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await checkSbx() }
+        }
         // The page has its own large title, so keep the window title for the
         // Window menu and Mission Control but don't repeat it in the toolbar.
         .navigationTitle("Sandboxes")
         .toolbar(removing: .title)
+    }
+
+    private func checkSbx() async {
+        if await sbxStatus.check() {
+            // It was just installed, so the sandboxes can load now.
+            await store.refresh()
+        }
     }
 }
 
@@ -227,6 +255,174 @@ private struct PendingApprovalsCard: View {
                 }
             }
             .disabled(store.isResponding(to: approval))
+        }
+    }
+}
+
+// MARK: - sbx
+
+/// A card at the top of the page for something the user needs to do: install
+/// or upgrade sbx, start the daemon, or sign in. It shows the command, so it
+/// can be copied and run in Terminal, with a button below that runs it here
+/// and shows the output.
+private struct SbxActionCard: View {
+    let action: SbxStatus.Action
+    @Environment(SbxStatus.self) private var sbxStatus
+    @Environment(SandboxStore.self) private var store
+    @Environment(\.openSettings) private var openSettings
+    @State private var hasHomebrew = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                StatusDot(color: isUpgrade ? .orange : .red)
+                Text(title)
+                    .font(.headline)
+            }
+            Text(explanation)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let command {
+                CopyableCommand(command: command.commandLine)
+                if command.usesHomebrew && !hasHomebrew {
+                    Text("Homebrew isn't installed, so Sandboxes can't run this for you. Install Homebrew first, or download sbx from GitHub.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button(buttonTitle) {
+                        // Reload the sandboxes afterwards: they can't load
+                        // without sbx, its daemon, or sometimes signing in.
+                        sbxStatus.run(command) { [store] in
+                            Task { await store.refresh() }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(sbxStatus.commandRun?.phase == .running)
+                    .help("Run \(command.commandLine)")
+                }
+            }
+            if isUpgrade, store.sandboxes.contains(where: { $0.state == .running }) {
+                Label("Upgrading stops the sbx daemon, so your running sandboxes will stop.", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            // Links look like links, not buttons, so the command's button is
+            // the only button on every card.
+            links
+                .font(.callout)
+                .buttonStyle(.link)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(CardBackground())
+        .task {
+            hasHomebrew = await Task.detached { Homebrew.executableURL() != nil }.value
+        }
+    }
+
+    /// The command that does what the card asks, or nil when the app can't
+    /// run one: sbx wasn't installed with Homebrew, so it can't upgrade it.
+    private var command: SbxCommandRun.Kind? {
+        switch action {
+        case .install: .install
+        case let .upgrade(installation, _): installation.upgrade
+        case let .fix(kind, _): kind
+        }
+    }
+
+    private var isUpgrade: Bool {
+        guard case .upgrade = action else { return false }
+        return true
+    }
+
+    private var title: String {
+        switch action {
+        case .install: "sbx isn't installed"
+        case let .upgrade(_, release): "sbx \(release.version) is available"
+        case .fix(.startDaemon, _): "The sbx daemon isn't running"
+        case .fix(.signIn, _): "You aren't signed in to Docker"
+        case .fix: "sbx needs attention"
+        }
+    }
+
+    private var explanation: String {
+        switch action {
+        case .install:
+            return "Sandboxes uses the Docker Sandboxes command line tool, sbx. Install it with Homebrew:"
+        case let .upgrade(installation, _):
+            let installed = installation.version.map { "sbx \($0)" } ?? "an older version"
+            return installation.upgrade == nil
+                ? "You have \(installed), which wasn't installed with Homebrew. Download the new version from GitHub."
+                : "You have \(installed). Upgrade it with Homebrew:"
+        case .fix(.startDaemon, _):
+            return "sbx runs your sandboxes through a background daemon. Start it to list, create and run sandboxes:"
+        case .fix(.signIn, _):
+            return "sbx needs you signed in to Docker to create and run sandboxes. You'll get a code to enter in your browser:"
+        case .fix:
+            return "Run this to fix it:"
+        }
+    }
+
+    private var buttonTitle: String {
+        switch command {
+        case .install: "Install sbx"
+        case .upgrade: "Upgrade sbx"
+        case .startDaemon: "Start Daemon"
+        case .signIn: "Sign In…"
+        case nil: ""
+        }
+    }
+
+    @ViewBuilder
+    private var links: some View {
+        switch action {
+        case .install:
+            HStack(spacing: 16) {
+                if !hasHomebrew {
+                    Link("Install Homebrew", destination: Homebrew.installURL)
+                }
+                Link("Download from GitHub", destination: SbxStatus.releasesURL)
+                Button("Already installed? Set its location in Settings…") {
+                    SettingsTab.show(.sbx, openSettings)
+                }
+            }
+        case let .upgrade(installation, release):
+            Link(installation.upgrade == nil ? "Download from GitHub" : "Release notes", destination: release.url)
+        case .fix:
+            EmptyView()
+        }
+    }
+}
+
+/// A shell command in monospaced text with a button that copies it.
+struct CopyableCommand: View {
+    let command: String
+    @State private var didCopy = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(command)
+                .font(.body.monospaced())
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                didCopy = true
+            } label: {
+                Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .help("Copy the command")
+        }
+        .padding(.leading, 10)
+        .padding([.trailing, .vertical], 6)
+        .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 8))
+        .task(id: didCopy) {
+            guard didCopy else { return }
+            try? await Task.sleep(for: .seconds(2))
+            didCopy = false
         }
     }
 }
