@@ -36,7 +36,7 @@ struct HomeView: View {
             }
         }
         .approvalResponseDialog($approvalResponse)
-        .sheet(item: Binding(get: { sbxStatus.commandRun }, set: { sbxStatus.commandRun = $0 })) { run in
+        .sheet(item: Binding(get: { sbxStatus.commandRun(in: .main) }, set: { sbxStatus.commandRun = $0 })) { run in
             SbxCommandSheet(run: run)
         }
         .task { await checkSbx() }

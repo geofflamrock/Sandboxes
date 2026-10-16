@@ -57,6 +57,7 @@ struct SandboxesApp: App {
 
         Settings {
             SettingsView()
+                .environment(store)
                 .environment(updates)
                 .environment(appDelegate.sbxStatus)
         }
