@@ -12,6 +12,7 @@
     {
       "layers": [
         {
+          "hidden": true,
           "image-name": "Mound.svg",
           "name": "Mound",
           "position": {
@@ -41,7 +42,7 @@
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              3.7902350000000524
             ]
           }
         }
@@ -64,7 +65,7 @@
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              -22.306465000000003
             ]
           }
         }
@@ -87,7 +88,7 @@
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              -22.306465000000003
             ]
           }
         }
