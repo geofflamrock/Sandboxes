@@ -5,14 +5,11 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 ### Features 
 
 - See the details of your sandboxes, including resource usage and network traffic.
-- Create new sandboxes quickly and easily, with extra kits from a registry, Git repository or folder, extra workspace folders, CPU and memory limits, and environment variables.
+- Create new sandboxes quickly and easily.
 - Start, stop and remove sandboxes.
-- Open an interactive shell inside a sandbox in Terminal.
-- Run a sandbox's agent in Terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download). The open button and double-clicking a sandbox use whichever you picked last.
-- Terminal sessions open in the app macOS uses for Unix executables: Terminal, unless you've set another terminal (such as Ghostty) as your default.
-- Approve or deny network requests made by agents.
-- Get a notification when an agent's network request is waiting for approval. Click it, or its **Review** button, to open that sandbox and respond. You can turn notifications off in **Settings**.
-- Keeps running in the menu bar when you close its window, showing how many requests are waiting for approval, so notifications still arrive. Turn on **Open at login** in **Settings** to have it running from the start.
+- Open an interactive shell inside a sandbox in your terminal.
+- Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
+- Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 
 ## Getting started
 
