@@ -370,12 +370,6 @@ private struct SbxActionCard: View {
             Text(explanation)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if case let .fix(_, check) = action, !check.hint.isEmpty {
-                Text(check.hint)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
             if let command {
                 CopyableCommand(command: command.commandLine)
                 if command.usesHomebrew && !hasHomebrew {
