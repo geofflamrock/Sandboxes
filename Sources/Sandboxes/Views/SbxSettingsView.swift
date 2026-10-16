@@ -5,6 +5,7 @@ import SwiftUI
 enum SettingsTab: String {
     case general
     case sbx
+    case development
 
     static let key = "settingsTab"
 
@@ -19,25 +20,32 @@ enum SettingsTab: String {
 /// Settings › sbx: where sbx is, which version it is, and the results of
 /// `sbx diagnose`. What the user needs to do about them is on the home page.
 struct SbxSettingsView: View {
+    /// How the app finds sbx: on the login shell's PATH, or at a path the
+    /// user enters.
+    enum PathMode: Hashable {
+        case automatic
+        case custom
+    }
+
+    /// Empty means automatic.
     @AppStorage(SbxCLI.executablePathKey) private var customPath = ""
-    @State private var resolvedPath: String?
-    @State private var hasResolved = false
+    @State private var pathMode: PathMode = .automatic
+    /// Whether the custom path is an executable, once it's been looked at.
+    @State private var customPathIsValid = true
     @Environment(SbxStatus.self) private var sbxStatus
 
     var body: some View {
         Form {
             Section {
-                TextField("sbx location", text: $customPath, prompt: Text("Automatic"))
-                    .font(.body.monospaced())
-                LabeledContent("Using") {
-                    if !hasResolved {
-                        ProgressView().controlSize(.small)
-                    } else if let resolvedPath {
-                        Text(resolvedPath)
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                    } else {
-                        Label("sbx not found", systemImage: "exclamationmark.triangle.fill")
+                Picker("Path", selection: $pathMode) {
+                    Text("Automatic").tag(PathMode.automatic)
+                    Text("Custom").tag(PathMode.custom)
+                }
+                if pathMode == .custom {
+                    TextField("Custom Path", text: $customPath, prompt: Text("/path/to/sbx"))
+                        .font(.body.monospaced())
+                    if !customPath.isEmpty && !customPathIsValid {
+                        Label("There's no sbx at this path.", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
                     }
                 }
@@ -45,10 +53,13 @@ struct SbxSettingsView: View {
                     SbxStatusValue(color: version.color, text: version.text)
                 }
             } header: {
-                Text("Command Line Tool")
+                Text("CLI")
             } footer: {
-                Text("Leave empty to find sbx on your login shell's PATH.")
+                Text(pathMode == .automatic
+                     ? "Finds sbx on your login shell's PATH\(sbxStatus.installation.map { ": \($0.path)" } ?? ".")"
+                     : "The full path to the sbx executable.")
                     .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
             Section {
@@ -89,10 +100,26 @@ struct SbxSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 560)
+        .onAppear {
+            pathMode = customPath.isEmpty ? .automatic : .custom
+        }
+        .onChange(of: pathMode) { _, mode in
+            switch mode {
+            case .automatic:
+                customPath = ""
+            case .custom where customPath.isEmpty:
+                // Start from the sbx in use, so it's easy to adjust.
+                customPath = sbxStatus.installation?.path ?? ""
+            case .custom:
+                break
+            }
+        }
         .task(id: customPath) {
-            resolvedPath = await Task.detached { SbxCLI.executableURL()?.path }.value
-            hasResolved = true
-            // A new location may be a different sbx, or one that works.
+            let path = customPath
+            customPathIsValid = await Task.detached {
+                path.isEmpty || SbxCLI.executableURL() != nil
+            }.value
+            // A new path may be a different sbx, or one that works.
             await sbxStatus.check()
         }
     }

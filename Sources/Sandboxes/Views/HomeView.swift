@@ -306,8 +306,11 @@ private struct SbxActionCard: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            // Links look like links, not buttons, so the command's button is
+            // the only button on every card.
             links
                 .font(.callout)
+                .buttonStyle(.link)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -382,7 +385,6 @@ private struct SbxActionCard: View {
                 Button("Already installed? Set its location in Settings…") {
                     SettingsTab.show(.sbx, openSettings)
                 }
-                .buttonStyle(.link)
             }
         case let .upgrade(installation, release):
             Link(installation.upgrade == nil ? "Download from GitHub" : "Release notes", destination: release.url)
