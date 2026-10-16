@@ -11,7 +11,6 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
-- See at a glance in the sidebar whether `sbx` is healthy or has an update.
 
 ## Getting started
 
