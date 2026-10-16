@@ -1,6 +1,6 @@
 import Foundation
 
-/// The results of `sbx diagnose --output json`, which checks the installation,
+/// The results of `sbx diagnose --json`, which checks the installation,
 /// platform, storage and connection to the daemon.
 struct SbxDiagnostics: Sendable {
     struct Check: Identifiable, Sendable {
@@ -18,9 +18,6 @@ struct SbxDiagnostics: Sendable {
         let detail: String
         /// What to do about a warning or failure. May be empty.
         let hint: String
-        /// The group sbx shows it under, such as "Installation", when the JSON
-        /// includes one.
-        let category: String?
     }
 
     let checks: [Check]
@@ -32,7 +29,7 @@ struct SbxDiagnostics: Sendable {
         checks.filter { $0.status == status }.count
     }
 
-    static let arguments = ["diagnose", "--output", "json"]
+    static let arguments = ["diagnose", "--json"]
 
     /// Runs the checks. sbx exits with an error when a check fails, so the
     /// output is parsed whatever the exit code.
@@ -63,8 +60,7 @@ struct SbxDiagnostics: Sendable {
                     status: Check.Status(rawValue: check.status.lowercased()) ?? .warn,
                     message: check.message ?? "",
                     detail: check.detail ?? "",
-                    hint: check.hint ?? "",
-                    category: check.category ?? check.group
+                    hint: check.hint ?? ""
                 )
             }
         )
@@ -86,7 +82,5 @@ struct SbxDiagnostics: Sendable {
         let message: String?
         let detail: String?
         let hint: String?
-        let category: String?
-        let group: String?
     }
 }

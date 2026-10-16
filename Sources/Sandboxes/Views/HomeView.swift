@@ -389,16 +389,8 @@ private struct SbxDiagnosticsView: View {
                 if !others.isEmpty {
                     DisclosureGroup(isExpanded: $isShowingAll) {
                         VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Self.grouped(others), id: \.offset) { _, group in
-                                if let category = group.category {
-                                    Text(category)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.top, 4)
-                                }
-                                ForEach(group.checks) { check in
-                                    SbxDiagnosticRow(check: check)
-                                }
+                            ForEach(others) { check in
+                                SbxDiagnosticRow(check: check)
                             }
                         }
                         .padding(.top, 6)
@@ -454,19 +446,6 @@ private struct SbxDiagnosticsView: View {
         if warned > 0 { parts.append(warned == 1 ? "1 warning" : "\(warned.formatted()) warnings") }
         if passed > 0 { parts.append("\(passed.formatted()) passed") }
         return parts.joined(separator: " · ")
-    }
-
-    /// Consecutive checks in the same category, in the order sbx gave them.
-    private static func grouped(_ checks: [SbxDiagnostics.Check]) -> [(offset: Int, element: (category: String?, checks: [SbxDiagnostics.Check]))] {
-        var groups: [(category: String?, checks: [SbxDiagnostics.Check])] = []
-        for check in checks {
-            if let last = groups.indices.last, groups[last].category == check.category {
-                groups[last].checks.append(check)
-            } else {
-                groups.append((check.category, [check]))
-            }
-        }
-        return Array(groups.enumerated())
     }
 }
 

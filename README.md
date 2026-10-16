@@ -106,7 +106,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | --- | --- |
 | List | `sbx ls --json` |
 | Installed version (home page) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases`. The app doesn't install or upgrade sbx; it shows the `brew` command to copy |
-| Diagnostics (home page) | `sbx diagnose --output json`, at most every 5 minutes or when you click **Run Again** |
+| Diagnostics (home page) | `sbx diagnose --json`, at most every 5 minutes or when you click **Run Again** |
 | Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
