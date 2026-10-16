@@ -64,6 +64,7 @@ struct ContentView: View {
 
 struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
 
     private var filteredSandboxes: [Sandbox] {
@@ -134,6 +135,16 @@ struct SandboxSidebar: View {
                         .padding(8)
                         .glassEffect(.regular, in: .rect(cornerRadius: 10))
                         .help(error)
+                }
+                if let update = updates.availableUpdate {
+                    Link(destination: update.url) {
+                        Label("Version \(update.version) available", systemImage: "arrow.down.circle.fill")
+                    }
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .help("Download Sandboxes \(update.version) from GitHub")
                 }
                 // Releases show their version; other builds show what they are
                 // built from, so it's obvious when this isn't a release.

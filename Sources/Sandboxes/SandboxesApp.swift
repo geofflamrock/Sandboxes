@@ -8,11 +8,13 @@ struct SandboxesApp: App {
 
     /// Owned by the app delegate, since it outlives the window.
     private var store: SandboxStore { appDelegate.store }
+    private var updates: UpdateChecker { appDelegate.updates }
 
     var body: some Scene {
         Window("Sandboxes", id: AppWindows.mainID) {
             ContentView()
                 .environment(store)
+                .environment(updates)
                 .environment(recents)
                 .frame(minWidth: 720, minHeight: 440)
         }
@@ -43,6 +45,7 @@ struct SandboxesApp: App {
         MenuBarExtra {
             MenuBarMenu()
                 .environment(store)
+                .environment(updates)
         } label: {
             MenuBarLabel()
                 .environment(store)
@@ -50,6 +53,7 @@ struct SandboxesApp: App {
 
         Settings {
             SettingsView()
+                .environment(updates)
         }
     }
 }
@@ -57,7 +61,9 @@ struct SandboxesApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = SandboxStore()
+    let updates = UpdateChecker()
     private var refreshTask: Task<Void, Never>?
+    private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -74,6 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         refreshTask = Task { [store] in
             await store.refreshPeriodically()
+        }
+        updateTask = Task { [updates] in
+            await updates.checkPeriodically()
         }
     }
 
