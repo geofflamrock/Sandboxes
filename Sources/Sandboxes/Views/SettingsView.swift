@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 /// Settings, with general options in one tab and sbx in another.
@@ -30,9 +31,40 @@ private struct GeneralSettingsView: View {
     @Environment(UpdateChecker.self) private var updates
     @State private var loginItemStatus = SMAppService.mainApp.status
     @State private var loginItemError: String?
+    @AppStorage(EnvironmentStore.directoryKey) private var environmentsPath = ""
+    @State private var environmentsError: String?
 
     var body: some View {
         Form {
+            Section {
+                LabeledContent("Folder") {
+                    HStack {
+                        TextField(
+                            "Folder",
+                            text: $environmentsPath,
+                            prompt: Text((EnvironmentStore.defaultDirectory.path as NSString).abbreviatingWithTildeInPath)
+                        )
+                        .labelsHidden()
+                        .font(.body.monospaced())
+                        Button("Choose…", action: chooseEnvironmentsFolder)
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Show in Finder", action: showEnvironmentsFolder)
+                }
+            } header: {
+                Text("Environments")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let environmentsError {
+                        Text("Couldn't open the folder: \(environmentsError)")
+                    }
+                    Text("Environments saved from the New Sandbox window go here, each as a folder with an sbxenv.yaml file for sbx env create. Leave empty to use the default folder.")
+                }
+                .foregroundStyle(.secondary)
+            }
+
             Section {
                 Toggle("Notify me when a sandbox is waiting for approval", isOn: $notifiesAboutApprovals)
                 Toggle("Open at login", isOn: Binding(
@@ -83,6 +115,28 @@ private struct GeneralSettingsView: View {
         .onAppear {
             // It can change in System Settings while Settings is closed.
             loginItemStatus = SMAppService.mainApp.status
+        }
+    }
+
+    private func chooseEnvironmentsFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = EnvironmentStore.directory
+        panel.prompt = "Choose"
+        panel.message = "Choose the folder to save sandbox environments in."
+        if panel.runModal() == .OK, let url = panel.url {
+            environmentsPath = (url.path as NSString).abbreviatingWithTildeInPath
+        }
+    }
+
+    private func showEnvironmentsFolder() {
+        do {
+            NSWorkspace.shared.open(try EnvironmentStore.createDirectory())
+            environmentsError = nil
+        } catch {
+            environmentsError = error.localizedDescription
         }
     }
 

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
+    @Environment(EnvironmentStore.self) private var environments
     @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
@@ -60,9 +61,19 @@ struct CreateSandboxView: View {
     private func start() {
         let request = request
         let run = CreationRun(request: request)
-        run.start { [recents, store] in
+        let environmentName = request.savesEnvironment ? request.resolvedEnvironmentName : nil
+        run.start { [recents, store, environments] in
             recents.record(workload: request.trimmedWorkload, kits: request.kits)
             Task { await store.refresh() }
+            // Only a setup that worked is worth saving.
+            if let environmentName {
+                do {
+                    let file = try environments.save(request, as: environmentName)
+                    run.output.append("\nSaved environment “\(environmentName)” to \((file.path as NSString).abbreviatingWithTildeInPath)\n")
+                } catch {
+                    run.output.append("\nCouldn't save environment “\(environmentName)”: \(error.localizedDescription)\n")
+                }
+            }
         }
         self.run = run
     }
@@ -79,6 +90,7 @@ private struct CreateSandboxForm: View {
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(EnvironmentStore.self) private var environments
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
 
@@ -151,6 +163,7 @@ private struct CreateSandboxForm: View {
         // As a bar, the form fades as it scrolls under them, as windows do.
         .safeAreaBar(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
+                saveEnvironmentRow
                 commandSection
                 actionBar
             }
@@ -173,9 +186,54 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    private var saveEnvironmentRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Toggle("Save as Environment", isOn: $request.savesEnvironment)
+                    .toggleStyle(.checkbox)
+                    .help("Once the sandbox is created, save its setup so you can create sandboxes like it from the home page")
+                if request.savesEnvironment {
+                    TextField("Environment Name", text: $request.environmentName, prompt: Text(request.suggestedEnvironmentName))
+                        .labelsHidden()
+                        .frame(maxWidth: 240)
+                }
+                Spacer()
+            }
+            if request.savesEnvironment {
+                Text(saveEnvironmentNote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var saveEnvironmentNote: String {
+        let folder = (EnvironmentStore.directory.path as NSString).abbreviatingWithTildeInPath
+        var note = "Saved to \(folder) once the sandbox is created."
+        var skipped: [String] = []
+        if !request.environmentFiles.isEmpty { skipped.append("Environment files") }
+        if !request.staticMCPServers.isEmpty { skipped.append("MCP servers") }
+        if !skipped.isEmpty {
+            note += " \(skipped.joined(separator: " and ")) aren't saved, since an environment can't include them."
+        }
+        return note
+    }
+
+    /// Why Create is disabled, including a name that's taken by another environment.
+    private var validationMessage: String? {
+        if let message = request.validationMessage {
+            return message
+        }
+        if request.savesEnvironment {
+            return environments.validationMessage(forName: request.resolvedEnvironmentName)
+        }
+        return nil
+    }
+
     private var actionBar: some View {
         HStack {
-            if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
+            if let message = validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -187,7 +245,7 @@ private struct CreateSandboxForm: View {
             Button("Create", action: create)
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.glassProminent)
-                .disabled(request.validationMessage != nil)
+                .disabled(validationMessage != nil)
         }
         .controlSize(.large)
     }
@@ -880,7 +938,7 @@ private struct RecentsMenu: View {
 
 // MARK: - Output
 
-private struct CreationOutputView: View {
+struct CreationOutputView: View {
     let run: CreationRun
     let onBack: () -> Void
     let onDone: () -> Void

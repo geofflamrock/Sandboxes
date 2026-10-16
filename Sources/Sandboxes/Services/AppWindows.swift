@@ -8,17 +8,21 @@ enum AppWindows {
     enum Kind {
         case main
         case create
+        case createFromEnvironment
         case settings
     }
 
     static let mainID = "main"
     static let createID = "create"
+    static let createFromEnvironmentID = "createFromEnvironment"
 
     /// Opens the main window scene. Set from a view, since only views can
     /// reach SwiftUI's `openWindow`.
     static var openMain: (() -> Void)?
     /// Opens the New Sandbox window scene, set alongside `openMain`.
     static var openCreate: (() -> Void)?
+    /// Opens the New Sandbox from Environment window scene, set alongside `openMain`.
+    static var openCreateFromEnvironment: (() -> Void)?
 
     private struct WeakWindow {
         weak var window: NSWindow?
@@ -35,6 +39,11 @@ enum AppWindows {
     /// Opens the New Sandbox window, or brings it forward, and activates the app.
     static func showCreate() {
         show(.create) { openCreate?() }
+    }
+
+    /// Opens the New Sandbox from Environment window, or brings it forward, and activates the app.
+    static func showCreateFromEnvironment() {
+        show(.createFromEnvironment) { openCreateFromEnvironment?() }
     }
 
     static func showSettings(_ openSettings: OpenSettingsAction) {

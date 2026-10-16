@@ -41,6 +41,11 @@ final class SandboxStore {
     /// Counts requests to create a sandbox, so an open New Sandbox window can
     /// switch to the workload asked for.
     private(set) var createRequests = 0
+    /// The saved environment the New Sandbox from Environment window shows.
+    private(set) var environmentToCreate: SandboxEnvironment?
+    /// Counts requests for that window, so it reads the file again even
+    /// when the same environment is asked for.
+    private(set) var environmentRequests = 0
     var removalCandidate: Sandbox?
     var actionError: ActionError?
     /// Where the open button and double-clicking open a sandbox: the last
@@ -106,6 +111,13 @@ final class SandboxStore {
         createWorkload = workload
         createRequests += 1
         AppWindows.showCreate()
+    }
+
+    /// Opens the New Sandbox from Environment window for `environment`.
+    func presentCreate(environment: SandboxEnvironment) {
+        environmentToCreate = environment
+        environmentRequests += 1
+        AppWindows.showCreateFromEnvironment()
     }
 
     func start(_ sandbox: Sandbox) async {

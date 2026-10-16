@@ -21,6 +21,7 @@ struct MenuBarLabel: View {
             // after it's closed.
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
             AppWindows.openCreate = { openWindow(id: AppWindows.createID) }
+            AppWindows.openCreateFromEnvironment = { openWindow(id: AppWindows.createFromEnvironmentID) }
         }
     }
 }

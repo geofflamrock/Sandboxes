@@ -449,6 +449,8 @@ private struct QuickCreateSection: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
+    @Environment(EnvironmentStore.self) private var environments
+    @AppStorage(EnvironmentStore.directoryKey) private var environmentsPath = ""
 
     private static let maxRecents = 4
 
@@ -457,6 +459,11 @@ private struct QuickCreateSection: View {
             HomeSectionHeader(title: "Create a Sandbox")
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
+                ForEach(environments.environments) { environment in
+                    EnvironmentCard(environment: environment) {
+                        store.presentCreate(environment: environment)
+                    }
+                }
                 ForEach(workloads, id: \.self) { workload in
                     QuickCreateCard(workload: workload) {
                         store.presentCreate(workload: workload)
@@ -466,6 +473,13 @@ private struct QuickCreateSection: View {
                     store.presentCreate()
                 }
             }
+        }
+        .task(id: environmentsPath) {
+            await environments.reload()
+        }
+        // Pick up environments saved, added or edited since, including outside the app.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await environments.reload() }
         }
     }
 
@@ -560,5 +574,78 @@ private struct QuickCreateCard: View {
         if let slash = name.lastIndex(of: "/") { name = name[name.index(after: slash)...] }
         if let colon = name.firstIndex(of: ":") { name = name[..<colon] }
         return name.isEmpty ? image : String(name)
+    }
+}
+
+/// A card for a saved environment. It has the agent's icon like the other
+/// cards, with an environment badge and label so it isn't mistaken for one.
+private struct EnvironmentCard: View {
+    let environment: SandboxEnvironment
+    let action: () -> Void
+
+    @Environment(EnvironmentStore.self) private var environments
+    @Environment(SandboxStore.self) private var store
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                AgentIcon(agent: environment.agent, size: 22, filled: true)
+                    .foregroundStyle(environment.agent?.color ?? Color.primary)
+                    .frame(width: 40, height: 40)
+                    .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 10))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 18, height: 18)
+                            .background(Color.accentColor, in: .circle)
+                            .offset(x: 4, y: 4)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(environment.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Label(environment.readError == nil ? "Environment" : "Can't read file", systemImage: environment.readError == nil ? "square.stack.3d.up" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(CardBackground(isHighlighted: isHovering))
+            .contentShape(.rect(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(help)
+        .contextMenu {
+            Button("Create Sandbox…", action: action)
+            Divider()
+            Button("Show in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([environment.fileURL])
+            }
+            Button("Open File") {
+                NSWorkspace.shared.open(environment.fileURL)
+            }
+            Divider()
+            Button("Move to Trash", role: .destructive) {
+                do {
+                    try environments.trash(environment)
+                } catch {
+                    store.actionError = .init(title: "Couldn't Move “\(environment.name)” to the Trash", message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private var help: String {
+        var lines = ["Create a sandbox from the \(environment.name) environment"]
+        if let workspace = environment.definition?.workspace {
+            lines.append((environment.resolve(workspace.path).path as NSString).abbreviatingWithTildeInPath)
+        }
+        return lines.joined(separator: "\n")
     }
 }

@@ -19,6 +19,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.sbxStatus)
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
+                .environment(appDelegate.environments)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -71,8 +72,19 @@ struct SandboxesApp: App {
                 .environment(store)
                 .environment(recents)
                 .environment(appDelegate.mcpServers)
+                .environment(appDelegate.environments)
         }
         .defaultSize(width: 640, height: 700)
+        .windowResizability(.contentMinSize)
+        .defaultPosition(.center)
+
+        // A window like New Sandbox, which it's an alternative to.
+        Window("New Sandbox from Environment", id: AppWindows.createFromEnvironmentID) {
+            CreateFromEnvironmentView()
+                .environment(store)
+                .environment(appDelegate.environments)
+        }
+        .defaultSize(width: 640, height: 660)
         .windowResizability(.contentMinSize)
         .defaultPosition(.center)
 
@@ -101,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sbxStatus = SbxStatus()
     let secrets: SecretStore
     let mcpServers: MCPServerStore
+    let environments = EnvironmentStore()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?

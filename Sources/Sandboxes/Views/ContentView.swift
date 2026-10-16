@@ -94,6 +94,7 @@ struct ContentView: View {
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
             AppWindows.openCreate = { openWindow(id: AppWindows.createID) }
+            AppWindows.openCreateFromEnvironment = { openWindow(id: AppWindows.createFromEnvironmentID) }
             store.windowDidOpen()
         }
         .onDisappear {

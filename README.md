@@ -6,6 +6,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
+- Save a sandbox's setup as an [environment](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and create more sandboxes like it from the home page. Environments are saved to `~/.config/sandboxes/environments` unless you choose another folder in Settings.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
@@ -21,6 +22,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
 - `sbx` v0.48.0 or later to unload MCP servers from a sandbox.
+- `sbx` v0.39.0 or later to create sandboxes from environments, which sbx still marks as experimental.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
@@ -115,6 +117,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
 | Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Create from an environment (New Sandbox from Environment window) | `sbx env create --force [--name NAME] [--env-arg NAME=VALUE]... FILE`. `--force` approves sbx's plan for the file, which sbx otherwise only asks about in a terminal: the window shows the commands it runs on your Mac first. Only arguments changed from the file's defaults are passed |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
