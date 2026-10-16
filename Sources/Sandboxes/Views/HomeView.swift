@@ -384,7 +384,6 @@ private struct SbxActionCard: View {
                             Task { await store.refresh() }
                         }
                     }
-                    .buttonStyle(.glassProminent)
                     .disabled(sbxStatus.commandRun?.phase == .running)
                     .help("Run \(command.commandLine)")
                 }
