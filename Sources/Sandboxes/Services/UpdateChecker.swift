@@ -4,8 +4,8 @@ import Observation
 /// Checks GitHub for a newer release of the app.
 ///
 /// Only release builds check, since other builds are labelled and aren't on
-/// the release track. To try it out in another build, use Settings › Update
-/// Testing, which sets these defaults (they also work as launch arguments):
+/// the release track. To try it out in another build, use Settings › Development
+/// Settings, which sets these defaults (they also work as launch arguments):
 ///
 /// - `UpdateCheckForceEnabled YES` checks even though the build has a label.
 /// - `UpdateCheckCurrentVersion 0.0.1` pretends the app is that version.

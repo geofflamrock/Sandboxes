@@ -78,9 +78,11 @@ struct SettingsView: View {
             if AppInfo.buildLabel != nil {
                 Section {
                     Toggle("Check for updates in this build", isOn: $forcesUpdateChecks)
-                    Group {
+                    if forcesUpdateChecks {
                         TextField("Pretend to be version", text: $pretendVersion, prompt: Text(AppInfo.version))
+                            .onSubmit { Task { await updates.check() } }
                         TextField("Repository", text: $updateRepository, prompt: Text(UpdateChecker.defaultRepository))
+                            .onSubmit { Task { await updates.check() } }
                         LabeledContent {
                             Button("Check Now") {
                                 Task { await updates.check() }
@@ -90,12 +92,8 @@ struct SettingsView: View {
                             UpdateStatusLabel(status: updates.status, update: updates.availableUpdate)
                         }
                     }
-                    .disabled(!forcesUpdateChecks)
-                    .onSubmit {
-                        Task { await updates.check() }
-                    }
                 } header: {
-                    Text("Update Testing")
+                    Text("Development Settings")
                 } footer: {
                     Text("Only in builds that aren't releases. Pretend to be an older version to see the update in the sidebar and menu bar.")
                         .foregroundStyle(.secondary)
@@ -142,7 +140,7 @@ struct SettingsView: View {
     }
 }
 
-/// The result of the last update check, for Settings › Update Testing.
+/// The result of the last update check, for Settings › Development Settings.
 private struct UpdateStatusLabel: View {
     let status: UpdateChecker.Status
     let update: UpdateChecker.Release?
