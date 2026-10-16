@@ -264,7 +264,7 @@ private struct SbxStatusSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HomeSectionHeader(title: "sbx", isLoading: sbxStatus.isDiagnosing)
+            HomeSectionHeader(title: "Setup", isLoading: sbxStatus.isDiagnosing)
 
             VStack(alignment: .leading, spacing: 0) {
                 switch sbxStatus.state {
