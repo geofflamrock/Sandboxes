@@ -12,13 +12,17 @@
     {
       "layers": [
         {
-          "image-name": "Mound.svg",
-          "name": "Mound",
+          "blend-mode": "normal",
+          "fill": "automatic",
+          "glass": true,
+          "hidden": false,
+          "image-name": "Agent.svg",
+          "name": "Agent",
           "position": {
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              3.7902350000000524
             ]
           }
         }
@@ -35,8 +39,9 @@
     {
       "layers": [
         {
-          "image-name": "Agent.svg",
-          "name": "Agent",
+          "hidden": true,
+          "image-name": "Mound.svg",
+          "name": "Mound",
           "position": {
             "scale": 1,
             "translation-in-points": [
@@ -64,7 +69,7 @@
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              -22.306465000000003
             ]
           }
         }
@@ -87,7 +92,7 @@
             "scale": 1,
             "translation-in-points": [
               0,
-              0
+              -22.306465000000003
             ]
           }
         }

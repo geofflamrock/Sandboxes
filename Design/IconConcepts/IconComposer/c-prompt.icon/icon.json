@@ -12,6 +12,7 @@
     {
       "layers": [
         {
+          "hidden": false,
           "image-name": "Mound.svg",
           "name": "Mound",
           "position": {
