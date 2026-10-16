@@ -45,11 +45,21 @@ struct NetworkApproval: Identifiable, Hashable {
         return (String(text[..<slash]), method ?? "ANY", String(text[slash...]))
     }
 
+    /// Adds an allow rule covering what the sandbox asked for, scoped to
+    /// `sandbox`, or for every sandbox when it's nil.
+    static func allowArguments(approval: NetworkApproval, sandbox: String?) -> [String] {
+        ruleArguments("allow", approval: approval, sandbox: sandbox)
+    }
+
     /// Adds a deny rule covering what the sandbox asked for, scoped to
     /// `sandbox`, or for every sandbox when it's nil.
     static func denyArguments(approval: NetworkApproval, sandbox: String?) -> [String] {
+        ruleArguments("deny", approval: approval, sandbox: sandbox)
+    }
+
+    private static func ruleArguments(_ decision: String, approval: NetworkApproval, sandbox: String?) -> [String] {
         let target = approval.target
-        var arguments = ["policy", "deny", "network"]
+        var arguments = ["policy", decision, "network"]
         if let sandbox {
             arguments += ["--sandbox", sandbox]
         }

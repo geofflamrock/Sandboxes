@@ -26,7 +26,7 @@ struct ApprovalResponse {
     var message: String {
         switch action {
         case .approve:
-            "This adds a rule that lets “\(sandboxName)” reach \(approval.title)."
+            "This adds a rule that lets “\(sandboxName)” or every sandbox reach \(approval.title). Approving for all sandboxes also dismisses other sandboxes' requests for \(approval.target.host)."
         case .deny:
             "This adds a rule that blocks \(approval.title) for “\(sandboxName)” or for every sandbox, and dismisses the request. Denying for all sandboxes also dismisses other sandboxes' requests for \(approval.target.host)."
         }
@@ -95,8 +95,11 @@ private struct ApprovalResponseDialog: ViewModifier {
         ) { response in
             switch response.action {
             case let .approve(option):
-                Button("Approve") {
+                Button("Approve for This Sandbox") {
                     Task { await store.respond(to: response.approval, with: option) }
+                }
+                Button("Approve for All Sandboxes") {
+                    Task { await store.approveForAllSandboxes(response.approval) }
                 }
             case .deny:
                 if let sandbox = response.sandbox {

@@ -184,6 +184,27 @@ final class SandboxStore {
         await finishResponding(to: [approval])
     }
 
+    /// Adds an allow rule for the destination for every sandbox, then dismisses
+    /// the request and other sandboxes' requests for the same host. Responding
+    /// with the allow option would also add a rule scoped to each sandbox,
+    /// which the global rule already covers.
+    func approveForAllSandboxes(_ approval: NetworkApproval) async {
+        let host = approval.target.host.lowercased()
+        let approved = [approval] + approvals.filter { $0.id != approval.id && $0.target.host.lowercased() == host }
+        respondingApprovalIDs.formUnion(approved.map(\.id))
+        do {
+            try await SbxCLI.runChecked(NetworkApproval.allowArguments(approval: approval, sandbox: nil))
+            for pending in approved {
+                if let dismiss = pending.dismissOption {
+                    try await SbxCLI.runChecked(NetworkApproval.respondArguments(approval: pending, option: dismiss))
+                }
+            }
+        } catch {
+            actionError = ActionError(title: "Couldn't Allow Access to “\(approval.title)”", message: error.localizedDescription)
+        }
+        await finishResponding(to: approved)
+    }
+
     /// Adds a deny rule for the destination, for `sandbox` or for every sandbox
     /// when it's nil, then dismisses the request so it no longer shows as
     /// pending. Denying for every sandbox also dismisses other sandboxes'
