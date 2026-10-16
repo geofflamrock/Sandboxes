@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
+    @Environment(EnvironmentStore.self) private var environments
     @Environment(\.dismiss) private var dismiss
 
     @State private var request = CreateSandboxRequest()
@@ -38,9 +39,19 @@ struct CreateSandboxView: View {
     private func start() {
         let request = request
         let run = CreationRun(request: request)
-        run.start { [recents, store] in
+        let environmentName = request.savesEnvironment ? request.resolvedEnvironmentName : nil
+        run.start { [recents, store, environments] in
             recents.record(workload: request.trimmedWorkload, kits: request.kits)
             Task { await store.refresh() }
+            // Only a setup that worked is worth saving.
+            if let environmentName {
+                do {
+                    let file = try environments.save(request, as: environmentName)
+                    run.output.append("\nSaved environment “\(environmentName)” to \((file.path as NSString).abbreviatingWithTildeInPath)\n")
+                } catch {
+                    run.output.append("\nCouldn't save environment “\(environmentName)”: \(error.localizedDescription)\n")
+                }
+            }
         }
         self.run = run
     }
@@ -54,6 +65,7 @@ private struct CreateSandboxForm: View {
     let onCreate: () -> Void
 
     @Environment(RecentsStore.self) private var recents
+    @Environment(EnvironmentStore.self) private var environments
     @State private var kitDraft = KitDraft()
 
     // The optional sections stay open or closed the way they were last left,
@@ -77,6 +89,7 @@ private struct CreateSandboxForm: View {
             kitsSection
             resourcesSection
             environmentSection
+            saveEnvironmentSection
 
             Section("Command") {
                 Text(commandPreview)
@@ -88,7 +101,7 @@ private struct CreateSandboxForm: View {
         .formStyle(.grouped)
         .safeAreaInset(edge: .bottom) {
             HStack {
-                if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
+                if let message = validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
                     Label(message, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -100,7 +113,7 @@ private struct CreateSandboxForm: View {
                 Button("Create", action: create)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.glassProminent)
-                    .disabled(request.validationMessage != nil)
+                    .disabled(validationMessage != nil)
             }
             .controlSize(.large)
             .padding()
@@ -453,6 +466,39 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Save as environment
+
+    private var saveEnvironmentSection: some View {
+        Section {
+            Toggle("Save as an environment", isOn: $request.savesEnvironment)
+            if request.savesEnvironment {
+                TextField("Environment name", text: $request.environmentName, prompt: Text(request.suggestedEnvironmentName))
+            }
+        } footer: {
+            Text(saveEnvironmentFooter)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var saveEnvironmentFooter: String {
+        let folder = (EnvironmentStore.directory.path as NSString).abbreviatingWithTildeInPath
+        var footer = "Once the sandbox is created, its setup is saved to \(folder) so you can create sandboxes like it from the home page."
+        if request.savesEnvironment && !request.environmentFiles.isEmpty {
+            footer += " Environment files aren't saved, so add any variables you need from them above."
+        }
+        return footer
+    }
+
+    private var validationMessage: String? {
+        if let message = request.validationMessage {
+            return message
+        }
+        if request.savesEnvironment {
+            return environments.validationMessage(forName: request.resolvedEnvironmentName)
+        }
+        return nil
+    }
+
     // MARK: Command
 
     /// The command as it will run, including a kit that's entered but not yet added.
@@ -664,7 +710,7 @@ private struct RecentsMenu: View {
 
 // MARK: - Output
 
-private struct CreationOutputView: View {
+struct CreationOutputView: View {
     let run: CreationRun
     let onBack: () -> Void
     let onDone: () -> Void

@@ -25,6 +25,9 @@ struct ContentView: View {
         .sheet(isPresented: $store.isCreatePresented) {
             CreateSandboxView()
         }
+        .sheet(item: $store.environmentToCreate) { environment in
+            CreateFromEnvironmentView(environment: environment)
+        }
         .confirmationDialog(
             "Remove “\(store.removalCandidate?.name ?? "")”?",
             isPresented: Binding(
