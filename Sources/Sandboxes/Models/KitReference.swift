@@ -39,7 +39,7 @@ enum KitSource: String, CaseIterable, Identifiable {
     }
 }
 
-/// A kit in a Git repository, as typed into the create sheet. The repository
+/// A kit in a Git repository, as typed into the New Sandbox window. The repository
 /// can be a plain clone URL, a full `git+…#ref=…&dir=…` reference, or a GitHub
 /// or GitLab page for a folder; `reference` turns any of them into what sbx
 /// expects.

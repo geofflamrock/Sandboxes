@@ -5,8 +5,6 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        @Bindable var store = store
-
         NavigationSplitView {
             SandboxSidebar()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
@@ -22,9 +20,6 @@ struct ContentView: View {
         // until the window next lays out. Hide it; scroll edge effects still
         // mark the toolbar edge when content scrolls under it.
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .sheet(isPresented: $store.isCreatePresented) {
-            CreateSandboxView()
-        }
         .confirmationDialog(
             "Remove “\(store.removalCandidate?.name ?? "")”?",
             isPresented: Binding(
@@ -54,6 +49,7 @@ struct ContentView: View {
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
+            AppWindows.openCreate = { openWindow(id: AppWindows.createID) }
             store.windowDidOpen()
         }
         .onDisappear {

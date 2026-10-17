@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
@@ -16,23 +16,40 @@ struct CreateSandboxView: View {
                 CreationOutputView(
                     run: run,
                     onBack: { self.run = nil },
-                    onDone: { dismiss() }
+                    onDone: close
                 )
             } else {
                 CreateSandboxForm(
                     request: $request,
-                    onCancel: { dismiss() },
+                    onCancel: close,
                     onCreate: start
                 )
             }
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
-        .interactiveDismissDisabled(run?.phase == .running)
+        .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
+        .background(WindowReader(kind: .create))
         .onAppear {
             if request.workload.isEmpty {
                 request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workloadImage ?? ""
             }
         }
+        // Asked again while the window is open, such as from an agent on the
+        // home page: switch to that agent unless a sandbox is being created.
+        .onChange(of: store.createRequests) {
+            if run == nil, let workload = store.createWorkload {
+                request.workload = workload
+            }
+        }
+        // Start afresh the next time the window opens.
+        .onDisappear {
+            request = CreateSandboxRequest()
+            run = nil
+        }
+    }
+
+    private func close() {
+        dismissWindow(id: AppWindows.createID)
     }
 
     private func start() {
@@ -57,8 +74,8 @@ private struct CreateSandboxForm: View {
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
 
-    // The tab bar only style leaves out the bordered box the automatic style
-    // draws around the content on macOS.
+    // In a window, the tab bar only style puts the tabs in the title bar
+    // rather than drawing a bordered box around the content.
     var body: some View {
         TabView(selection: $tab) {
             ForEach(CreateSheetTab.allCases) { tab in

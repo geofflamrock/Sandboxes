@@ -25,10 +25,12 @@ final class SandboxStore {
     /// A sandbox whose pending approvals its detail view should scroll to,
     /// after the user clicked a notification about them.
     var approvalsToReveal: Sandbox.ID?
-    var isCreatePresented = false
-    /// The workload image the create sheet starts with, or nil for the most
-    /// recently used one.
+    /// The workload image the New Sandbox window starts with, or nil for the
+    /// most recently used one.
     private(set) var createWorkload: String?
+    /// Counts requests to create a sandbox, so an open New Sandbox window can
+    /// switch to the workload asked for.
+    private(set) var createRequests = 0
     var removalCandidate: Sandbox?
     var actionError: ActionError?
     /// Where the open button and double-clicking open a sandbox: the last
@@ -88,10 +90,11 @@ final class SandboxStore {
         isWindowOpen = false
     }
 
-    /// Opens the create sheet, starting with `workload` when it's given.
+    /// Opens the New Sandbox window, starting with `workload` when it's given.
     func presentCreate(workload: String? = nil) {
         createWorkload = workload
-        isCreatePresented = true
+        createRequests += 1
+        AppWindows.showCreate()
     }
 
     func start(_ sandbox: Sandbox) async {
