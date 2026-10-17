@@ -429,6 +429,9 @@ private struct SecretEditor: View {
             .formStyle(.grouped)
             .disabled(isSaving)
 
+            // Sheets separate their buttons from the content with a line.
+            Divider()
+
             HStack {
                 if isSaving {
                     ProgressView()
@@ -445,7 +448,7 @@ private struct SecretEditor: View {
                 .disabled(isSaving || draft.missing != nil)
                 .help(draft.missing ?? "")
             }
-            .padding([.horizontal, .bottom], 20)
+            .padding(20)
         }
         .frame(minWidth: 480, idealWidth: 520, minHeight: 440, idealHeight: 500)
         .navigationTitle(draft.isEditing ? "Edit Secret" : "Add Secret")
