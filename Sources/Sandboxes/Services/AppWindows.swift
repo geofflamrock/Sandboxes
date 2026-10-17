@@ -7,14 +7,18 @@ import SwiftUI
 enum AppWindows {
     enum Kind {
         case main
+        case create
         case settings
     }
 
     static let mainID = "main"
+    static let createID = "create"
 
     /// Opens the main window scene. Set from a view, since only views can
     /// reach SwiftUI's `openWindow`.
     static var openMain: (() -> Void)?
+    /// Opens the New Sandbox window scene, set alongside `openMain`.
+    static var openCreate: (() -> Void)?
 
     private struct WeakWindow {
         weak var window: NSWindow?
@@ -26,6 +30,11 @@ enum AppWindows {
     /// Opens the main window, or brings it forward, and activates the app.
     static func showMain() {
         show(.main) { openMain?() }
+    }
+
+    /// Opens the New Sandbox window, or brings it forward, and activates the app.
+    static func showCreate() {
+        show(.create) { openCreate?() }
     }
 
     static func showSettings(_ openSettings: OpenSettingsAction) {

@@ -46,6 +46,16 @@ struct SandboxesApp: App {
             }
         }
 
+        // A window rather than a sheet, so its tab view's tabs sit in a title bar.
+        Window("New Sandbox", id: AppWindows.createID) {
+            CreateSandboxView()
+                .environment(store)
+                .environment(recents)
+        }
+        .defaultSize(width: 640, height: 700)
+        .windowResizability(.contentMinSize)
+        .defaultPosition(.center)
+
         MenuBarExtra {
             MenuBarMenu()
                 .environment(store)

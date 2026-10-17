@@ -20,6 +20,7 @@ struct MenuBarLabel: View {
             // The label is always shown, so the window can be reopened even
             // after it's closed.
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
+            AppWindows.openCreate = { openWindow(id: AppWindows.createID) }
         }
     }
 }

@@ -488,7 +488,7 @@ private struct QuickCreateSection: View {
     }
 }
 
-/// A card that opens the create sheet with `workload`, or a blank card for a
+/// A card that opens the New Sandbox window with `workload`, or a blank card for a
 /// new sandbox when it's nil.
 private struct QuickCreateCard: View {
     let workload: String?
