@@ -285,7 +285,6 @@ struct SandboxDetailView: View {
                 Button("Add Secret…") {
                     secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
                 }
-                .controlSize(.small)
             }
         } footer: {
             HStack(spacing: 4) {
