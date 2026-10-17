@@ -50,7 +50,7 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 
 `sbx`'s JSON isn't documented and changes between versions. Parsers (`SandboxListParser`, the network and approval parsers) use `JSONSerialization` and accept several shapes and key spellings rather than a strict `Decodable` model. They skip any warnings printed before the JSON, and some fall back to the table output when `--json` isn't supported. Keep new parsing just as tolerant.
 
-Don't guess `sbx` flags, subcommands or output fields. Check the [Docker Sandboxes docs](https://docs.docker.com/ai/sandboxes/) or the existing code, or ask for real output. The `sbx` CLI isn't installed in the dev sandbox.
+Don't guess `sbx` flags or subcommands. Check them in the [`sbx` CLI reference](https://docs.docker.com/reference/cli/sbx/) (see [Looking up `sbx` docs](#looking-up-sbx-docs)). The reference doesn't describe what `--json` output contains, so for output fields go by the existing parsers or ask for real output. The `sbx` CLI isn't installed in the dev sandbox.
 
 ### Concurrency
 
@@ -93,7 +93,18 @@ Much of the macOS 26 API (Liquid Glass, new SwiftUI scene and toolbar APIs) is n
 
   The path is the page's path, lowercased. `metadata.platforms` gives the OS versions a symbol was introduced in (check it's available on macOS, and not iOS only), `abstract` gives the summary, `primaryContentSections` gives the declaration and discussion, and `topicSections` and `references` list related symbols.
 - To find a symbol, start from a framework or type page such as `.../documentation/swiftui/view.json` and follow `topicSections`.
-- For Docker Sandboxes and `sbx`, docs pages are also served as Markdown: add `.md` to the page path (for example `https://docs.docker.com/ai/sandboxes.md`). `https://docs.docker.com/llms.txt` lists every page.
+## Looking up `sbx` docs
+
+- **CLI reference:** `https://docs.docker.com/reference/cli/sbx/<command>/<subcommand>/`, for example `.../sbx/policy/log/`. Every subcommand has a page with its usage, description, options, global options and examples. The sidebar on any page links to all of them.
+- **Fetch reference pages as HTML.** Their `.md` versions are empty apart from the title. This prints the page's text:
+
+  ```bash
+  curl -s https://docs.docker.com/reference/cli/sbx/policy/log/ | python3 -c 'import html,re,sys; t=sys.stdin.read(); t=t[t.find("<article"):t.find("</article>")]; t=re.sub(r"<(script|style)\b.*?</\1>","",t,flags=re.S); print(re.sub(r"[ \t]*\n\s*","\n",html.unescape(re.sub(r"<[^>]+>"," ",t))).strip())'
+  ```
+
+- **No output schemas.** The reference lists `--json` and `--format json|yaml` but not the fields they produce, so it can't settle what a parser should expect.
+- **`sbx policy approval` is undocumented.** It has no reference page, though the app uses `approval ls` and `approval respond`. Don't change how the app calls it without real `sbx` output to go on.
+- **Guides** (`https://docs.docker.com/ai/sandboxes/...`) are served as Markdown: add `.md` to the page path, for example `https://docs.docker.com/ai/sandboxes.md`. `https://docs.docker.com/llms.txt` lists the guide pages.
 
 ## Git and PRs
 
