@@ -50,7 +50,7 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 
 `sbx`'s JSON isn't documented and changes between versions. Parsers (`SandboxListParser`, the network and approval parsers) use `JSONSerialization` and accept several shapes and key spellings rather than a strict `Decodable` model. They skip any warnings printed before the JSON, and some fall back to the table output when `--json` isn't supported. Keep new parsing just as tolerant.
 
-Don't guess `sbx` flags or subcommands. Check them in the [`sbx` CLI reference](https://docs.docker.com/reference/cli/sbx/) (see [Looking up `sbx` docs](#looking-up-sbx-docs)). The reference doesn't describe what `--json` output contains, so for output fields go by the existing parsers or ask for real output. The `sbx` CLI isn't installed in the dev sandbox.
+Don't guess `sbx` flags or subcommands. Check them with `sbx <command> --help` when `sbx` is installed, or else in the [`sbx` CLI reference](https://docs.docker.com/reference/cli/sbx/) (see [Looking up `sbx` docs](#looking-up-sbx-docs)). Neither describes what `--json` output contains, so for output fields go by the existing parsers or ask for real output.
 
 ### Concurrency
 
@@ -93,18 +93,34 @@ Much of the macOS 26 API (Liquid Glass, new SwiftUI scene and toolbar APIs) is n
 
   The path is the page's path, lowercased. `metadata.platforms` gives the OS versions a symbol was introduced in (check it's available on macOS, and not iOS only), `abstract` gives the summary, `primaryContentSections` gives the declaration and discussion, and `topicSections` and `references` list related symbols.
 - To find a symbol, start from a framework or type page such as `.../documentation/swiftui/view.json` and follow `topicSections`.
+
 ## Looking up `sbx` docs
 
-- **CLI reference:** `https://docs.docker.com/reference/cli/sbx/<command>/<subcommand>/`, for example `.../sbx/policy/log/`. Every subcommand has a page with its usage, description, options, global options and examples. The sidebar on any page links to all of them.
+### `sbx --help` (first choice)
+
+Check `command -v sbx`. When it's installed (for example by an sbx CLI kit), its help is the most reliable source for the version installed:
+
+- `sbx <command> --help` works for every command without signing in. Most work without the daemon too. The exception is the `sbx kit builder history` commands, which need it even for `--help`: start it with `sbx daemon start --detach`, and stop it with `sbx daemon stop` when you're done.
+- Some commands are hidden from their parent's help but have help of their own. `sbx policy approval` (`ls`, `inspect`, `respond`) isn't listed in `sbx policy --help` or on the docs site, but `sbx policy approval --help` works.
+- `sbx policy approval ls` has no `--json` flag (as of v0.48.0), so the app's fallback to table output is the path in use. `sbx policy approval respond` takes `APPROVAL-ID --option OPTION-ID`.
+- `sbx version` gives the installed version. Behaviour differs between releases, so say which version you checked.
+- Commands that read real state (`ls`, `policy ls`, `policy log`, `policy approval ls`, `template ls`, `mcp ls`) fail with "not signed in to Docker". Don't run `sbx login`; ask the user for real output instead. Local sandboxes can't run inside a sandbox anyway, since there's no KVM.
+
+### CLI reference
+
+- `https://docs.docker.com/reference/cli/sbx/<command>/<subcommand>/`, for example `.../sbx/policy/log/`. Pages have usage, description, options, global options and examples. The sidebar on any page links to all of them.
 - **Fetch reference pages as HTML.** Their `.md` versions are empty apart from the title. This prints the page's text:
 
   ```bash
   curl -s https://docs.docker.com/reference/cli/sbx/policy/log/ | python3 -c 'import html,re,sys; t=sys.stdin.read(); t=t[t.find("<article"):t.find("</article>")]; t=re.sub(r"<(script|style)\b.*?</\1>","",t,flags=re.S); print(re.sub(r"[ \t]*\n\s*","\n",html.unescape(re.sub(r"<[^>]+>"," ",t))).strip())'
   ```
 
-- **No output schemas.** The reference lists `--json` and `--format json|yaml` but not the fields they produce, so it can't settle what a parser should expect.
-- **`sbx policy approval` is undocumented.** It has no reference page, though the app uses `approval ls` and `approval respond`. Don't change how the app calls it without real `sbx` output to go on.
-- **Guides** (`https://docs.docker.com/ai/sandboxes/...`) are served as Markdown: add `.md` to the page path, for example `https://docs.docker.com/ai/sandboxes.md`. `https://docs.docker.com/llms.txt` lists the guide pages.
+- **Not complete.** It has no pages for `sbx policy approval` or `sbx policy profile`, though both exist. Don't take a missing page to mean a command doesn't exist.
+- **No output schemas.** Neither the reference nor `--help` describes the fields `--json` or `--format json|yaml` produce, so they can't settle what a parser should expect. Don't change how the app calls or parses a command without real `sbx` output to go on.
+
+### Guides
+
+`https://docs.docker.com/ai/sandboxes/...` pages are served as Markdown: add `.md` to the page path, for example `https://docs.docker.com/ai/sandboxes.md`. `https://docs.docker.com/llms.txt` lists the guide pages.
 
 ## Git and PRs
 
