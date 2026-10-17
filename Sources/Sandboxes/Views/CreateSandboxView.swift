@@ -28,8 +28,6 @@ struct CreateSandboxView: View {
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
-        // The green button zooms rather than taking a Space for a dialog.
-        .windowFullScreenBehavior(.disabled)
         .background(WindowReader(kind: .create))
         .onAppear {
             if request.workload.isEmpty {
