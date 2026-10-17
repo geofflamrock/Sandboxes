@@ -100,9 +100,12 @@ struct SandboxDetailView: View {
                         secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
                     }
                     .help("Store a secret for this sandbox")
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
                 }
-                // Its own glass group, apart from the sandbox's actions.
-                ToolbarSpacer(.fixed)
+                // Not sharing the actions' glass puts it in a group of its own,
+                // with the same gap as between theirs. A fixed spacer's is wider.
+                .sharedBackgroundVisibility(.hidden)
             }
             ToolbarItemGroup {
                 SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
