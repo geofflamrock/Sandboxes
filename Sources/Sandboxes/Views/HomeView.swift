@@ -230,7 +230,7 @@ private struct PendingApprovalsCard: View {
         return VStack(alignment: .leading, spacing: 6) {
             if let name = approval.sandbox {
                 Button {
-                    store.selection = sandbox?.id
+                    store.selection = sandbox.map { SidebarItem.sandbox($0.id) }
                 } label: {
                     HStack(spacing: 5) {
                         AgentIcon(agent: sandbox?.knownAgent, size: 12)

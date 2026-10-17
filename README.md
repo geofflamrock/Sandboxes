@@ -10,6 +10,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
+- Manage the secrets `sbx` gives sandboxes, globally or for one sandbox, from **Management › Secrets** in the sidebar.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
 ## Getting started
@@ -122,6 +123,9 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option dismiss` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |
 | Dismiss a request | `sbx policy approval respond ID --option dismiss` |
+| List secrets (sidebar and Management › Secrets) | `sbx secret ls --json` |
+| Add or replace a secret | `sbx secret set SERVICE --force [--sandbox NAME]`, with the value on standard input |
+| Remove a secret | `sbx secret rm SERVICE --force [--sandbox NAME]`, or `sbx secret rm --registry HOST --force [--all-sandboxes \| --sandbox NAME]` for registry credentials (after confirming in the app) |
 | Open Shell | `sbx exec -it NAME bash`, in Terminal |
 | Run the agent (in Terminal) | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |

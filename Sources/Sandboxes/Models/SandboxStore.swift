@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+/// What's selected in the sidebar: a sandbox, or one of the management pages.
+enum SidebarItem: Hashable {
+    case sandbox(Sandbox.ID)
+    case secrets
+}
+
 @MainActor
 @Observable
 final class SandboxStore {
@@ -18,7 +24,7 @@ final class SandboxStore {
     private(set) var approvals: [NetworkApproval] = []
     /// Approvals with a response or deny in flight.
     private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
-    var selection: Sandbox.ID?
+    var selection: SidebarItem?
     /// Whether the main window is open. While it's closed the app stays in
     /// the menu bar and only checks for pending approvals.
     private(set) var isWindowOpen = false
@@ -54,7 +60,8 @@ final class SandboxStore {
     @ObservationIgnored private var pendingSelection: Sandbox.ID?
 
     var selectedSandbox: Sandbox? {
-        sandboxes.first { $0.id == selection }
+        guard case let .sandbox(id) = selection else { return nil }
+        return sandboxes.first { $0.id == id }
     }
 
     /// Reloads the list. Calls made while a reload is in flight queue one more reload.
@@ -163,7 +170,7 @@ final class SandboxStore {
         }
         approvalsToReveal = name
         if hasLoaded && sandboxes.contains(where: { $0.id == name }) {
-            selection = name
+            selection = .sandbox(name)
         } else {
             // Not loaded yet, or new since the list was last loaded, which it
             // isn't while the window is closed.
@@ -265,11 +272,11 @@ final class SandboxStore {
             if let pendingSelection {
                 self.pendingSelection = nil
                 if sandboxes.contains(where: { $0.id == pendingSelection }) {
-                    selection = pendingSelection
+                    selection = .sandbox(pendingSelection)
                 }
             }
-            if let selection, !sandboxes.contains(where: { $0.id == selection }) {
-                self.selection = nil
+            if case let .sandbox(id) = selection, !sandboxes.contains(where: { $0.id == id }) {
+                selection = nil
             }
         } catch {
             let wasFailing = loadError != nil

@@ -17,6 +17,7 @@ struct SandboxesApp: App {
                 .environment(updates)
                 .environment(recents)
                 .environment(appDelegate.sbxStatus)
+                .environment(appDelegate.secrets)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -40,6 +41,11 @@ struct SandboxesApp: App {
                     Task { await store.refresh() }
                 }
                 .keyboardShortcut("r")
+                Button("Secrets") {
+                    store.selection = .secrets
+                    AppWindows.showMain()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
             }
             CommandGroup(after: .help) {
                 RunDiagnosticsButton(sbxStatus: appDelegate.sbxStatus)
@@ -79,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = SandboxStore()
     let updates = UpdateChecker()
     let sbxStatus = SbxStatus()
+    let secrets = SecretStore()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
