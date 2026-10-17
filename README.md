@@ -4,7 +4,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 ### Features 
 
-- See the details of your sandboxes, including resource usage and network traffic.
+- See the details of your sandboxes, with tabs for an overview and resource usage, network approvals, rules and traffic, and secrets.
 - Create new sandboxes quickly and easily.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
