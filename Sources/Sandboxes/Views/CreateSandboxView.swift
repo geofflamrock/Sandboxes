@@ -62,7 +62,7 @@ private struct CreateSandboxForm: View {
     var body: some View {
         TabView(selection: $tab) {
             ForEach(CreateSheetTab.allCases) { tab in
-                Tab(tab.title, value: tab) {
+                Tab(value: tab) {
                     Form {
                         switch tab {
                         case .general:
@@ -77,6 +77,8 @@ private struct CreateSandboxForm: View {
                         }
                     }
                     .formStyle(.grouped)
+                } label: {
+                    Text(tab.title)
                 }
             }
         }
