@@ -18,6 +18,7 @@ struct SandboxesApp: App {
                 .environment(recents)
                 .environment(appDelegate.sbxStatus)
                 .environment(appDelegate.secrets)
+                .environment(appDelegate.mcpServers)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -46,6 +47,18 @@ struct SandboxesApp: App {
                     AppWindows.showMain()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
+                Button("MCP Servers") {
+                    store.selection = .mcpServers
+                    AppWindows.showMain()
+                }
+            }
+            // The selected sandbox's actions, which are also in the sandbox's
+            // toolbar and context menu.
+            CommandMenu("Sandbox") {
+                SandboxMenu()
+                    .environment(store)
+                    .environment(appDelegate.mcpServers)
+                    .environment(appDelegate.sbxStatus)
             }
             CommandGroup(after: .help) {
                 RunDiagnosticsButton(sbxStatus: appDelegate.sbxStatus)
@@ -57,6 +70,7 @@ struct SandboxesApp: App {
             CreateSandboxView()
                 .environment(store)
                 .environment(recents)
+                .environment(appDelegate.mcpServers)
         }
         .defaultSize(width: 640, height: 700)
         .windowResizability(.contentMinSize)
@@ -85,10 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = SandboxStore()
     let updates = UpdateChecker()
     let sbxStatus = SbxStatus()
-    let secrets = SecretStore()
+    let secrets: SecretStore
+    let mcpServers: MCPServerStore
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
+
+    override init() {
+        let secrets = SecretStore()
+        self.secrets = secrets
+        mcpServers = MCPServerStore(secrets: secrets)
+        super.init()
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         ApprovalNotifier.shared.register(store)
@@ -125,6 +147,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !flag else { return true }
         AppWindows.showMain()
         return false
+    }
+}
+
+/// The Sandbox menu: actions on the sandbox selected in the sidebar, or the
+/// same items disabled when none is.
+private struct SandboxMenu: View {
+    @Environment(SandboxStore.self) private var store
+
+    var body: some View {
+        if let sandbox = store.selectedSandbox {
+            SandboxActionButtons(sandbox: sandbox)
+        } else {
+            Group {
+                Button("Start") {}
+                Button("Open Shell") {}
+                Divider()
+                Button("Load MCP Server") {}
+                Button("Unload MCP Server") {}
+                Divider()
+                Button("Remove…") {}
+            }
+            .disabled(true)
+        }
     }
 }
 

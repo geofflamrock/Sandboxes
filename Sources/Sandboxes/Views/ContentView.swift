@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
+    @Environment(MCPServerStore.self) private var mcp
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -13,6 +14,8 @@ struct ContentView: View {
             Group {
                 if store.selection == .secrets {
                     SecretsView()
+                } else if store.selection == .mcpServers {
+                    MCPServersView()
                 } else if let sandbox = store.selectedSandbox {
                     SandboxDetailView(sandbox: sandbox)
                 } else {
@@ -49,6 +52,32 @@ struct ContentView: View {
         } message: { error in
             Text(error.message)
         }
+        .confirmationDialog(
+            "Unload “\(mcp.unloadCandidate?.server.name ?? "")” from “\(mcp.unloadCandidate?.sandbox.name ?? "")”?",
+            isPresented: Binding(
+                get: { mcp.unloadCandidate != nil },
+                set: { if !$0 { mcp.unloadCandidate = nil } }
+            ),
+            presenting: mcp.unloadCandidate
+        ) { unload in
+            Button("Unload") {
+                Task { await mcp.unload(unload.server, from: unload.sandbox) }
+            }
+        } message: { _ in
+            Text("The agent loses the server's tools straight away. The server stays registered, and an agent that finds servers itself can load it again.")
+        }
+        .alert(
+            mcp.actionError?.title ?? "",
+            isPresented: Binding(
+                get: { mcp.actionError != nil },
+                set: { if !$0 { mcp.actionError = nil } }
+            ),
+            presenting: mcp.actionError
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.message)
+        }
         .alert(
             secrets.actionError?.title ?? "",
             isPresented: Binding(
@@ -76,6 +105,7 @@ struct ContentView: View {
 struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
+    @Environment(MCPServerStore.self) private var mcp
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
     @AppStorage("sidebarSandboxesExpanded") private var sandboxesExpanded = true
@@ -108,11 +138,16 @@ struct SandboxSidebar: View {
                     .badge(secrets.secrets.count)
                     .tag(SidebarItem.secrets)
                     .help("API keys, tokens and registry credentials sbx gives sandboxes")
+                Label("MCP Servers", systemImage: "puzzlepiece.extension")
+                    .badge(mcp.servers.count)
+                    .tag(SidebarItem.mcpServers)
+                    .help("MCP servers registered with sbx, which sandboxes reach through its MCP gateway")
             }
         }
         // Removing a sandbox also removes its secrets, so keep the count right.
         .task(id: store.sandboxes.map(\.name)) {
             await secrets.refresh()
+            await mcp.refresh()
         }
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let sandbox = sandbox(for: items) {
@@ -404,7 +439,9 @@ struct SandboxRow: View {
     }
 }
 
-/// Start/stop, shell, run/open and remove actions, shared by menus and the toolbar.
+/// Start/stop, shell, run/open, MCP and remove actions, shared by the
+/// context menu, the Sandbox menu and the toolbar. The toolbar keeps the
+/// less common ones in a More menu.
 struct SandboxActionButtons: View {
     enum Placement {
         case menu
@@ -414,6 +451,7 @@ struct SandboxActionButtons: View {
     let sandbox: Sandbox
     var placement = Placement.menu
     @Environment(SandboxStore.self) private var store
+    @Environment(MCPServerStore.self) private var mcp
 
     var body: some View {
         if sandbox.state == .running {
@@ -438,13 +476,81 @@ struct SandboxActionButtons: View {
             // Double-clicking uses the default.
             OpenTargetButtons(sandbox: sandbox)
             Divider()
+            MCPServerMenus(sandbox: sandbox)
+            Divider()
+            removeButton
         case .toolbar:
             OpenSplitButton(sandbox: sandbox)
+            Menu("More", systemImage: "ellipsis.circle") {
+                MCPServerMenus(sandbox: sandbox)
+                Divider()
+                removeButton
+            }
+            .menuIndicator(.hidden)
+            .help("More actions for “\(sandbox.name)”")
+            // A toolbar menu's AppKit item keeps the items it was first built
+            // with, so rebuild it when they change, as OpenSplitButton does.
+            .id("\(sandbox.id)/\(sandbox.state == .running)/\(mcp.servers.map(\.name).joined(separator: ","))")
         }
+    }
+
+    /// The confirmation is on the main window, which the Sandbox menu may
+    /// need to open.
+    private var removeButton: some View {
         Button("Remove…", systemImage: "trash", role: .destructive) {
             store.removalCandidate = sandbox
+            AppWindows.showMain()
         }
         .disabled(store.isBusy(sandbox))
+    }
+}
+
+/// Submenus that load registered MCP servers into a running sandbox and
+/// unload them. sbx doesn't report which servers a sandbox has loaded, so
+/// both list every registered server.
+struct MCPServerMenus: View {
+    let sandbox: Sandbox
+    @Environment(SandboxStore.self) private var store
+    @Environment(MCPServerStore.self) private var mcp
+    @Environment(SbxStatus.self) private var sbxStatus
+
+    var body: some View {
+        let isAvailable = sandbox.state == .running && !mcp.isBusy(sandbox)
+        Menu("Load MCP Server", systemImage: "plus.circle") {
+            if mcp.servers.isEmpty {
+                Button("No MCP Servers") {}
+                    .disabled(true)
+            }
+            ForEach(mcp.servers) { server in
+                Button(server.name) {
+                    Task { await mcp.load(server, into: sandbox) }
+                }
+            }
+            Divider()
+            Button("Manage MCP Servers") {
+                store.selection = .mcpServers
+                AppWindows.showMain()
+            }
+        }
+        .disabled(!isAvailable)
+        .help(sandbox.state == .running ? "Give the agent a registered MCP server's tools" : "Start the sandbox to load MCP servers")
+        if sbxStatus.supportsMCPUnload {
+            let unloadable = mcp.servers.filter(\.canUnload)
+            Menu("Unload MCP Server", systemImage: "minus.circle") {
+                if unloadable.isEmpty {
+                    Button("No MCP Servers") {}
+                        .disabled(true)
+                }
+                ForEach(unloadable) { server in
+                    Button(server.name) {
+                        mcp.unloadCandidate = MCPServerStore.Unload(server: server, sandbox: sandbox)
+                        AppWindows.showMain()
+                    }
+                }
+            }
+            .disabled(!isAvailable)
+            .help(sandbox.state == .running ? "Take a server's tools away from the agent" : "Start the sandbox to unload MCP servers")
+        }
     }
 }
 

@@ -73,6 +73,7 @@ private struct CreateSandboxForm: View {
 
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
+    @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
 
@@ -93,6 +94,8 @@ private struct CreateSandboxForm: View {
                         case .runtime:
                             resourcesSection
                             environmentSection
+                        case .mcp:
+                            mcpSection
                         }
                     }
                     .formStyle(.grouped)
@@ -102,6 +105,9 @@ private struct CreateSandboxForm: View {
             }
         }
         .tabViewStyle(.tabBarOnly)
+        .task {
+            await mcp.refresh()
+        }
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
         // As a bar, the form fades as it scrolls under them, as windows do.
         .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -517,6 +523,49 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: MCP
+
+    private var mcpSection: some View {
+        Section {
+            if mcp.servers.isEmpty {
+                Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(mcp.servers) { server in
+                Toggle(isOn: mcpBinding(for: server.name)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(server.name)
+                        Text(server.status == .ready ? server.transportTitle : "\(server.transportTitle) · \(server.statusTitle)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+        } header: {
+            Text("MCP Servers")
+        } footer: {
+            Text(request.staticMCPServers.isEmpty
+                ? "With none chosen, the agent can find and load registered servers itself."
+                : "Only these servers are loaded, and the agent can't find others itself. You can still load more into the sandbox later.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func mcpBinding(for name: String) -> Binding<Bool> {
+        Binding {
+            request.staticMCPServers.contains(name)
+        } set: { isOn in
+            if isOn {
+                if !request.staticMCPServers.contains(name) {
+                    request.staticMCPServers.append(name)
+                }
+            } else {
+                request.staticMCPServers.removeAll { $0 == name }
+            }
+        }
+    }
+
     // MARK: Command
 
     /// The command as it will run, including a kit that's entered but not yet added.
@@ -538,6 +587,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
     case general
     case kits
     case runtime
+    case mcp
 
     var id: Self { self }
 
@@ -546,6 +596,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
         case .general: "General"
         case .kits: "Kits"
         case .runtime: "Runtime"
+        case .mcp: "MCP"
         }
     }
 }
@@ -574,7 +625,7 @@ private struct KitDraft {
     }
 }
 
-private struct RemoveButton: View {
+struct RemoveButton: View {
     let help: String
     let action: () -> Void
 
@@ -588,7 +639,7 @@ private struct RemoveButton: View {
 }
 
 @MainActor
-private enum OpenPanel {
+enum OpenPanel {
     /// Shows an open panel and returns what was chosen, or nothing if it was cancelled.
     static func choose(
         directories: Bool = false,
