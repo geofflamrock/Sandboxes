@@ -102,6 +102,8 @@ struct SandboxDetailView: View {
                     .help("Store a secret for this sandbox")
                     .buttonStyle(.glass)
                     .buttonBorderShape(.circle)
+                    // Matches the toolbar's own items; the regular size is smaller.
+                    .controlSize(.large)
                 }
                 // Not sharing the actions' glass puts it in a group of its own,
                 // with the same gap as between theirs. A fixed spacer's is wider.
