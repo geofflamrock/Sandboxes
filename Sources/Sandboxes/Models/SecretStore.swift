@@ -5,6 +5,13 @@ import Observation
 @MainActor
 @Observable
 final class SecretStore {
+    struct SandboxSecrets: Identifiable {
+        let sandbox: String
+        let secrets: [SbxSecret]
+
+        var id: String { sandbox }
+    }
+
     private(set) var secrets: [SbxSecret] = []
     private(set) var hasLoaded = false
     private(set) var loadError: String?
@@ -15,14 +22,7 @@ final class SecretStore {
     @ObservationIgnored private var refreshAgain = false
 
     var globalSecrets: [SbxSecret] {
-        secrets.filter { $0.scope == .global || $0.scope == .host }
-    }
-
-    struct SandboxSecrets: Identifiable {
-        let sandbox: String
-        let secrets: [SbxSecret]
-
-        var id: String { sandbox }
+        secrets.filter { $0.scope.sandboxName == nil }
     }
 
     /// Each sandbox with secrets of its own, by name.
@@ -30,6 +30,10 @@ final class SecretStore {
         Dictionary(grouping: secrets.filter { $0.scope.sandboxName != nil }) { $0.scope.sandboxName ?? "" }
             .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
             .map { SandboxSecrets(sandbox: $0.key, secrets: $0.value) }
+    }
+
+    func secrets(for sandbox: String) -> [SbxSecret] {
+        secrets.filter { $0.scope.sandboxName == sandbox }
     }
 
     /// Reloads the list. Calls made while a reload is in flight queue one
@@ -60,17 +64,26 @@ final class SecretStore {
         hasLoaded = true
     }
 
-    /// Stores `value` as `service`'s secret, for `sandbox` or globally when
-    /// it's nil, replacing any it already has there.
-    func set(service: String, value: String, sandbox: String?) async throws {
-        try await SbxCLI.runChecked(SbxSecret.setArguments(service: service, sandbox: sandbox), input: value)
+    /// Stores the secret, replacing any with the same name in its scope.
+    func save(_ draft: SecretDraft) async throws {
+        let invocation = draft.invocation
+        try await SbxCLI.runChecked(invocation.arguments, input: invocation.input)
         await refresh()
     }
 
-    func remove(_ secret: SbxSecret) async throws {
-        removingIDs.insert(secret.id)
-        defer { removingIDs.remove(secret.id) }
-        try await SbxCLI.runChecked(secret.removeArguments)
+    func remove(_ secrets: [SbxSecret]) async throws {
+        let ids = Set(secrets.map(\.id))
+        removingIDs.formUnion(ids)
+        defer { removingIDs.subtract(ids) }
+        do {
+            for secret in secrets {
+                guard let arguments = secret.removeArguments else { continue }
+                try await SbxCLI.runChecked(arguments)
+            }
+        } catch {
+            await refresh()
+            throw error
+        }
         await refresh()
     }
 

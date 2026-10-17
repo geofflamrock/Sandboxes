@@ -1,11 +1,18 @@
 import Foundation
 
-/// A secret stored by sbx: an API key or token for a service, or pull
-/// credentials for a container registry. sbx never shows a secret's value.
+/// A secret stored by sbx: an API key or token for a built-in service, a
+/// custom secret for any other host, or pull credentials for a container
+/// registry. sbx shows at most a masked value.
 struct SbxSecret: Identifiable, Hashable {
     enum Kind: Hashable {
         case service
+        /// Set with `sbx secret set-custom`: the sandbox sees a placeholder
+        /// and the proxy swaps in the real value for requests to its hosts.
+        case custom
         case registry
+        /// Anything else `sbx secret ls` lists, such as MCP credentials,
+        /// which the app shows but doesn't change.
+        case other(String)
     }
 
     enum Scope: Hashable {
@@ -21,13 +28,35 @@ struct SbxSecret: Identifiable, Hashable {
         }
     }
 
+    /// Where sbx gets the value.
+    enum Source: Hashable {
+        /// A value stored when the secret was set.
+        case value
+        /// A 1Password `op://` reference or AWS Secrets Manager ARN.
+        case ref(String)
+        /// A command run on the host whose output is the value.
+        case command(String)
+        case oauth
+    }
+
     let kind: Kind
-    /// The service, such as "github", or the registry's hostname.
+    /// The service, such as "github", the registry's hostname, or the custom
+    /// secret's name.
     let name: String
     let scope: Scope
-    /// Where the value comes from when sbx says, such as a 1Password
-    /// reference or OAuth.
-    let source: String?
+    var source = Source.value
+    /// Such as "gho_GCaw****...****43qy".
+    var maskedValue: String?
+    /// How often sbx resolves a reference or command again.
+    var refresh: String?
+    /// The hosts a custom secret is sent to.
+    var hosts: [String] = []
+    /// The variable a custom secret's placeholder is set in.
+    var environmentVariable: String?
+    /// What the sandbox sees in place of a custom secret's value.
+    var placeholder: String?
+    var username: String?
+    var authEndpoint: String?
 
     var id: String {
         let scopeKey = switch scope {
@@ -35,14 +64,22 @@ struct SbxSecret: Identifiable, Hashable {
         case .host: "host"
         case let .sandbox(name): "sandbox:\(name)"
         }
-        return "\(kind)/\(scopeKey)/\(name)"
+        return "\(kind)/\(scopeKey)/\(name)/\(placeholder ?? "")"
     }
 
     /// The service's name as people write it, such as "GitHub".
     var title: String {
         switch kind {
         case .service: Self.serviceTitle(name)
-        case .registry: name
+        case .custom, .registry, .other: name
+        }
+    }
+
+    var canEdit: Bool {
+        switch kind {
+        case .service, .registry: true
+        case .custom: !hosts.isEmpty
+        case .other: false
         }
     }
 
@@ -73,34 +110,27 @@ struct SbxSecret: Identifiable, Hashable {
 
     static let listArguments = ["secret", "ls", "--json"]
 
-    /// Stores `service`'s secret, replacing any it already has in that scope.
-    /// The value is passed on standard input so it doesn't show in the
-    /// process's arguments.
-    static func setArguments(service: String, sandbox: String?) -> [String] {
-        var arguments = ["secret", "set", service, "--force"]
-        if let sandbox {
+    /// Nil when the app can't tell sbx which secret to remove.
+    var removeArguments: [String]? {
+        var arguments: [String]
+        switch kind {
+        case .service:
+            arguments = ["secret", "rm", name, "--force"]
+        case .custom:
+            guard let placeholder else { return nil }
+            arguments = ["secret", "rm", "--placeholder", placeholder, "--force"]
+        case .registry:
+            arguments = ["secret", "rm", "--registry", name, "--force"]
+            if scope == .global {
+                arguments.append("--all-sandboxes")
+            }
+        case .other:
+            return nil
+        }
+        if let sandbox = scope.sandboxName {
             arguments += ["--sandbox", sandbox]
         }
         return arguments
-    }
-
-    var removeArguments: [String] {
-        switch kind {
-        case .service:
-            var arguments = ["secret", "rm", name, "--force"]
-            if let sandbox = scope.sandboxName {
-                arguments += ["--sandbox", sandbox]
-            }
-            return arguments
-        case .registry:
-            var arguments = ["secret", "rm", "--registry", name, "--force"]
-            switch scope {
-            case .global: arguments.append("--all-sandboxes")
-            case let .sandbox(sandbox): arguments += ["--sandbox", sandbox]
-            case .host: break
-            }
-            return arguments
-        }
     }
 
     static func fetch() async throws -> [SbxSecret] {
@@ -109,8 +139,189 @@ struct SbxSecret: Identifiable, Hashable {
     }
 }
 
+/// A secret being added, or new settings for an existing one.
+struct SecretDraft: Identifiable {
+    enum Kind: String, CaseIterable, Identifiable {
+        case service
+        case custom
+        case registry
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .service: "Service"
+            case .custom: "Custom"
+            case .registry: "Registry"
+            }
+        }
+    }
+
+    enum SourceKind: String, CaseIterable, Identifiable {
+        case value
+        case ref
+        case command
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .value: "Value"
+            case .ref: "Reference"
+            case .command: "Command"
+            }
+        }
+    }
+
+    let id = UUID()
+    var kind = Kind.service
+    var service = "github"
+    var scope = SbxSecret.Scope.global
+    var sourceKind = SourceKind.value
+    /// The token, API key or registry password.
+    var value = ""
+    var ref = ""
+    var command = ""
+    var refresh = ""
+    /// Hosts for a custom secret, separated by commas or spaces.
+    var hosts = ""
+    var environmentVariable = ""
+    var placeholder = ""
+    var registry = ""
+    var username = ""
+    var authEndpoint = ""
+    /// The secret being edited, which fixes its kind, name and scope.
+    private(set) var original: SbxSecret?
+
+    var isEditing: Bool { original != nil }
+
+    init(scope: SbxSecret.Scope = .global) {
+        self.scope = scope
+    }
+
+    init(editing secret: SbxSecret) {
+        original = secret
+        scope = secret.scope
+        switch secret.kind {
+        case .service, .other:
+            kind = .service
+            service = secret.name
+        case .custom:
+            kind = .custom
+            hosts = secret.hosts.joined(separator: ", ")
+            environmentVariable = secret.environmentVariable ?? ""
+            placeholder = secret.placeholder ?? ""
+        case .registry:
+            kind = .registry
+            registry = secret.name
+            username = secret.username ?? ""
+            authEndpoint = secret.authEndpoint ?? ""
+        }
+        switch secret.source {
+        case .value, .oauth:
+            sourceKind = .value
+        case let .ref(ref):
+            sourceKind = .ref
+            self.ref = ref
+        case let .command(command):
+            sourceKind = .command
+            self.command = command
+        }
+        refresh = secret.refresh ?? ""
+    }
+
+    var hostList: [String] {
+        hosts.split { $0 == "," || $0.isWhitespace }.map(String.init)
+    }
+
+    /// Registry credentials always store a password.
+    var effectiveSourceKind: SourceKind {
+        kind == .registry ? .value : sourceKind
+    }
+
+    /// What's missing before it can be saved, or nil when it's ready.
+    var missing: String? {
+        switch kind {
+        case .service:
+            break
+        case .custom:
+            if hostList.isEmpty { return "Enter the hosts to send the secret to." }
+        case .registry:
+            if trimmed(registry).isEmpty { return "Enter the registry's hostname." }
+        }
+        switch effectiveSourceKind {
+        case .value:
+            if trimmed(value).isEmpty { return kind == .registry ? "Enter the password or token." : "Enter the secret's value." }
+        case .ref:
+            if trimmed(ref).isEmpty { return "Enter a 1Password or AWS Secrets Manager reference." }
+        case .command:
+            if trimmed(command).isEmpty { return "Enter the command that prints the secret." }
+        }
+        return nil
+    }
+
+    /// The `sbx` arguments that store it, and what to write to standard
+    /// input. Values go on standard input where sbx accepts that, so they
+    /// don't show in the process's arguments.
+    var invocation: (arguments: [String], input: String?) {
+        var arguments: [String]
+        var input: String?
+        switch kind {
+        case .service:
+            arguments = ["secret", "set", service, "--force"]
+        case .custom:
+            arguments = ["secret", "set-custom"] + hostList.flatMap { ["--host", $0] }
+            if !trimmed(environmentVariable).isEmpty {
+                arguments += ["--env", trimmed(environmentVariable)]
+            }
+            if !trimmed(placeholder).isEmpty {
+                arguments += ["--placeholder", trimmed(placeholder)]
+            }
+        case .registry:
+            arguments = ["secret", "set", "--registry", trimmed(registry)]
+            if !trimmed(username).isEmpty {
+                arguments += ["--username", trimmed(username)]
+            }
+            if !trimmed(authEndpoint).isEmpty {
+                arguments += ["--registry-auth-endpoint", trimmed(authEndpoint)]
+            }
+            if scope == .global {
+                arguments.append("--all-sandboxes")
+            }
+        }
+        if let sandbox = scope.sandboxName {
+            arguments += ["--sandbox", sandbox]
+        }
+        switch effectiveSourceKind {
+        case .value:
+            switch kind {
+            case .service:
+                input = trimmed(value)
+            case .custom:
+                // set-custom only takes the value as an argument.
+                arguments += ["--value", trimmed(value)]
+            case .registry:
+                arguments.append("--password-stdin")
+                input = trimmed(value)
+            }
+        case .ref:
+            arguments += ["--ref", trimmed(ref)]
+        case .command:
+            arguments += ["--command", trimmed(command)]
+        }
+        if effectiveSourceKind != .value, !trimmed(refresh).isEmpty {
+            arguments += ["--refresh", trimmed(refresh)]
+        }
+        return (arguments, input)
+    }
+
+    private func trimmed(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 /// Reads `sbx secret ls --json`, accepting a list of secrets or secrets
-/// grouped by scope.
+/// grouped by scope or kind.
 enum SecretListParser {
     struct ParseError: LocalizedError {
         let output: String
@@ -147,7 +358,7 @@ enum SecretListParser {
         }
         if let name = json as? String, let kind {
             // A list of names under a scope.
-            return [SbxSecret(kind: kind, name: name, scope: scope ?? .global, source: nil)]
+            return [SbxSecret(kind: kind, name: name, scope: scope ?? .global)]
         }
         guard let object = json as? [String: Any] else { return [] }
         if let secret = secret(from: object, scope: scope, kind: kind) {
@@ -161,6 +372,8 @@ enum SecretListParser {
                 return secrets(in: value, scope: .host, kind: kind)
             case "registry", "registries", "registrycredentials":
                 return secrets(in: value, scope: scope, kind: .registry)
+            case "custom", "customs", "customsecrets":
+                return secrets(in: value, scope: scope, kind: .custom)
             case "service", "services", "servicesecrets":
                 return secrets(in: value, scope: scope, kind: .service)
             case "sandbox", "sandboxes":
@@ -176,7 +389,7 @@ enum SecretListParser {
                 return secrets(in: value, scope: scope, kind: kind)
             default:
                 // A map of service name to details.
-                if var record = value as? [String: Any], SandboxListParser.value(in: record, for: nameKeys) == nil {
+                if var record = value as? [String: Any], field(record, ["service", "name"]) == nil {
                     record["service"] = key
                     return secret(from: record, scope: scope, kind: kind).map { [$0] } ?? []
                 }
@@ -185,48 +398,79 @@ enum SecretListParser {
         }
     }
 
-    private static let nameKeys = ["service", "registry", "name", "host", "hostname"]
-
     private static func looksLikeRecord(_ object: [String: Any]) -> Bool {
-        SandboxListParser.value(in: object, for: nameKeys + ["scope"]) != nil
+        field(object, ["service", "registry", "name", "placeholder", "scope"]) != nil
     }
 
     private static func secret(from record: [String: Any], scope inherited: SbxSecret.Scope?, kind inheritedKind: SbxSecret.Kind?) -> SbxSecret? {
-        let typeName = SandboxListParser.string(SandboxListParser.value(in: record, for: ["type", "kind"]))?.lowercased()
-        let registry = SandboxListParser.string(SandboxListParser.value(in: record, for: ["registry", "registry_host", "hostname"]))
-        let kind: SbxSecret.Kind = if registry != nil || typeName?.contains("registry") == true {
-            .registry
+        let typeName = text(record, ["type", "kind", "secret_type", "category"])?.lowercased()
+        let registry = text(record, ["registry", "registry_host", "hostname"])
+        let hosts = list(field(record, ["hosts", "host_patterns", "domains", "allowed_hosts"]))
+        let placeholder = text(record, ["placeholder", "placeholder_value"])
+        let kind: SbxSecret.Kind
+        if registry != nil || typeName?.contains("registry") == true || inheritedKind == .registry {
+            kind = .registry
+        } else if typeName?.contains("custom") == true || placeholder != nil || !hosts.isEmpty || inheritedKind == .custom {
+            kind = .custom
+        } else if let typeName, typeName.contains("mcp") {
+            kind = .other(typeName)
         } else {
-            inheritedKind ?? .service
+            kind = inheritedKind ?? .service
         }
-        let nameKeys = kind == .registry
-            ? ["registry", "registry_host", "hostname", "host", "name"]
-            : ["service", "name", "id"]
-        guard let name = SandboxListParser.string(SandboxListParser.value(in: record, for: nameKeys)), !name.isEmpty else {
-            return nil
+        let name: String? = switch kind {
+        case .registry: registry ?? text(record, ["host", "name"])
+        case .custom: text(record, ["name", "id", "service"]) ?? hosts.first ?? placeholder
+        case .service, .other: text(record, ["service", "name", "id"])
         }
+        guard let name, !name.isEmpty else { return nil }
         return SbxSecret(
             kind: kind,
             name: name,
-            scope: scope(from: record) ?? inherited ?? .global,
-            source: SandboxListParser.string(SandboxListParser.value(in: record, for: ["source", "method", "auth", "auth_type", "provider"]))
+            scope: scope(from: record) ?? inherited ?? (kind == .registry ? .host : .global),
+            source: source(from: record),
+            maskedValue: text(record, ["secret", "masked", "masked_value", "masked_secret", "value", "token", "preview"]),
+            refresh: text(record, ["refresh", "refresh_policy", "refresh_interval"]),
+            hosts: hosts,
+            environmentVariable: text(record, ["env", "env_var", "env_name", "environment_variable", "envvar"]),
+            placeholder: placeholder,
+            username: text(record, ["username", "user"]),
+            authEndpoint: text(record, ["registry_auth_endpoint", "auth_endpoint"])
         )
     }
 
+    private static func source(from record: [String: Any]) -> SbxSecret.Source {
+        if let ref = text(record, ["ref", "reference", "secret_ref", "source_ref"]) {
+            return .ref(ref)
+        }
+        if let command = text(record, ["command", "cmd", "source_command"]) {
+            return .command(command)
+        }
+        let value = field(record, ["source", "method", "auth", "auth_type", "provider", "origin"])
+        if let nested = value as? [String: Any] {
+            return source(from: nested)
+        }
+        guard let description = SandboxListParser.string(value)?.trimmingCharacters(in: .whitespaces) else {
+            return .value
+        }
+        let lowered = description.lowercased()
+        if lowered.hasPrefix("op://") || lowered.hasPrefix("arn:") {
+            return .ref(description)
+        }
+        if lowered.contains("oauth") {
+            return .oauth
+        }
+        return .value
+    }
+
     private static func scope(from record: [String: Any]) -> SbxSecret.Scope? {
-        if let sandbox = SandboxListParser.string(SandboxListParser.value(in: record, for: ["sandbox", "sandbox_name"])),
-           !sandbox.isEmpty {
+        if let sandbox = text(record, ["sandbox", "sandbox_name"]) {
             return .sandbox(sandbox)
         }
-        if let allSandboxes = SandboxListParser.value(in: record, for: ["all_sandboxes"]) as? Bool {
+        if let allSandboxes = field(record, ["all_sandboxes"]) as? Bool {
             return allSandboxes ? .global : .host
         }
-        guard let scope = SandboxListParser.string(SandboxListParser.value(in: record, for: ["scope"]))?
-            .trimmingCharacters(in: .whitespaces), !scope.isEmpty
-        else {
-            return nil
-        }
-        switch normalize(scope) {
+        guard let scope = text(record, ["scope"]) else { return nil }
+        switch normalize(scope.trimmingCharacters(in: CharacterSet(charactersIn: "()"))) {
         case "global", "all", "allsandboxes": return .global
         case "host", "hostonly": return .host
         default:
@@ -236,6 +480,28 @@ enum SecretListParser {
             }
             return .sandbox(scope)
         }
+    }
+
+    private static func field(_ record: [String: Any], _ keys: [String]) -> Any? {
+        SandboxListParser.value(in: record, for: keys)
+    }
+
+    /// A non-empty string for the first of `keys` the record has.
+    private static func text(_ record: [String: Any], _ keys: [String]) -> String? {
+        guard let string = SandboxListParser.string(field(record, keys))?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty
+        else {
+            return nil
+        }
+        return string
+    }
+
+    private static func list(_ value: Any?) -> [String] {
+        if let array = value as? [Any] {
+            return array.compactMap { SandboxListParser.string($0) }.filter { !$0.isEmpty }
+        }
+        guard let string = value as? String else { return [] }
+        return string.split { $0 == "," || $0.isWhitespace }.map(String.init)
     }
 
     private static func normalize(_ key: String) -> String {

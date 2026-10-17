@@ -7,6 +7,9 @@ struct SandboxDetailView: View {
     @State private var networkError: String?
     @State private var isLoadingNetwork = false
     @State private var approvalResponse: ApprovalResponse?
+    @Environment(SecretStore.self) private var secrets
+    @State private var secretEditor: SecretDraft?
+    @State private var secretRemoval: SecretRemoval?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,7 +26,11 @@ struct SandboxDetailView: View {
         .task(id: sandbox.name) {
             await refreshNetwork()
         }
+        .task(id: sandbox.name) {
+            await secrets.refresh()
+        }
         .approvalResponseDialog($approvalResponse)
+        .secretEditing(editor: $secretEditor, removal: $secretRemoval)
         .navigationTitle(sandbox.name)
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -120,6 +127,8 @@ struct SandboxDetailView: View {
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
 
+            secretsSection
+
             Section {
                 if network == nil {
                     networkPlaceholder
@@ -163,6 +172,39 @@ struct SandboxDetailView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Secrets scoped to this sandbox. Global secrets it was created with
+    /// aren't listed, since sbx doesn't say which those were.
+    private var secretsSection: some View {
+        let scoped = secrets.secrets(for: sandbox.name)
+        return Section {
+            if scoped.isEmpty {
+                Text(secrets.hasLoaded ? "No secrets just for this sandbox." : "Loading…")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(scoped) { secret in
+                SecretRow(secret: secret, editor: $secretEditor, removal: $secretRemoval)
+            }
+        } header: {
+            HStack {
+                Text(scoped.isEmpty ? "Secrets" : "Secrets (\(scoped.count.formatted()))")
+                Spacer()
+                Button("Add Secret…") {
+                    secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
+                }
+                .controlSize(.small)
+            }
+        } footer: {
+            HStack(spacing: 4) {
+                Text("Used instead of the matching global secret.")
+                    .foregroundStyle(.secondary)
+                Button("Show All Secrets") {
+                    store.selection = .secrets
+                }
+                .buttonStyle(.link)
+            }
+        }
     }
 
     @ViewBuilder
