@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 /// The output of a command that fixes the setup, such as installing sbx,
-/// starting the daemon or signing in, laid out like the output of creating a
-/// sandbox.
+/// starting the daemon or signing in, or that authorises an MCP server, laid
+/// out like the output of creating a sandbox.
 struct SbxCommandSheet: View {
     let run: SbxCommandRun
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +30,10 @@ struct SbxCommandSheet: View {
                 deviceSignIn(signIn)
             }
 
+            if run.phase == .running, let url = run.authorisationURL {
+                authorisation(url)
+            }
+
             ConsoleOutputView(output: run.output)
 
             if case .failed = run.phase {
@@ -37,6 +41,11 @@ struct SbxCommandSheet: View {
                     Text("If it doesn't work here, run this in Terminal instead:")
                         .foregroundStyle(.secondary)
                     CopyableCommand(command: run.commandLine)
+                    if case .authoriseMCP = run.kind {
+                        Button("Open in Terminal") {
+                            try? TerminalLauncher.open(sbxArguments: run.kind.arguments)
+                        }
+                    }
                 }
             }
         }
@@ -92,12 +101,28 @@ struct SbxCommandSheet: View {
         .background(Color.accentColor.opacity(0.1), in: .rect(cornerRadius: 10))
     }
 
+    /// sbx has already opened the page, so this is for when the browser
+    /// didn't come forward or the tab was closed.
+    private func authorisation(_ url: URL) -> some View {
+        HStack(spacing: 12) {
+            Text("Approve access in your browser. sbx carries on once you have.")
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Open Again") { openURL(url) }
+                .help(url.absoluteString)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.1), in: .rect(cornerRadius: 10))
+    }
+
     private var titles: (running: String, succeeded: String, failed: String) {
         switch run.kind {
         case .install: ("Installing sbx…", "sbx Installed", "Couldn't Install sbx")
         case .upgrade: ("Upgrading sbx…", "sbx Upgraded", "Couldn't Upgrade sbx")
         case .startDaemon: ("Starting the sbx Daemon…", "Daemon Started", "Couldn't Start the Daemon")
         case .signIn: ("Signing In to Docker…", "Signed In", "Couldn't Sign In")
+        case let .authoriseMCP(server): ("Authorising “\(server)”…", "“\(server)” Authorised", "Couldn't Authorise “\(server)”")
         }
     }
 

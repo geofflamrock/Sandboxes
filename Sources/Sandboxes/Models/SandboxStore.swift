@@ -5,6 +5,7 @@ import Observation
 enum SidebarItem: Hashable {
     case sandbox(Sandbox.ID)
     case secrets
+    case mcpServers
 }
 
 @MainActor
@@ -31,6 +32,9 @@ final class SandboxStore {
     /// A sandbox whose pending approvals its detail view should scroll to,
     /// after the user clicked a notification about them.
     var approvalsToReveal: Sandbox.ID?
+    /// An MCP server the MCP Servers page should scroll to, after the user
+    /// clicked Show Server on one of its secrets.
+    var mcpServerToReveal: String?
     /// The workload image the New Sandbox window starts with, or nil for the
     /// most recently used one.
     private(set) var createWorkload: String?

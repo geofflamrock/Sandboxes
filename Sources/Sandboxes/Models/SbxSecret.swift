@@ -13,6 +13,11 @@ struct SbxSecret: Identifiable, Hashable {
         /// Anything else `sbx secret ls` lists, such as MCP credentials,
         /// which the app shows but doesn't change.
         case other(String)
+
+        /// A header placeholder's value or an OAuth client secret for an MCP
+        /// server, named `mcp:<server>:<key>`. Set and removed on the MCP
+        /// Servers page.
+        static let mcp = Kind.other("mcp")
     }
 
     enum Scope: Hashable {
@@ -70,10 +75,33 @@ struct SbxSecret: Identifiable, Hashable {
 
     /// The service's name as people write it, such as "GitHub".
     var title: String {
-        switch kind {
+        if let mcp = mcpName {
+            return mcp.key
+        }
+        return switch kind {
         case .service: Self.serviceTitle(name)
         case .custom, .registry, .other: name
         }
+    }
+
+    /// The server and key of an MCP secret, such as "acme" and "api-key" for
+    /// `mcp:acme:api-key`.
+    var mcpName: (server: String, key: String)? {
+        Self.mcpName(name)
+    }
+
+    /// Records sbx keeps next to an MCP secret, such as `mcp:acme:api-key:endpoint`,
+    /// which tie it to the server's URL or OAuth client. sbx manages them, so
+    /// they aren't listed.
+    var isMCPMetadata: Bool {
+        guard let key = mcpName?.key else { return false }
+        return key.hasSuffix(":endpoint") || key.hasSuffix(":identity")
+    }
+
+    static func mcpName(_ name: String) -> (server: String, key: String)? {
+        let parts = name.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "mcp", !parts[1].isEmpty, !parts[2].isEmpty else { return nil }
+        return (String(parts[1]), String(parts[2]))
     }
 
     var canEdit: Bool {
@@ -408,7 +436,7 @@ enum SecretListParser {
         let registry = text(record, ["registry", "registry_host", "hostname"])
         let hosts = list(field(record, ["hosts", "host_patterns", "domains", "allowed_hosts"]))
         let placeholder = text(record, ["placeholder", "placeholder_value"])
-        let kind: SbxSecret.Kind
+        var kind: SbxSecret.Kind
         if registry != nil || typeName?.contains("registry") == true || inheritedKind == .registry {
             kind = .registry
         } else if typeName?.contains("custom") == true || placeholder != nil || !hosts.isEmpty || inheritedKind == .custom {
@@ -424,6 +452,11 @@ enum SecretListParser {
         case .service, .other: text(record, ["service", "name", "id"])
         }
         guard let name, !name.isEmpty else { return nil }
+        // sbx lists MCP secrets as services named mcp:<server>:<key>, but they
+        // only take a stored value and are managed with their server.
+        if kind == .service, SbxSecret.mcpName(name) != nil {
+            kind = .mcp
+        }
         return SbxSecret(
             kind: kind,
             name: name,
