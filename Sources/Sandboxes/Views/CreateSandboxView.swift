@@ -55,32 +55,37 @@ private struct CreateSandboxForm: View {
 
     @Environment(RecentsStore.self) private var recents
     @State private var kitDraft = KitDraft()
+    @State private var tab = CreateSheetTab.general
 
+    // A segmented control over a borderless form, rather than a TabView, whose
+    // macOS tabs draw a bordered box around the content.
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") {
-                Form {
-                    agentSection
-                    nameSection
-                    workspaceSection
-                }
-                .formStyle(.grouped)
-            }
-            Tab("Kits", systemImage: "shippingbox") {
-                Form {
-                    kitsSection
-                }
-                .formStyle(.grouped)
-            }
-            Tab("Runtime", systemImage: "cpu") {
-                Form {
-                    resourcesSection
-                    environmentSection
-                }
-                .formStyle(.grouped)
+        Form {
+            switch tab {
+            case .general:
+                agentSection
+                nameSection
+                workspaceSection
+            case .kits:
+                kitsSection
+            case .runtime:
+                resourcesSection
+                environmentSection
             }
         }
-        .padding([.horizontal, .top])
+        .formStyle(.grouped)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Options", selection: $tab) {
+                ForEach(CreateSheetTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.large)
+            .fixedSize()
+            .padding(.top)
+        }
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
@@ -476,6 +481,22 @@ private struct CreateSandboxForm: View {
     private func create() {
         addDraftKit()
         onCreate()
+    }
+}
+
+private enum CreateSheetTab: CaseIterable, Identifiable {
+    case general
+    case kits
+    case runtime
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .kits: "Kits"
+        case .runtime: "Runtime"
+        }
     }
 }
 
