@@ -16,7 +16,8 @@ struct SbxSecret: Identifiable, Hashable {
     }
 
     enum Scope: Hashable {
-        /// Every sandbox created from now on.
+        /// Every sandbox. Service secrets reach existing sandboxes straight
+        /// away; registry credentials only reach sandboxes created later.
         case global
         /// Only `sbx` itself on the host, such as registry credentials for
         /// pulling templates and kits.

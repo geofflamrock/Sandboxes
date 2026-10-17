@@ -25,7 +25,7 @@ struct SecretsView: View {
                     Text("Couldn't list secrets: \(error)")
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Given to sandboxes created after the secret is set. To give one to an existing sandbox, add it to that sandbox.")
+                    Text("Service secrets apply to every sandbox straight away, including existing ones. Registry credentials only go to sandboxes created after they're set, and existing sandboxes may need recreating to get a custom secret's environment variable.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -101,10 +101,12 @@ struct SecretRemoval: Identifiable {
         if sandbox != nil {
             return "The sandbox no longer exists, so nothing uses them."
         }
-        switch secrets.first?.scope {
-        case let .sandbox(name): return "“\(name)” will no longer get it."
-        case .host: return "sbx will no longer use it to pull templates and kits."
-        default: return "Sandboxes created from now on won't get it."
+        switch (secrets.first?.kind, secrets.first?.scope) {
+        case let (_, .sandbox(name)): return "“\(name)” will no longer get it."
+        case (_, .host): return "sbx will no longer use it to pull templates and kits."
+        case (.registry, _): return "Sandboxes created from now on won't get it."
+        case (.service, _): return "Sandboxes stop getting it straight away, unless they have their own."
+        default: return "Sandboxes will no longer get it."
         }
     }
 }
@@ -199,9 +201,7 @@ struct SecretRow: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(.quaternary, in: .capsule)
-                    .help(isOverridden
-                        ? "A secret for this sandbox is used instead of this global one."
-                        : "A global secret. Change it in Management › Secrets.")
+                    .help(readOnlyHelp)
             } else if secrets.isRemoving(secret) {
                 ProgressView()
                     .controlSize(.small)
@@ -223,6 +223,17 @@ struct SecretRow: View {
             if readOnlyLabel == nil, secret.removeArguments != nil {
                 Button("Remove…", role: .destructive) { remove() }
             }
+        }
+    }
+
+    private var readOnlyHelp: String {
+        if isOverridden {
+            return "A secret for this sandbox is used instead of this global one."
+        }
+        return switch secret.kind {
+        case .registry: "A global secret, given only to sandboxes created after it was set. Change it in Management › Secrets."
+        case .custom: "A global secret. Sandboxes created before it was set may not have its environment variable. Change it in Management › Secrets."
+        case .service, .other: "A global secret. Change it in Management › Secrets."
         }
     }
 
@@ -369,7 +380,7 @@ private struct SecretEditor: View {
                         if draft.kind == .registry {
                             Text("Pulls on this Mac only").tag(SbxSecret.Scope.host)
                         }
-                        Text("All new sandboxes").tag(SbxSecret.Scope.global)
+                        Text(draft.kind == .registry ? "All new sandboxes" : "All sandboxes").tag(SbxSecret.Scope.global)
                         if !scopeNames.isEmpty {
                             Divider()
                         }
@@ -463,14 +474,18 @@ private struct SecretEditor: View {
 
     private var scopeFooter: String {
         switch (draft.kind, draft.scope) {
-        case (.custom, _):
+        case (.custom, .sandbox):
             "Sandboxes see the placeholder instead of the secret. sbx swaps in the secret on requests to these hosts."
+        case (.custom, _):
+            "Sandboxes see the placeholder instead of the secret. sbx swaps in the secret on requests to these hosts. Existing sandboxes may need recreating to get the environment variable."
         case (.registry, .host):
             "Used to pull private templates and kits. Sandboxes don't get it."
+        case (.registry, .global):
+            "Given to sandboxes created after it's set. To use it in an existing sandbox, add it for that sandbox."
         case (_, .sandbox):
             "Used instead of the global secret for this sandbox."
         default:
-            "Given to sandboxes created after it's set."
+            "Applies to every sandbox straight away, including existing ones."
         }
     }
 
