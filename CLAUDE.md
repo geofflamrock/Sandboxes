@@ -24,10 +24,10 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 
 ## Layout
 
-- `Sources/Sandboxes/SandboxesApp.swift`: the `App`, its scenes (main `Window`, `MenuBarExtra`, `Settings`) and `AppDelegate`, which owns the long-lived stores.
+- `Sources/Sandboxes/SandboxesApp.swift`: the `App`, its scenes (the main `Window`, the **New Sandbox** `Window`, `MenuBarExtra`, `Settings`) and `AppDelegate`, which owns the long-lived stores.
 - `Models/`: `@Observable` stores and value types, plus parsers for `sbx` output.
 - `Services/`: talking to the outside world: `SbxCLI` (runs processes), `ShellEnvironment` (login shell `PATH`), `TerminalLauncher`, `ClaudeDesktopLauncher`, `ApprovalNotifier`, `UpdateChecker`, `AppWindows`, `Homebrew`.
-- `Views/`: SwiftUI views, one file per screen or sheet.
+- `Views/`: SwiftUI views, one file per window, screen or sheet.
 - `Design/AppIcon.icon`: Icon Composer file. Its layers come from `scripts/generate-app-icon.py`, which also writes `Design/AppIcon.svg`.
 
 ## Patterns to follow
@@ -61,7 +61,9 @@ Don't guess `sbx` flags or subcommands. Check them with `sbx <command> --help` w
 ### UI
 
 - Use system Liquid Glass styles: `.buttonStyle(.glassProminent)` for primary actions, `.glassEffect(.regular, in: …)` (`.regular.interactive()` for tappable shapes) for floating chrome. Don't fake glass with materials or custom blurs.
-- The app keeps running in the menu bar when its window closes. Open windows through `AppWindows.showMain()` and `AppWindows.showSettings(_:)`, which also switch the activation policy, not `openWindow` directly.
+- The app keeps running in the menu bar when its windows close, and leaves the Dock when none is visible or minimized. Open windows through `AppWindows` (`showMain()`, `showCreate()`, `showSettings(_:)`), which also switch the activation policy, not `openWindow` directly. To open New Sandbox, call `store.presentCreate(workload:)`.
+- Each `Window` scene has an ID in `AppWindows`, an `AppWindows.open…` closure that `ContentView` and `MenuBarLabel` set from `openWindow` (the menu bar label is always there, so it works with every window closed), and a `WindowReader(kind:)` in its content so `AppWindows` can track it (Settings has one too, and opens with `openSettings`). Close one with `dismissWindow(id:)`.
+- Use a separate `Window` rather than a sheet when the content needs a title bar, such as New Sandbox's tabs (`TabView` with `.tabViewStyle(.tabBarOnly)`). Call it the **New Sandbox window** in code comments and text, not "the create sheet".
 - Write UI text in Apple's style: title case for buttons, menus and alert titles, curly quotes around names (`“name”`), `…` on items that open something needing more input, and plain sentences for messages.
 
 ### Code style
