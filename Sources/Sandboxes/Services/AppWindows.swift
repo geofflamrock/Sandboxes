@@ -90,7 +90,9 @@ enum AppWindows {
     }
 
     private static func leaveDockIfNoWindowsAreOpen() {
-        guard !windows.values.contains(where: { $0.window?.isVisible == true }) else { return }
+        // A minimized window isn't visible, but leaving the Dock would
+        // take it with it, with no way back to it.
+        guard !windows.values.contains(where: { $0.window.map { $0.isVisible || $0.isMiniaturized } == true }) else { return }
         NSApp.setActivationPolicy(.accessory)
     }
 }
