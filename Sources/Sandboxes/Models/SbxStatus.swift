@@ -136,6 +136,15 @@ final class SbxStatus {
         return installation
     }
 
+    /// Whether the installed sbx has `sbx mcp unload`, added in v0.48.0. True
+    /// when the version isn't known, such as for a nightly build.
+    var supportsMCPUnload: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.48.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// A newer stable release than the installed version.
     var availableUpgrade: Release? {
         guard let installed = installation?.version, let latest, installed < latest.version
