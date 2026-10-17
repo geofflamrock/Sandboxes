@@ -101,6 +101,8 @@ struct SandboxDetailView: View {
                     }
                     .help("Store a secret for this sandbox")
                 }
+                // Its own glass group, apart from the sandbox's actions.
+                ToolbarSpacer(.fixed)
             }
             ToolbarItemGroup {
                 SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
