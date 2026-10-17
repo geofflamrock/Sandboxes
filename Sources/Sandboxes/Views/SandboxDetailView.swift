@@ -33,7 +33,7 @@ struct SandboxDetailView: View {
     @State private var secretRemoval: SecretRemoval?
 
     // The network policy is polled here rather than in the Network tab so
-    // its badge and the approvals row on Overview stay current on every tab.
+    // the Network tab's count and the approvals row on Overview stay current.
     var body: some View {
         let approvalCount = store.approvals(for: sandbox).count
         TabView(selection: $tab) {
@@ -57,9 +57,14 @@ struct SandboxDetailView: View {
                     }
                     .formStyle(.grouped)
                 } label: {
-                    Text(tab.title)
+                    // Title bar tabs don't draw badges, so the count is in
+                    // the title, as in the section headers.
+                    if tab == .network, approvalCount > 0 {
+                        Text("\(tab.title) (\(approvalCount.formatted()))")
+                    } else {
+                        Text(tab.title)
+                    }
                 }
-                .badge(tab == .network ? approvalCount : 0)
             }
         }
         .tabViewStyle(.tabBarOnly)
