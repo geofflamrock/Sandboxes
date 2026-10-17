@@ -33,9 +33,8 @@ struct SandboxDetailView: View {
     @State private var secretRemoval: SecretRemoval?
 
     // The network policy is polled here rather than in the Network tab so
-    // the Network tab's count and the approvals row on Overview stay current.
+    // the approvals row on Overview stays current.
     var body: some View {
-        let approvalCount = store.approvals(for: sandbox).count
         TabView(selection: $tab) {
             ForEach(SandboxDetailTab.allCases) { tab in
                 Tab(value: tab) {
@@ -57,13 +56,7 @@ struct SandboxDetailView: View {
                     }
                     .formStyle(.grouped)
                 } label: {
-                    // Title bar tabs don't draw badges, so the count is in
-                    // the title, as in the section headers.
-                    if tab == .network, approvalCount > 0 {
-                        Text("\(tab.title) (\(approvalCount.formatted()))")
-                    } else {
-                        Text(tab.title)
-                    }
+                    Text(tab.title)
                 }
             }
         }
@@ -89,6 +82,15 @@ struct SandboxDetailView: View {
                 }
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")
+            }
+            // Left of the sandbox's actions, so they stay put as tabs change.
+            if tab == .secrets {
+                ToolbarItem {
+                    Button("Add Secret", systemImage: "plus") {
+                        secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
+                    }
+                    .help("Store a secret for this sandbox")
+                }
             }
             // Kept out of the actions' group so it doesn't widen it, and always
             // laid out so the toolbar doesn't shift when it appears.
@@ -279,13 +281,7 @@ struct SandboxDetailView: View {
                 )
             }
         } header: {
-            HStack {
-                Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
-                Spacer()
-                Button("Add Secret…") {
-                    secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
-                }
-            }
+            Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
         } footer: {
             HStack(spacing: 4) {
                 Text("Secrets for this sandbox override global secrets for the same service.")
