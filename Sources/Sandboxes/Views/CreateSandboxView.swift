@@ -56,55 +56,73 @@ private struct CreateSandboxForm: View {
     @Environment(RecentsStore.self) private var recents
     @State private var kitDraft = KitDraft()
 
-    // The optional sections stay open or closed the way they were last left,
-    // so options someone uses often are one step closer.
-    @AppStorage("createSheetShowsKits") private var showsKits = false
-    @AppStorage("createSheetShowsResources") private var showsResources = false
-    @AppStorage("createSheetShowsEnvironment") private var showsEnvironment = false
-
     var body: some View {
-        Form {
-            agentSection
-            workspaceSection
-
-            Section {
-                TextField("Name", text: $request.name, prompt: Text("Automatic"))
-            } footer: {
-                Text("Leave empty to let sbx choose a name.")
-                    .foregroundStyle(.secondary)
+        TabView {
+            Tab("General", systemImage: "gearshape") {
+                Form {
+                    agentSection
+                    nameSection
+                    workspaceSection
+                }
+                .formStyle(.grouped)
             }
-
-            kitsSection
-            resourcesSection
-            environmentSection
-
-            Section("Command") {
-                Text(commandPreview)
-                    .font(.callout.monospaced())
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Tab("Kits", systemImage: "shippingbox") {
+                Form {
+                    kitsSection
+                }
+                .formStyle(.grouped)
+            }
+            Tab("Runtime", systemImage: "cpu") {
+                Form {
+                    resourcesSection
+                    environmentSection
+                }
+                .formStyle(.grouped)
             }
         }
-        .formStyle(.grouped)
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
-                    Label(message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel, action: onCancel)
-                    .keyboardShortcut(.cancelAction)
-                Button("Create", action: create)
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
-                    .disabled(request.validationMessage != nil)
+        .padding([.horizontal, .top])
+        // The command and the buttons reflect every tab, so they stay in view whichever is open.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                commandSection
+                actionBar
             }
-            .controlSize(.large)
             .padding()
         }
+    }
+
+    // MARK: Footer
+
+    private var commandSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Command")
+                .font(.headline)
+            Text(commandPreview)
+                .font(.callout.monospaced())
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(.background.secondary, in: .rect(cornerRadius: 6))
+        }
+    }
+
+    private var actionBar: some View {
+        HStack {
+            if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button("Cancel", role: .cancel, action: onCancel)
+                .keyboardShortcut(.cancelAction)
+            Button("Create", action: create)
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.glassProminent)
+                .disabled(request.validationMessage != nil)
+        }
+        .controlSize(.large)
     }
 
     // MARK: Agent
@@ -129,6 +147,17 @@ private struct CreateSandboxForm: View {
             Text("Agent")
         } footer: {
             Text("Pick an agent, or enter any v3 workload kit from an OCI registry.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Name
+
+    private var nameSection: some View {
+        Section {
+            TextField("Name", text: $request.name, prompt: Text("Automatic"))
+        } footer: {
+            Text("Leave empty to let sbx choose a name.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -223,11 +252,7 @@ private struct CreateSandboxForm: View {
     // MARK: Kits
 
     private var kitsSection: some View {
-        CollapsibleSection(
-            title: "Kits",
-            summary: request.kits.isEmpty ? "None" : request.kits.count == 1 ? "1 kit" : "\(request.kits.count) kits",
-            isExpanded: $showsKits
-        ) {
+        Section {
             ForEach(request.kits, id: \.self) { kit in
                 HStack {
                     Image(systemName: KitSource(reference: kit).systemImage)
@@ -344,7 +369,7 @@ private struct CreateSandboxForm: View {
     // MARK: Resources
 
     private var resourcesSection: some View {
-        CollapsibleSection(title: "Resources", summary: resourcesSummary, isExpanded: $showsResources) {
+        Section {
             Picker("CPUs", selection: $request.cpus) {
                 Text("Automatic").tag(0)
                 Divider()
@@ -359,21 +384,12 @@ private struct CreateSandboxForm: View {
                     Text("\(size) GB").tag(size)
                 }
             }
+        } header: {
+            Text("Resources")
         } footer: {
             Text("Automatic uses all \(HostResources.cpuCount) of your Mac's CPUs and \(Self.formattedMemory(HostResources.defaultMemoryGiB)) of memory.")
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var resourcesSummary: String {
-        var parts: [String] = []
-        if request.cpus > 0 {
-            parts.append(request.cpus == 1 ? "1 CPU" : "\(request.cpus) CPUs")
-        }
-        if request.memoryGiB > 0 {
-            parts.append("\(request.memoryGiB) GB")
-        }
-        return parts.isEmpty ? "Automatic" : parts.joined(separator: ", ")
     }
 
     private static let memoryChoices: [Int] = {
@@ -389,7 +405,7 @@ private struct CreateSandboxForm: View {
     // MARK: Environment
 
     private var environmentSection: some View {
-        CollapsibleSection(title: "Environment", summary: environmentSummary, isExpanded: $showsEnvironment) {
+        Section {
             ForEach($request.environment) { $variable in
                 HStack {
                     TextField("Name", text: $variable.key, prompt: Text("NAME"))
@@ -425,19 +441,12 @@ private struct CreateSandboxForm: View {
                 Spacer()
             }
             .buttonStyle(.borderless)
+        } header: {
+            Text("Environment")
         } footer: {
             Text("Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files.")
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var environmentSummary: String {
-        let variables = request.environment.filter { !$0.isBlank }.count
-        let files = request.environmentFiles.count
-        var parts: [String] = []
-        if variables > 0 { parts.append(variables == 1 ? "1 variable" : "\(variables) variables") }
-        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
-        return parts.isEmpty ? "None" : parts.joined(separator: ", ")
     }
 
     private func addEnvironmentFiles() {
@@ -491,52 +500,6 @@ private struct KitDraft {
     mutating func clearFields() {
         image = ""
         git = GitKitDraft()
-    }
-}
-
-/// A form section that folds away to a single row showing `summary`. The
-/// toggle is a row rather than the section header so the section is never
-/// empty: an empty section makes the grouped form style the headers that
-/// follow it differently.
-private struct CollapsibleSection<Content: View, Footer: View>: View {
-    let title: String
-    let summary: String
-    @Binding var isExpanded: Bool
-    @ViewBuilder let content: Content
-    @ViewBuilder let footer: Footer
-
-    var body: some View {
-        Section {
-            Button {
-                withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 12)
-                    Text(title)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    if !isExpanded {
-                        Text(summary)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed, \(summary)")
-
-            if isExpanded {
-                content
-            }
-        } footer: {
-            if isExpanded {
-                footer
-            }
-        }
     }
 }
 
