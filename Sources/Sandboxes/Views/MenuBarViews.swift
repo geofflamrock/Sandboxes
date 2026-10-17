@@ -98,12 +98,19 @@ extension NSImage {
             context.addPath(polygon([point(512, 355.2), point(842, 530.1), point(842, 654.1), point(512, 829), point(182, 654.1), point(182, 530.1)]))
             context.fillPath()
 
-            // Cut out the inside of the rim, the edges between the rim and the
-            // walls, and a gap around the head, since a template image only
-            // has one colour.
+            // Cut out the inside of the rim, then fill the sand back in a
+            // little smaller, so a gap separates it from the rim, since a
+            // template image only has one colour.
             context.setBlendMode(.clear)
             context.addPath(polygon([point(512, 384.9), point(785.9, 530.1), point(512, 675.3), point(238.1, 530.1)]))
             context.fillPath()
+            context.setBlendMode(.normal)
+            context.addPath(polygon([point(512, 433.6), point(709.2, 538.1), point(512, 642.6), point(314.8, 538.1)]))
+            context.fillPath()
+
+            // Cut out the edges between the rim and the walls, and a gap
+            // around the head.
+            context.setBlendMode(.clear)
             context.setLineWidth(1)
             context.setLineJoin(.round)
             context.move(to: point(182, 530.1))
