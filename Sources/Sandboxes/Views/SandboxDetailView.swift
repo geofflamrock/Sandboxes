@@ -211,7 +211,7 @@ struct SandboxDetailView: View {
             HStack(spacing: 4) {
                 Text("Secrets for this sandbox override global secrets for the same service.")
                     .foregroundStyle(.secondary)
-                Button("Manage secrets") {
+                Button("Manage Secrets") {
                     store.selection = .secrets
                 }
                 .buttonStyle(.link)

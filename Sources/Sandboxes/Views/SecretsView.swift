@@ -112,8 +112,9 @@ struct SecretRemoval: Identifiable {
 }
 
 extension View {
-    /// The sheet for adding or editing a secret, and the confirmation and
-    /// error for removing secrets.
+    /// The sheet for adding or editing a secret, and the confirmation for
+    /// removing secrets. Failures to remove show through the secret store's
+    /// `actionError`, in the main window.
     func secretEditing(editor: Binding<SecretDraft?>, removal: Binding<SecretRemoval?>) -> some View {
         modifier(SecretEditing(editor: editor, removal: removal))
     }
@@ -124,7 +125,6 @@ private struct SecretEditing: ViewModifier {
     @Binding var removal: SecretRemoval?
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
-    @State private var removalError: String?
 
     func body(content: Content) -> some View {
         content
@@ -140,28 +140,10 @@ private struct SecretEditing: ViewModifier {
                 presenting: removal
             ) { removal in
                 Button("Remove", role: .destructive) {
-                    Task {
-                        do {
-                            try await secrets.remove(removal.secrets)
-                        } catch {
-                            removalError = error.localizedDescription
-                        }
-                    }
+                    Task { await secrets.remove(removal.secrets) }
                 }
             } message: { removal in
                 Text(removal.message)
-            }
-            .alert(
-                "Couldn't Remove the Secret",
-                isPresented: Binding(
-                    get: { removalError != nil },
-                    set: { if !$0 { removalError = nil } }
-                ),
-                presenting: removalError
-            ) { _ in
-                Button("OK") {}
-            } message: { error in
-                Text(error)
             }
     }
 }

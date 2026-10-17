@@ -17,6 +17,7 @@ final class SecretStore {
     private(set) var loadError: String?
     /// Secrets with a removal in flight.
     private(set) var removingIDs: Set<SbxSecret.ID> = []
+    var actionError: SandboxStore.ActionError?
 
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
@@ -71,18 +72,18 @@ final class SecretStore {
         await refresh()
     }
 
-    func remove(_ secrets: [SbxSecret]) async throws {
+    func remove(_ secrets: [SbxSecret]) async {
         let ids = Set(secrets.map(\.id))
         removingIDs.formUnion(ids)
         defer { removingIDs.subtract(ids) }
-        do {
-            for secret in secrets {
-                guard let arguments = secret.removeArguments else { continue }
+        for secret in secrets {
+            guard let arguments = secret.removeArguments else { continue }
+            do {
                 try await SbxCLI.runChecked(arguments)
+            } catch {
+                actionError = SandboxStore.ActionError(title: "Couldn't Remove “\(secret.title)”", message: error.localizedDescription)
+                break
             }
-        } catch {
-            await refresh()
-            throw error
         }
         await refresh()
     }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(SecretStore.self) private var secrets
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -43,6 +44,18 @@ struct ContentView: View {
                 set: { if !$0 { store.actionError = nil } }
             ),
             presenting: store.actionError
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.message)
+        }
+        .alert(
+            secrets.actionError?.title ?? "",
+            isPresented: Binding(
+                get: { secrets.actionError != nil },
+                set: { if !$0 { secrets.actionError = nil } }
+            ),
+            presenting: secrets.actionError
         ) { _ in
             Button("OK") {}
         } message: { error in
