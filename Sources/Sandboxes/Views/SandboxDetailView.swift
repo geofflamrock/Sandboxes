@@ -174,21 +174,33 @@ struct SandboxDetailView: View {
         .formStyle(.grouped)
     }
 
-    /// Secrets scoped to this sandbox. Global secrets it was created with
-    /// aren't listed, since sbx doesn't say which those were.
+    /// Secrets scoped to this sandbox, which can be changed here, then the
+    /// global ones, which are changed in Management › Secrets. Host-only
+    /// registry credentials aren't given to sandboxes, so aren't listed.
     private var secretsSection: some View {
         let scoped = secrets.secrets(for: sandbox.name)
+        let global = secrets.secrets.filter { $0.scope == .global }
+        let count = scoped.count + global.count
         return Section {
-            if scoped.isEmpty {
-                Text(secrets.hasLoaded ? "No secrets just for this sandbox." : "Loading…")
+            if count == 0 {
+                Text(secrets.hasLoaded ? "No secrets." : "Loading…")
                     .foregroundStyle(.secondary)
             }
             ForEach(scoped) { secret in
                 SecretRow(secret: secret, editor: $secretEditor, removal: $secretRemoval)
             }
+            ForEach(global) { secret in
+                SecretRow(
+                    secret: secret,
+                    editor: .constant(nil),
+                    removal: .constant(nil),
+                    readOnlyLabel: "Global",
+                    isOverridden: scoped.contains { $0.kind == secret.kind && $0.name == secret.name }
+                )
+            }
         } header: {
             HStack {
-                Text(scoped.isEmpty ? "Secrets" : "Secrets (\(scoped.count.formatted()))")
+                Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
                 Spacer()
                 Button("Add Secret…") {
                     secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
@@ -197,9 +209,9 @@ struct SandboxDetailView: View {
             }
         } footer: {
             HStack(spacing: 4) {
-                Text("Used instead of the matching global secret.")
+                Text("Secrets for this sandbox override global secrets for the same service.")
                     .foregroundStyle(.secondary)
-                Button("Show All Secrets") {
+                Button("Manage secrets") {
                     store.selection = .secrets
                 }
                 .buttonStyle(.link)

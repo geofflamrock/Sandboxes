@@ -164,11 +164,17 @@ private struct SecretEditing: ViewModifier {
     }
 }
 
-/// A secret with buttons to edit and remove it.
+/// A secret with buttons to edit and remove it, or a label saying where it's
+/// managed when it's read-only.
 struct SecretRow: View {
     let secret: SbxSecret
     @Binding var editor: SecretDraft?
     @Binding var removal: SecretRemoval?
+    /// Shown in place of the buttons, such as "Global" for a global secret
+    /// listed on a sandbox's page.
+    var readOnlyLabel: String?
+    /// Whether a secret scoped to the sandbox replaces this one.
+    var isOverridden = false
     @Environment(SecretStore.self) private var secrets
 
     var body: some View {
@@ -186,7 +192,17 @@ struct SecretRow: View {
                 }
             }
             Spacer()
-            if secrets.isRemoving(secret) {
+            if let readOnlyLabel {
+                Text(isOverridden ? "\(readOnlyLabel) · Overridden" : readOnlyLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.quaternary, in: .capsule)
+                    .help(isOverridden
+                        ? "A secret for this sandbox is used instead of this global one."
+                        : "A global secret. Change it in Management › Secrets.")
+            } else if secrets.isRemoving(secret) {
                 ProgressView()
                     .controlSize(.small)
             } else {
@@ -199,11 +215,12 @@ struct SecretRow: View {
                 }
             }
         }
+        .opacity(isOverridden ? 0.6 : 1)
         .contextMenu {
-            if secret.canEdit {
+            if readOnlyLabel == nil, secret.canEdit {
                 Button("Edit…") { edit() }
             }
-            if secret.removeArguments != nil {
+            if readOnlyLabel == nil, secret.removeArguments != nil {
                 Button("Remove…", role: .destructive) { remove() }
             }
         }
