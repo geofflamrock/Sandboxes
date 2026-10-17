@@ -1,8 +1,29 @@
 import SwiftUI
 
+/// The tabs of the sandbox detail view. The last one used is remembered
+/// across sandboxes, so watching traffic carries on when you switch.
+enum SandboxDetailTab: String, CaseIterable, Identifiable {
+    case overview
+    case network
+    case secrets
+
+    static let selectionKey = "sandboxDetailTab"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .overview: "Overview"
+        case .network: "Network"
+        case .secrets: "Secrets"
+        }
+    }
+}
+
 struct SandboxDetailView: View {
     let sandbox: Sandbox
     @Environment(SandboxStore.self) private var store
+    @AppStorage(SandboxDetailTab.selectionKey) private var tab = SandboxDetailTab.overview
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
     @State private var isLoadingNetwork = false
@@ -11,17 +32,39 @@ struct SandboxDetailView: View {
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
 
+    // The network policy is polled here rather than in the Network tab so
+    // the approvals row on Overview stays current.
     var body: some View {
-        ScrollViewReader { proxy in
-            form
-                .onChange(of: store.approvalsToReveal, initial: true) { _, name in
-                    guard name == sandbox.name else { return }
-                    store.approvalsToReveal = nil
-                    // Wait a turn so a newly shown sandbox's form is laid out.
-                    Task {
-                        withAnimation { proxy.scrollTo(DetailAnchor.approvals, anchor: .top) }
+        TabView(selection: $tab) {
+            ForEach(SandboxDetailTab.allCases) { tab in
+                Tab(value: tab) {
+                    Form {
+                        switch tab {
+                        case .overview:
+                            approvalsSummarySection
+                            detailsSection
+                            SandboxResourcesSection(sandbox: sandbox)
+                                .id(sandbox.name)
+                        case .network:
+                            approvalsSection
+                            policySection
+                            rulesSection
+                            trafficSection
+                        case .secrets:
+                            secretsSection
+                        }
                     }
+                    .formStyle(.grouped)
+                } label: {
+                    Text(tab.title)
                 }
+            }
+        }
+        .tabViewStyle(.tabBarOnly)
+        .onChange(of: store.approvalsToReveal, initial: true) { _, name in
+            guard name == sandbox.name else { return }
+            store.approvalsToReveal = nil
+            tab = .network
         }
         .task(id: sandbox.name) {
             await refreshNetwork()
@@ -49,6 +92,18 @@ struct SandboxDetailView: View {
                     .accessibilityHidden(!store.isBusy(sandbox))
             }
             .sharedBackgroundVisibility(.hidden)
+            // Left of the sandbox's actions, so they stay put as tabs change, and
+            // after the spinner, whose space would otherwise leave a gap.
+            if tab == .secrets {
+                ToolbarItem {
+                    Button("Add Secret", systemImage: "plus") {
+                        secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
+                    }
+                    .help("Store a secret for this sandbox")
+                }
+                // Without it, the button shares the Stop and Open Shell glass.
+                ToolbarSpacer(.fixed)
+            }
             ToolbarItemGroup {
                 SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
                     .labelStyle(.iconOnly)
@@ -56,123 +111,153 @@ struct SandboxDetailView: View {
         }
     }
 
-    private var form: some View {
-        Form {
-            let approvals = store.approvals(for: sandbox)
-            if !approvals.isEmpty {
-                Section {
-                    ForEach(approvals) { approval in
-                        NetworkApprovalRow(approval: approval) { action in
-                            switch action {
-                            case let .approve(option):
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
-                            case .deny:
-                                approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
-                            case let .dismiss(option):
-                                Task { await store.respond(to: approval, with: option) }
-                            }
-                        }
-                        .disabled(store.isResponding(to: approval))
-                    }
-                } header: {
-                    SectionHeader(
-                        title: "Pending Approvals (\(approvals.count.formatted()))",
-                        isLoading: approvals.contains { store.isResponding(to: $0) }
+    // MARK: - Overview
+
+    /// Points to the Network tab, where pending approvals are answered.
+    @ViewBuilder
+    private var approvalsSummarySection: some View {
+        let count = store.approvals(for: sandbox).count
+        if count > 0 {
+            Section {
+                HStack {
+                    Label(
+                        count == 1
+                            ? "1 request is waiting for your approval."
+                            : "\(count.formatted()) requests are waiting for your approval.",
+                        systemImage: "hand.raised"
                     )
-                } footer: {
-                    Text("This sandbox tried to reach these destinations and was blocked until you respond.")
-                        .foregroundStyle(.secondary)
-                }
-                .id(DetailAnchor.approvals)
-            }
-
-            Section {
-                LabeledContent("Status") {
-                    HStack(spacing: 6) {
-                        StatusDot(color: sandbox.state.color)
-                        Text(sandbox.statusLabel)
+                    Spacer()
+                    Button("Review") {
+                        tab = .network
                     }
                 }
-                if let agent = sandbox.agent {
-                    LabeledContent("Agent") {
-                        HStack(spacing: 6) {
-                            AgentIcon(agent: sandbox.knownAgent, size: 14)
-                                .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
-                            Text(agent).textSelection(.enabled)
-                        }
-                    }
-                }
-                if let createdAt = sandbox.createdAt {
-                    LabeledContent("Created") {
-                        TimelineView(.periodic(from: .now, by: 60)) { context in
-                            Text("\(DurationFormat.short(context.date.timeIntervalSince(createdAt))) ago (\(createdAt.formatted(date: .abbreviated, time: .shortened)))")
-                                .textSelection(.enabled)
-                        }
-                    }
-                }
-                LabeledContent(sandbox.workspaces.count > 1 ? "Workspaces" : "Workspace") {
-                    lines(sandbox.workspaces.map { ($0 as NSString).abbreviatingWithTildeInPath })
-                }
-                LabeledContent("Ports") {
-                    lines(sandbox.ports)
-                }
-                LabeledContent("Network Policy") {
-                    networkPolicy
-                }
-            } header: {
-                // The network policy is read along with the rules and traffic.
-                SectionHeader(title: "Details", isLoading: isLoadingNetwork)
-            }
-
-            SandboxResourcesSection(sandbox: sandbox)
-                .id(sandbox.name)
-
-            secretsSection
-
-            Section {
-                if network == nil {
-                    networkPlaceholder
-                }
-                if let network {
-                    if network.rules.isEmpty {
-                        Text("No rules apply to this sandbox.")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(network.rules) { rule in
-                        NetworkRuleRow(rule: rule)
-                    }
-                }
-            } header: {
-                SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingNetwork)
-            } footer: {
-                if let networkError {
-                    Text("Couldn't read the network policy: \(networkError)")
-                        .foregroundStyle(.secondary)
-                } else if network?.defaultDecision == .deny {
-                    Text("Requests that no rule allows are blocked, or wait for your approval.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                if network == nil {
-                    networkPlaceholder
-                }
-                if let network {
-                    if network.log.isEmpty {
-                        Text("No requests yet.")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(network.log) { entry in
-                        NetworkLogRow(entry: entry)
-                    }
-                }
-            } header: {
-                SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingNetwork)
             }
         }
-        .formStyle(.grouped)
     }
+
+    private var detailsSection: some View {
+        Section("Details") {
+            LabeledContent("Status") {
+                HStack(spacing: 6) {
+                    StatusDot(color: sandbox.state.color)
+                    Text(sandbox.statusLabel)
+                }
+            }
+            if let agent = sandbox.agent {
+                LabeledContent("Agent") {
+                    HStack(spacing: 6) {
+                        AgentIcon(agent: sandbox.knownAgent, size: 14)
+                            .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
+                        Text(agent).textSelection(.enabled)
+                    }
+                }
+            }
+            if let createdAt = sandbox.createdAt {
+                LabeledContent("Created") {
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        Text("\(DurationFormat.short(context.date.timeIntervalSince(createdAt))) ago (\(createdAt.formatted(date: .abbreviated, time: .shortened)))")
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            LabeledContent(sandbox.workspaces.count > 1 ? "Workspaces" : "Workspace") {
+                lines(sandbox.workspaces.map { ($0 as NSString).abbreviatingWithTildeInPath })
+            }
+            LabeledContent("Ports") {
+                lines(sandbox.ports)
+            }
+        }
+    }
+
+    // MARK: - Network
+
+    @ViewBuilder
+    private var approvalsSection: some View {
+        let approvals = store.approvals(for: sandbox)
+        if !approvals.isEmpty {
+            Section {
+                ForEach(approvals) { approval in
+                    NetworkApprovalRow(approval: approval) { action in
+                        switch action {
+                        case let .approve(option):
+                            approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .approve(option))
+                        case .deny:
+                            approvalResponse = ApprovalResponse(approval: approval, sandbox: sandbox, action: .deny)
+                        case let .dismiss(option):
+                            Task { await store.respond(to: approval, with: option) }
+                        }
+                    }
+                    .disabled(store.isResponding(to: approval))
+                }
+            } header: {
+                SectionHeader(
+                    title: "Pending Approvals (\(approvals.count.formatted()))",
+                    isLoading: approvals.contains { store.isResponding(to: $0) }
+                )
+            } footer: {
+                Text("This sandbox tried to reach these destinations and was blocked until you respond.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var policySection: some View {
+        Section {
+            LabeledContent("Network Policy") {
+                networkPolicy
+            }
+        } header: {
+            SectionHeader(title: "Policy", isLoading: isLoadingNetwork)
+        } footer: {
+            if let networkError {
+                Text("Couldn't read the network policy: \(networkError)")
+                    .foregroundStyle(.secondary)
+            } else if network?.defaultDecision == .deny {
+                Text("Requests that no rule allows are blocked, or wait for your approval.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var rulesSection: some View {
+        Section {
+            if network == nil {
+                networkPlaceholder
+            }
+            if let network {
+                if network.rules.isEmpty {
+                    Text("No rules apply to this sandbox.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(network.rules) { rule in
+                    NetworkRuleRow(rule: rule)
+                }
+            }
+        } header: {
+            SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingNetwork)
+        }
+    }
+
+    private var trafficSection: some View {
+        Section {
+            if network == nil {
+                networkPlaceholder
+            }
+            if let network {
+                if network.log.isEmpty {
+                    Text("No requests yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(network.log) { entry in
+                    NetworkLogRow(entry: entry)
+                }
+            }
+        } header: {
+            SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingNetwork)
+        }
+    }
+
+    // MARK: - Secrets
 
     /// Secrets scoped to this sandbox, which can be changed here, then the
     /// global ones, which are changed in Management › Secrets. Host-only
@@ -199,14 +284,7 @@ struct SandboxDetailView: View {
                 )
             }
         } header: {
-            HStack {
-                Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
-                Spacer()
-                Button("Add Secret…") {
-                    secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
-                }
-                .controlSize(.small)
-            }
+            Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
         } footer: {
             HStack(spacing: 4) {
                 Text("Secrets for this sandbox override global secrets for the same service.")
@@ -516,9 +594,4 @@ struct StatusDot: View {
             .fill(color)
             .frame(width: 8, height: 8)
     }
-}
-
-/// Places in the detail view to scroll to.
-private enum DetailAnchor: Hashable {
-    case approvals
 }

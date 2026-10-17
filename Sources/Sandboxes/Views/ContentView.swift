@@ -10,19 +10,19 @@ struct ContentView: View {
             SandboxSidebar()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            if store.selection == .secrets {
-                SecretsView()
-            } else if let sandbox = store.selectedSandbox {
-                SandboxDetailView(sandbox: sandbox)
-            } else {
-                HomeView()
+            Group {
+                if store.selection == .secrets {
+                    SecretsView()
+                } else if let sandbox = store.selectedSandbox {
+                    SandboxDetailView(sandbox: sandbox)
+                } else {
+                    HomeView()
+                }
             }
+            // Content scrolled under the toolbar and the sandbox tabs fades out,
+            // as in System Settings, rather than showing through behind them.
+            .scrollEdgeEffectStyle(.soft, for: .top)
         }
-        // The window starts with a non-scrolling detail view, so AppKit draws a
-        // hard titlebar separator and doesn't drop it when the Form arrives
-        // until the window next lays out. Hide it; scroll edge effects still
-        // mark the toolbar edge when content scrolls under it.
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .confirmationDialog(
             "Remove “\(store.removalCandidate?.name ?? "")”?",
             isPresented: Binding(
