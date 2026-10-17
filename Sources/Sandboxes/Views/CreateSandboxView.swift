@@ -57,35 +57,30 @@ private struct CreateSandboxForm: View {
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
 
-    // A segmented control over a borderless form, rather than a TabView, whose
-    // macOS tabs draw a bordered box around the content.
+    // The tab bar only style leaves out the bordered box the automatic style
+    // draws around the content on macOS.
     var body: some View {
-        Form {
-            switch tab {
-            case .general:
-                agentSection
-                nameSection
-                workspaceSection
-            case .kits:
-                kitsSection
-            case .runtime:
-                resourcesSection
-                environmentSection
-            }
-        }
-        .formStyle(.grouped)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            Picker("Options", selection: $tab) {
-                ForEach(CreateSheetTab.allCases) { tab in
-                    Text(tab.title).tag(tab)
+        TabView(selection: $tab) {
+            ForEach(CreateSheetTab.allCases) { tab in
+                Tab(tab.title, value: tab) {
+                    Form {
+                        switch tab {
+                        case .general:
+                            agentSection
+                            nameSection
+                            workspaceSection
+                        case .kits:
+                            kitsSection
+                        case .runtime:
+                            resourcesSection
+                            environmentSection
+                        }
+                    }
+                    .formStyle(.grouped)
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.large)
-            .fixedSize()
-            .padding(.top)
         }
+        .tabViewStyle(.tabBarOnly)
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
