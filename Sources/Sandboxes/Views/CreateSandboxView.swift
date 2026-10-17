@@ -101,7 +101,8 @@ private struct CreateSandboxForm: View {
         }
         .tabViewStyle(.tabBarOnly)
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // As a bar, the form fades as it scrolls under them, as windows do.
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 commandSection
                 actionBar

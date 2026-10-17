@@ -10,6 +10,19 @@ struct SbxCommandSheet: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
+        VStack(spacing: 0) {
+            content
+                .padding(20)
+            // Sheets separate their buttons from the content with a line.
+            Divider()
+            buttons
+                .padding(20)
+        }
+        .frame(minWidth: 520, idealWidth: 600, minHeight: 360, idealHeight: 440)
+        .interactiveDismissDisabled(run.phase == .running)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
@@ -26,31 +39,30 @@ struct SbxCommandSheet: View {
                     CopyableCommand(command: run.commandLine)
                 }
             }
-
-            HStack {
-                Button("Copy Output", systemImage: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(run.output.text, forType: .string)
-                }
-                Spacer()
-                switch run.phase {
-                case .running:
-                    Button("Cancel", role: .cancel) { run.cancel() }
-                        .keyboardShortcut(.cancelAction)
-                case .succeeded:
-                    Button("Done") { dismiss() }
-                        .keyboardShortcut(.defaultAction)
-                        .buttonStyle(.glassProminent)
-                case .failed, .cancelled:
-                    Button("Close") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
-                }
-            }
-            .controlSize(.large)
         }
-        .padding(20)
-        .frame(minWidth: 520, idealWidth: 600, minHeight: 360, idealHeight: 440)
-        .interactiveDismissDisabled(run.phase == .running)
+    }
+
+    private var buttons: some View {
+        HStack {
+            Button("Copy Output", systemImage: "doc.on.doc") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(run.output.text, forType: .string)
+            }
+            Spacer()
+            switch run.phase {
+            case .running:
+                Button("Cancel", role: .cancel) { run.cancel() }
+                    .keyboardShortcut(.cancelAction)
+            case .succeeded:
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.glassProminent)
+            case .failed, .cancelled:
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .controlSize(.large)
     }
 
     /// The code to enter and a button to open the page to enter it on.

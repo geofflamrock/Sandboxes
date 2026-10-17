@@ -44,6 +44,7 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 - All processes go through `SbxCLI`: `run` (collect output), `runChecked` (throw `SbxError` on a non-zero exit) or `stream` (output as it arrives; cancelling the task terminates the process). It uses `ShellEnvironment.environment` so a GUI launch sees the login shell's `PATH`. Don't create `Process` directly elsewhere (the only other one reads the login shell's environment in `ShellEnvironment`).
 - Interactive commands (`sbx exec -it`, `sbx run`) open in the user's default terminal through `TerminalLauncher`, not in the app.
 - Store actions report failures by setting `actionError` with a title like `Couldn't Stop “name”` and the error's `localizedDescription`, rather than throwing to the view.
+  The exception is saving from a sheet that edits something, such as the secret editor's `SecretStore.save(_:)`: it throws, so the sheet stays open with what was entered and shows the error next to it.
 - Destructive or security-relevant actions (remove, approve, deny) confirm first with `confirmationDialog`.
 
 ### Parsing `sbx` output

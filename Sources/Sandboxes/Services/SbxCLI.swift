@@ -47,16 +47,20 @@ enum SbxCLI {
         return nil
     }
 
-    static func run(_ arguments: [String]) async throws -> CommandResult {
+    /// Runs the command, writing `input` to its standard input when it's given.
+    static func run(_ arguments: [String], input: String? = nil) async throws -> CommandResult {
         let collector = OutputCollector()
-        let exitCode = try await stream(arguments) { collector.append($0) }
+        guard let executable = executableURL() else {
+            throw SbxError.executableNotFound
+        }
+        let exitCode = try await stream(executable: executable, arguments: arguments, input: input) { collector.append($0) }
         return CommandResult(exitCode: exitCode, output: collector.text)
     }
 
     /// Runs the command and throws if it exits with a non-zero status.
     @discardableResult
-    static func runChecked(_ arguments: [String]) async throws -> String {
-        let result = try await run(arguments)
+    static func runChecked(_ arguments: [String], input: String? = nil) async throws -> String {
+        let result = try await run(arguments, input: input)
         guard result.succeeded else {
             throw SbxError.commandFailed(arguments: arguments, exitCode: result.exitCode, output: result.output)
         }
@@ -76,16 +80,20 @@ enum SbxCLI {
     }
 
     /// Runs another executable the same way, such as Homebrew to install sbx.
+    /// `input` is written to standard input, such as a secret's value, so it
+    /// isn't visible in the process's arguments.
     static func stream(
         executable: URL,
         arguments: [String],
+        input: String? = nil,
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws -> Int32 {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
         process.environment = ShellEnvironment.environment
-        process.standardInput = FileHandle.nullDevice
+        let inputPipe = input.map { _ in Pipe() }
+        process.standardInput = inputPipe ?? FileHandle.nullDevice
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -115,6 +123,11 @@ enum SbxCLI {
                 }
                 do {
                     try process.run()
+                    if let inputPipe, let input {
+                        let writer = inputPipe.fileHandleForWriting
+                        try? writer.write(contentsOf: Data(input.utf8))
+                        try? writer.close()
+                    }
                 } catch {
                     process.terminationHandler = nil
                     handle.readabilityHandler = nil

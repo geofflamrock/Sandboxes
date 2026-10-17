@@ -7,6 +7,9 @@ struct SandboxDetailView: View {
     @State private var networkError: String?
     @State private var isLoadingNetwork = false
     @State private var approvalResponse: ApprovalResponse?
+    @Environment(SecretStore.self) private var secrets
+    @State private var secretEditor: SecretDraft?
+    @State private var secretRemoval: SecretRemoval?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,7 +26,11 @@ struct SandboxDetailView: View {
         .task(id: sandbox.name) {
             await refreshNetwork()
         }
+        .task(id: sandbox.name) {
+            await secrets.refresh()
+        }
         .approvalResponseDialog($approvalResponse)
+        .secretEditing(editor: $secretEditor, removal: $secretRemoval)
         .navigationTitle(sandbox.name)
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -120,6 +127,8 @@ struct SandboxDetailView: View {
             SandboxResourcesSection(sandbox: sandbox)
                 .id(sandbox.name)
 
+            secretsSection
+
             Section {
                 if network == nil {
                     networkPlaceholder
@@ -163,6 +172,51 @@ struct SandboxDetailView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Secrets scoped to this sandbox, which can be changed here, then the
+    /// global ones, which are changed in Management › Secrets. Host-only
+    /// registry credentials aren't given to sandboxes, so aren't listed.
+    private var secretsSection: some View {
+        let scoped = secrets.secrets(for: sandbox.name)
+        let global = secrets.secrets.filter { $0.scope == .global }
+        let count = scoped.count + global.count
+        return Section {
+            if count == 0 {
+                Text(secrets.hasLoaded ? "No secrets." : "Loading…")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(scoped) { secret in
+                SecretRow(secret: secret, editor: $secretEditor, removal: $secretRemoval)
+            }
+            ForEach(global) { secret in
+                SecretRow(
+                    secret: secret,
+                    editor: .constant(nil),
+                    removal: .constant(nil),
+                    readOnlyLabel: "Global",
+                    isOverridden: scoped.contains { $0.kind == secret.kind && $0.name == secret.name }
+                )
+            }
+        } header: {
+            HStack {
+                Text(count == 0 ? "Secrets" : "Secrets (\(count.formatted()))")
+                Spacer()
+                Button("Add Secret…") {
+                    secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
+                }
+                .controlSize(.small)
+            }
+        } footer: {
+            HStack(spacing: 4) {
+                Text("Secrets for this sandbox override global secrets for the same service.")
+                    .foregroundStyle(.secondary)
+                Button("Manage Secrets") {
+                    store.selection = .secrets
+                }
+                .buttonStyle(.link)
+            }
+        }
     }
 
     @ViewBuilder

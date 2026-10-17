@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(SecretStore.self) private var secrets
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -9,7 +10,9 @@ struct ContentView: View {
             SandboxSidebar()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            if let sandbox = store.selectedSandbox {
+            if store.selection == .secrets {
+                SecretsView()
+            } else if let sandbox = store.selectedSandbox {
                 SandboxDetailView(sandbox: sandbox)
             } else {
                 HomeView()
@@ -46,6 +49,18 @@ struct ContentView: View {
         } message: { error in
             Text(error.message)
         }
+        .alert(
+            secrets.actionError?.title ?? "",
+            isPresented: Binding(
+                get: { secrets.actionError != nil },
+                set: { if !$0 { secrets.actionError = nil } }
+            ),
+            presenting: secrets.actionError
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.message)
+        }
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
@@ -60,8 +75,11 @@ struct ContentView: View {
 
 struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
+    @Environment(SecretStore.self) private var secrets
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
+    @AppStorage("sidebarSandboxesExpanded") private var sandboxesExpanded = true
+    @AppStorage("sidebarManagementExpanded") private var managementExpanded = true
 
     private var filteredSandboxes: [Sandbox] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -73,52 +91,40 @@ struct SandboxSidebar: View {
         @Bindable var store = store
 
         List(selection: $store.selection) {
-            ForEach(filteredSandboxes) { sandbox in
-                SandboxRow(
-                    sandbox: sandbox,
-                    isBusy: store.isBusy(sandbox),
-                    pendingApprovals: store.approvals(for: sandbox).count
-                )
+            Section("Sandboxes", isExpanded: $sandboxesExpanded) {
+                ForEach(filteredSandboxes) { sandbox in
+                    SandboxRow(
+                        sandbox: sandbox,
+                        isBusy: store.isBusy(sandbox),
+                        pendingApprovals: store.approvals(for: sandbox).count
+                    )
+                    .tag(SidebarItem.sandbox(sandbox.id))
+                }
+                sandboxesPlaceholder
+            }
+            // Search only filters sandboxes, so these stay put.
+            Section("Management", isExpanded: $managementExpanded) {
+                Label("Secrets", systemImage: "key")
+                    .badge(secrets.secrets.count)
+                    .tag(SidebarItem.secrets)
+                    .help("API keys, tokens and registry credentials sbx gives sandboxes")
             }
         }
-        .contextMenu(forSelectionType: Sandbox.ID.self) { ids in
-            if let id = ids.first, let sandbox = store.sandboxes.first(where: { $0.id == id }) {
+        // Removing a sandbox also removes its secrets, so keep the count right.
+        .task(id: store.sandboxes.map(\.name)) {
+            await secrets.refresh()
+        }
+        .contextMenu(forSelectionType: SidebarItem.self) { items in
+            if let sandbox = sandbox(for: items) {
                 SandboxActionButtons(sandbox: sandbox)
             }
-        } primaryAction: { ids in
-            if let id = ids.first, let sandbox = store.sandboxes.first(where: { $0.id == id }) {
+        } primaryAction: { items in
+            if let sandbox = sandbox(for: items) {
                 Task { await store.open(sandbox, in: store.defaultOpenTarget) }
             }
         }
         .onDeleteCommand {
             store.removalCandidate = store.selectedSandbox
-        }
-        .overlay {
-            if !store.hasLoaded {
-                ProgressView()
-            } else if store.sandboxes.isEmpty {
-                if let error = store.loadError {
-                    ContentUnavailableView {
-                        Label("Can't Load Sandboxes", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Try Again") { Task { await store.refresh() } }
-                        SettingsLink { Text("Settings…") }
-                    }
-                } else {
-                    ContentUnavailableView {
-                        Label("No Sandboxes", systemImage: "shippingbox")
-                    } description: {
-                        Text("Create a sandbox to get started.")
-                    } actions: {
-                        Button("New Sandbox") { store.presentCreate() }
-                            .buttonStyle(.glassProminent)
-                    }
-                }
-            } else if filteredSandboxes.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            }
         }
         .searchable(text: $searchText, placement: .sidebar, prompt: "Search sandboxes")
         .safeAreaInset(edge: .bottom) {
@@ -172,6 +178,51 @@ struct SandboxSidebar: View {
         }
     }
 
+    private func sandbox(for items: Set<SidebarItem>) -> Sandbox? {
+        guard case let .sandbox(id) = items.first else { return nil }
+        return store.sandboxes.first { $0.id == id }
+    }
+
+    /// Shown in the Sandboxes section in place of rows, so the Management
+    /// section stays visible while there are no sandboxes to list.
+    @ViewBuilder
+    private var sandboxesPlaceholder: some View {
+        if !store.hasLoaded {
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+        } else if store.sandboxes.isEmpty {
+            if let error = store.loadError {
+                SidebarPlaceholder(
+                    title: "Can't Load Sandboxes",
+                    systemImage: "exclamationmark.triangle",
+                    message: error
+                ) {
+                    Button("Try Again") { Task { await store.refresh() } }
+                    SettingsLink { Text("Settings…") }
+                }
+            } else {
+                SidebarPlaceholder(
+                    title: "No Sandboxes",
+                    systemImage: "shippingbox",
+                    message: "Create a sandbox to get started."
+                ) {
+                    Button("New Sandbox") { store.presentCreate() }
+                        .buttonStyle(.glassProminent)
+                }
+            }
+        } else if filteredSandboxes.isEmpty {
+            SidebarPlaceholder(
+                title: "No Results",
+                systemImage: "magnifyingglass",
+                message: "No sandboxes match “\(searchText)”."
+            ) {
+                EmptyView()
+            }
+        }
+    }
+
     /// Releases show their version; other builds show what they are built
     /// from, so it's obvious when this isn't a release.
     private var versionBadge: some View {
@@ -189,6 +240,38 @@ struct SandboxSidebar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .glassEffect(.regular, in: .capsule)
+    }
+}
+
+/// A short message in place of a sidebar section's rows, such as when there
+/// are no sandboxes.
+private struct SidebarPlaceholder<Actions: View>: View {
+    let title: String
+    let systemImage: String
+    let message: String
+    @ViewBuilder let actions: Actions
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+            HStack {
+                actions
+            }
+            .controlSize(.small)
+            .padding(.top, 2)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .selectionDisabled()
     }
 }
 
