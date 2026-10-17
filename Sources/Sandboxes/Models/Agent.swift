@@ -65,6 +65,23 @@ enum Agent: CaseIterable {
         }
     }
 
+    /// The name sbx knows the agent by as a built-in agent, as in `sbx create claude`.
+    var builtInName: String {
+        switch self {
+        case .claude: "claude"
+        case .codex: "codex"
+        case .copilot: "copilot"
+        case .cursor: "cursor"
+        case .devin: "devin"
+        case .dockerAgent: "docker-agent"
+        case .droid: "droid"
+        case .gemini: "gemini"
+        case .kiro: "kiro"
+        case .openCode: "opencode"
+        case .shell: "shell"
+        }
+    }
+
     /// The v3 workload kit Docker publishes for the agent, if there is one.
     var workloadImage: String? {
         switch self {
@@ -82,23 +99,49 @@ enum Agent: CaseIterable {
         }
     }
 
-    /// The creatable agent whose kit `image` is, ignoring a `docker.io/`
-    /// registry prefix and any tag or digest.
-    init?(workloadImage image: String) {
-        var name = Substring(image.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    /// What to pass `sbx create` for the agent in `version`, if it comes in that version.
+    func workload(for version: AgentVersion) -> String? {
+        switch version {
+        case .builtIn: builtInName
+        case .kit: workloadImage
+        }
+    }
+
+    /// The creatable agent and version `workload` picks: a built-in agent's
+    /// name, or one of Docker's kits ignoring a `docker.io/` registry prefix
+    /// and any tag or digest.
+    static func match(workload: String) -> (agent: Agent, version: AgentVersion)? {
+        let trimmed = workload.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let agent = creatable.first(where: { $0.builtInName == trimmed }) {
+            return (agent, .builtIn)
+        }
+        var name = Substring(trimmed)
         if let at = name.firstIndex(of: "@") { name = name[..<at] }
         if let colon = name.lastIndex(of: ":"), !name[colon...].contains("/") { name = name[..<colon] }
         for prefix in ["docker.io/", "index.docker.io/"] where name.hasPrefix(prefix) {
             name = name.dropFirst(prefix.count)
         }
-        guard let agent = Self.creatable.first(where: { $0.workloadImage == String(name) }) else { return nil }
-        self = agent
+        if let agent = creatable.first(where: { $0.workloadImage == String(name) }) {
+            return (agent, .kit)
+        }
+        return nil
+    }
+
+    /// The creatable agent `workload` picks, in either version.
+    init?(workload: String) {
+        guard let match = Self.match(workload: workload) else { return nil }
+        self = match.agent
     }
 
     /// Agents that can be picked when creating a sandbox, in the order shown.
     static let creatable: [Agent] = [
-        .claude, .codex, .copilot, .cursor, .openCode, .dockerAgent, .devin, .droid, .kiro, .shell,
+        .claude, .codex, .copilot, .cursor, .gemini, .openCode, .dockerAgent, .devin, .droid, .kiro, .shell,
     ]
+
+    /// The creatable agents that come in `version`.
+    static func creatable(in version: AgentVersion) -> [Agent] {
+        creatable.filter { $0.workload(for: version) != nil }
+    }
 
     /// The agent's logo in the asset catalog, from Simple Icons (CC0). Agents
     /// without one there use an SF Symbol instead.
@@ -144,6 +187,27 @@ enum Agent: CaseIterable {
         case .dockerAgent: Color(red: 0x24 / 255, green: 0x96 / 255, blue: 0xED / 255)
         case .gemini: Color(red: 0x8E / 255, green: 0x75 / 255, blue: 0xB2 / 255)
         default: nil
+        }
+    }
+}
+
+/// Which of the two forms of Docker's agents the New Sandbox window offers.
+enum AgentVersion: String, CaseIterable, Identifiable {
+    /// Agents built into sbx, picked by name (`claude`).
+    case builtIn
+    /// Docker's v3 workload kits (`docker/sbx-kit-claude`).
+    case kit
+
+    /// The version picked last in the New Sandbox window, which the home page's
+    /// suggestions follow too.
+    static let key = "agentVersion"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .builtIn: "Built-in (v2)"
+        case .kit: "Kit (v3)"
         }
     }
 }
