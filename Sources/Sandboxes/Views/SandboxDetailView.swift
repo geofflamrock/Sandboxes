@@ -83,15 +83,6 @@ struct SandboxDetailView: View {
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")
             }
-            // Left of the sandbox's actions, so they stay put as tabs change.
-            if tab == .secrets {
-                ToolbarItem {
-                    Button("Add Secret", systemImage: "plus") {
-                        secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
-                    }
-                    .help("Store a secret for this sandbox")
-                }
-            }
             // Kept out of the actions' group so it doesn't widen it, and always
             // laid out so the toolbar doesn't shift when it appears.
             ToolbarItem {
@@ -101,6 +92,16 @@ struct SandboxDetailView: View {
                     .accessibilityHidden(!store.isBusy(sandbox))
             }
             .sharedBackgroundVisibility(.hidden)
+            // Left of the sandbox's actions, so they stay put as tabs change, and
+            // after the spinner, whose space would otherwise leave a gap.
+            if tab == .secrets {
+                ToolbarItem {
+                    Button("Add Secret", systemImage: "plus") {
+                        secretEditor = SecretDraft(scope: .sandbox(sandbox.name))
+                    }
+                    .help("Store a secret for this sandbox")
+                }
+            }
             ToolbarItemGroup {
                 SandboxActionButtons(sandbox: sandbox, placement: .toolbar)
                     .labelStyle(.iconOnly)
