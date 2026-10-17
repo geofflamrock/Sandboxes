@@ -14,6 +14,10 @@ Outputs:
 - Design/AppIcon.svg: a flattened preview of the icon. It follows icon.json's
   layer order and offsets, so it matches what Icon Composer shows.
 
+The menu bar item draws a one-colour version of the same shapes in
+NSImage.menuBarSandbox (Sources/Sandboxes/Views/MenuBarViews.swift), so
+update it too when the shapes change.
+
 Run from the repository root: python3 scripts/generate-app-icon.py
 """
 
