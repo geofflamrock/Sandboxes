@@ -72,12 +72,48 @@ final class MCPServerStore {
         hasLoaded = true
     }
 
-    /// Registers the server and returns it as sbx now lists it. Throws so
-    /// the Add Server sheet stays open with the error.
+    /// Stores the header secrets, which sbx needs before it registers a
+    /// server whose headers use them, then registers the server and returns
+    /// it as sbx now lists it. Throws so the Add Server sheet stays open with
+    /// the error.
     func add(_ draft: MCPServerDraft) async throws -> MCPServer? {
-        try await SbxCLI.runChecked(draft.addArguments)
+        let server = draft.trimmedName
+        await secrets.refresh()
+        let existing = Set(secrets.mcpSecretNames(forServer: server))
+        var created: [String] = []
+        do {
+            for (placeholder, value) in draft.headerSecretsToSet.sorted(by: { $0.key < $1.key }) {
+                let name = MCPServerDetails.secretName(server: server, placeholder: placeholder)
+                try await SbxCLI.runChecked(["secret", "set", name, "--force"], input: value)
+                if !existing.contains(name) {
+                    created.append(name)
+                }
+            }
+            try await SbxCLI.runChecked(draft.addArguments)
+        } catch {
+            // Don't leave secrets behind for a server that wasn't added,
+            // apart from ones that were already there.
+            await secrets.refresh()
+            let leftOver = secrets.mcpSecretNames(forServer: server).filter { name in
+                created.contains { name == $0 || name.hasPrefix($0 + ":") }
+            }
+            for name in leftOver {
+                _ = try? await SbxCLI.runChecked(["secret", "rm", name, "--force"])
+            }
+            await secrets.refresh()
+            throw error
+        }
         await refresh()
-        return server(named: draft.trimmedName)
+        await secrets.refresh()
+        return self.server(named: server)
+    }
+
+    /// Placeholders of `server` that already have a stored value.
+    func storedPlaceholders(forServer server: String) -> Set<String> {
+        Set(secrets.mcpSecretNames(forServer: server).compactMap { name -> String? in
+            guard let key = SbxSecret.mcpName(name)?.key, !key.contains(":") else { return nil }
+            return key
+        })
     }
 
     /// Removes the registration and, when `removingSecrets` is set, the

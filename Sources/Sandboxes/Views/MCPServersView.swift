@@ -604,8 +604,8 @@ private struct AddMCPServerSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.glassProminent)
-                .disabled(isSaving || draft.missing != nil)
-                .help(draft.missing ?? "")
+                .disabled(isSaving || missing != nil)
+                .help(missing ?? "")
             }
             .padding(20)
         }
@@ -654,8 +654,26 @@ private struct AddMCPServerSheet: View {
         } header: {
             Text("Headers")
         } footer: {
-            Text("Sent with every request to a remote endpoint. Write a secret as a ${placeholder}, such as Bearer ${api-key}; you'll enter its value next, and it's never stored in the server's settings.")
+            Text("Sent with every request to a remote endpoint. Write a secret as a ${placeholder}, such as Bearer ${api-key}, and enter its value below.")
                 .foregroundStyle(.secondary)
+        }
+
+        if !draft.placeholders.isEmpty {
+            let stored = mcp.storedPlaceholders(forServer: draft.trimmedName)
+            Section {
+                ForEach(draft.placeholders, id: \.self) { placeholder in
+                    SecureField(
+                        "${\(placeholder)}",
+                        text: secretBinding(for: placeholder),
+                        prompt: Text(stored.contains(placeholder) ? "Stored. Enter a new value to replace it" : "Paste the value")
+                    )
+                }
+            } header: {
+                Text("Header Secrets")
+            } footer: {
+                Text("sbx needs these before it adds the server. They're passed to sbx on standard input and kept in its secret store as mcp:\(draft.trimmedName.isEmpty ? "<name>" : draft.trimmedName):<placeholder>, never in the server's settings.")
+                    .foregroundStyle(.secondary)
+            }
         }
 
         Section {
@@ -700,6 +718,18 @@ private struct AddMCPServerSheet: View {
             Text("Runs on your Mac with your permissions, outside the sandbox. Only add commands you trust.")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// What's missing before it can be added, including header secrets.
+    private var missing: String? {
+        draft.missing ?? draft.missingSecret(stored: mcp.storedPlaceholders(forServer: draft.trimmedName))
+    }
+
+    private func secretBinding(for placeholder: String) -> Binding<String> {
+        Binding(
+            get: { draft.headerSecretValues[placeholder] ?? "" },
+            set: { draft.headerSecretValues[placeholder] = $0 }
+        )
     }
 
     private func add() async {

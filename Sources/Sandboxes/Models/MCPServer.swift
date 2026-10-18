@@ -172,6 +172,9 @@ struct MCPServerDraft {
     /// Runs a registry or manifest server on the Mac with `docker run`.
     var runsLocally = false
     var headers: [Header] = []
+    /// Values for the headers' `${placeholder}`s, keyed by placeholder. sbx
+    /// only registers a server once each one has a stored secret.
+    var headerSecretValues: [String: String] = [:]
     var clientID = ""
     /// Separated by commas or spaces.
     var scopes = ""
@@ -187,6 +190,38 @@ struct MCPServerDraft {
         argumentsText.split(whereSeparator: \.isNewline)
             .map { trimmed(String($0)) }
             .filter { !$0.isEmpty }
+    }
+
+    /// The `${placeholder}`s in the headers, in the order they first appear.
+    var placeholders: [String] {
+        guard source == .url else { return [] }
+        var seen = Set<String>()
+        return headers.flatMap { header in
+            header.value.matches(of: #/\$\{([^}\s]+)\}/#).map { String($0.1) }
+        }
+        .filter { seen.insert($0).inserted }
+    }
+
+    /// The values entered for current placeholders, trimmed.
+    var headerSecretsToSet: [String: String] {
+        var values: [String: String] = [:]
+        for placeholder in placeholders {
+            let value = trimmed(headerSecretValues[placeholder] ?? "")
+            if !value.isEmpty {
+                values[placeholder] = value
+            }
+        }
+        return values
+    }
+
+    /// Asks for a value for each placeholder that doesn't already have a
+    /// stored secret, such as from when a server of the same name was removed.
+    func missingSecret(stored: Set<String>) -> String? {
+        let needed = placeholders.filter {
+            !stored.contains($0) && trimmed(headerSecretValues[$0] ?? "").isEmpty
+        }
+        guard let first = needed.first else { return nil }
+        return "Enter a value for ${\(first)}."
     }
 
     var scopeList: [String] {
