@@ -702,13 +702,11 @@ private struct AddMCPServerSheet: View {
         }
     }
 
+    @ViewBuilder
     private var commandSection: some View {
         Section {
             TextField("Command", text: $draft.command, prompt: Text("npx"))
                 .font(.body.monospaced())
-            TextField("Arguments", text: $draft.argumentsText, prompt: Text("One per line"), axis: .vertical)
-                .font(.body.monospaced())
-                .lineLimit(2...6)
             LabeledContent("Folder") {
                 HStack {
                     if let directory = draft.directory {
@@ -731,6 +729,23 @@ private struct AddMCPServerSheet: View {
         } footer: {
             Text("Runs on your Mac with your permissions, outside the sandbox. Only add commands you trust.")
                 .foregroundStyle(.secondary)
+        }
+
+        Section("Arguments") {
+            ForEach($draft.arguments) { $argument in
+                HStack {
+                    TextField("Argument", text: $argument.value, prompt: Text("Argument"))
+                        .labelsHidden()
+                    RemoveButton(help: "Remove argument") {
+                        draft.arguments.removeAll { $0.id == argument.id }
+                    }
+                }
+                .font(.body.monospaced())
+            }
+            Button("Add Argument", systemImage: "plus") {
+                draft.arguments.append(MCPServerDraft.Argument())
+            }
+            .buttonStyle(.borderless)
         }
     }
 

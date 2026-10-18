@@ -166,6 +166,11 @@ struct MCPServerDraft {
         }
     }
 
+    struct Argument: Identifiable {
+        let id = UUID()
+        var value = ""
+    }
+
     var name = ""
     var source = Source.url
     var url = ""
@@ -180,16 +185,14 @@ struct MCPServerDraft {
     var scopes = ""
     var skipsSSRFCheck = false
     var command = ""
-    /// One argument per line.
-    var argumentsText = ""
+    var arguments: [Argument] = []
     var directory: URL?
 
     var trimmedName: String { trimmed(name) }
 
+    /// The arguments entered, leaving out empty rows.
     var argumentList: [String] {
-        argumentsText.split(whereSeparator: \.isNewline)
-            .map { trimmed(String($0)) }
-            .filter { !$0.isEmpty }
+        arguments.map { trimmed($0.value) }.filter { !$0.isEmpty }
     }
 
     /// The `${placeholder}`s in the headers, in the order they first appear.
