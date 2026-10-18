@@ -387,9 +387,23 @@ private struct MCPServerInspector: View {
                             .textSelection(.enabled)
                     }
                 }
+            }
+        }
+        if !details.headerSecrets.isEmpty {
+            Section {
                 ForEach(details.headerSecrets) { secret in
-                    LabeledContent("${\(secret.placeholder)}", value: secret.isStored ? "Stored" : "Not set")
+                    LabeledContent {
+                        Text(secret.isStored ? "Stored" : "Not set")
+                    } label: {
+                        Text(secret.placeholder)
+                            .font(.callout.monospaced())
+                    }
                 }
+            } header: {
+                Text("Header Secrets")
+            } footer: {
+                Text("The values for the headers' placeholders, kept in sbx's secret store as mcp:\(details.name):<placeholder> and never shown. Change them with Set Header Secrets in the server's menu.")
+                    .foregroundStyle(.secondary)
             }
         }
     }
