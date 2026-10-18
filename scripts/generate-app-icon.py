@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Generates the app icon's layers and Design/AppIcon.svg.
 
-The icon is a child's wooden sandbox, seen isometrically, with an agent (a
-little blue robot) poking its head out of the sand. It follows the macOS 26
-Liquid Glass style: flat, solid shapes in separate layers, with no drawn
+The icon is a child's wooden sandbox full of sand, seen isometrically. It
+follows the macOS 26 Liquid Glass style: flat, solid shapes in separate layers, with no drawn
 shadows or highlights, since the system adds those itself.
 
 Outputs:
@@ -47,12 +46,6 @@ WOOD_RIGHT = "#AE6530"
 WOOD_INSIDE = "#9A5A2B"
 WOOD_SEAM = "#8F5226"
 SAND = "#EDC77F"
-AGENT = "#2A6EEF"
-ANTENNA = "#1C5CDB"
-VISOR = "#132A5C"
-EYES = "#A6D5FA"
-# The light on top of the antenna, a terminal green to say the agent is running.
-ANTENNA_LIGHT = "#5BE38F"
 
 # The sandbox: a diamond W wide (half width) and W * SLOPE tall, with walls
 # WALL deep. The sand sits SAND_DROP below the rim, inside a rim that's
@@ -63,30 +56,9 @@ WALL = 124
 INNER = 0.83
 SAND_DROP = 22
 
-# The agent peeks out of the sand: the sides of its head show HEAD_SHOWN
-# above the sand, which it meets along a curve HEAD_DIP deep. HEAD_SHOWN
-# keeps the visor clear of the sand, with a little of the face below it.
-# HEAD_FORWARD moves the agent towards the front of the sandbox.
-HEAD_WIDTH = 250
-HEAD_RADIUS = 78
-HEAD_SHOWN = 176
-HEAD_DIP = 33
-HEAD_FORWARD = 15
-ANTENNA_HEIGHT = 70
-LIGHT_RADIUS = 24
-
-
-def head_top(cy):
-    # The lowest point of the head is in front of the sand's centre.
-    return cy + SAND_DROP / 2 + 20 + HEAD_FORWARD - HEAD_SHOWN - HEAD_DIP
-
-
-# Centre the artwork on the canvas, as Apple's icon grid expects: the
-# antenna light at the top and the bottom of the walls are the same distance
-# from the middle.
-_REACH_UP = -(head_top(0) - ANTENNA_HEIGHT - LIGHT_RADIUS)
-_REACH_DOWN = W * SLOPE + WALL
-CENTRE = (512, CANVAS / 2 + (_REACH_UP - _REACH_DOWN) / 2)
+# Centre the artwork on the canvas, as Apple's icon grid expects: the top of
+# the rim and the bottom of the walls are the same distance from the middle.
+CENTRE = (512, CANVAS / 2 - WALL / 2)
 
 
 def diamond(cx, cy, w, h):
@@ -95,10 +67,6 @@ def diamond(cx, cy, w, h):
 
 def polygon(points, fill):
     return f'<polygon points="{" ".join(f"{x:.1f},{y:.1f}" for x, y in points)}" fill="{fill}"/>'
-
-
-def rect(x, y, width, height, radius, fill):
-    return f'<rect x="{x:g}" y="{y:g}" width="{width:g}" height="{height:g}" rx="{radius:g}" fill="{fill}"/>'
 
 
 def frame():
@@ -131,27 +99,7 @@ def sand():
     return [polygon([(cx, cy - h + SAND_DROP), (cx + side, cy + SAND_DROP / 2), (cx, cy + h), (cx - side, cy + SAND_DROP / 2)], SAND)]
 
 
-def agent():
-    # A rounded head with a visor and two eyes, and an antenna on top. Its
-    # bottom is a shallow curve where it disappears into the sand.
-    cx, cy = CENTRE
-    top = head_top(cy)
-    sides = top + HEAD_SHOWN
-    left, right, r = cx - HEAD_WIDTH / 2, cx + HEAD_WIDTH / 2, HEAD_RADIUS
-    head = (f"M{left:g},{sides:g} V{top + r:g} A{r},{r} 0 0 1 {left + r:g},{top:g} "
-            f"H{right - r:g} A{r},{r} 0 0 1 {right:g},{top + r:g} "
-            f"V{sides:g} A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} Z")
-    return [
-        rect(cx - 7, top - ANTENNA_HEIGHT, 14, ANTENNA_HEIGHT + 10, 7, ANTENNA),
-        f'<circle cx="{cx}" cy="{top - ANTENNA_HEIGHT:g}" r="{LIGHT_RADIUS}" fill="{ANTENNA_LIGHT}"/>',
-        f'<path d="{head}" fill="{AGENT}"/>',
-        rect(cx - 98, top + 44, 196, 114, 52, VISOR),
-        rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
-        rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
-    ]
-
-
-LAYER_SHAPES = {"Frame": frame, "Sand": sand, "Agent": agent}
+LAYER_SHAPES = {"Frame": frame, "Sand": sand}
 
 
 def svg(body, defs=""):
