@@ -66,17 +66,19 @@ SAND_DROP = 22
 # The agent peeks out of the sand: the sides of its head show HEAD_SHOWN
 # above the sand, which it meets along a curve HEAD_DIP deep. HEAD_SHOWN
 # keeps the visor clear of the sand, with a little of the face below it.
+# HEAD_FORWARD moves the agent towards the front of the sandbox.
 HEAD_WIDTH = 250
 HEAD_RADIUS = 78
 HEAD_SHOWN = 176
 HEAD_DIP = 33
+HEAD_FORWARD = 30
 ANTENNA_HEIGHT = 70
 LIGHT_RADIUS = 24
 
 
 def head_top(cy):
-    # The lowest point of the head is a little in front of the sand's centre.
-    return cy + SAND_DROP / 2 + 20 - HEAD_SHOWN - HEAD_DIP
+    # The lowest point of the head is in front of the sand's centre.
+    return cy + SAND_DROP / 2 + 20 + HEAD_FORWARD - HEAD_SHOWN - HEAD_DIP
 
 
 # Centre the artwork on the canvas, as Apple's icon grid expects: the
