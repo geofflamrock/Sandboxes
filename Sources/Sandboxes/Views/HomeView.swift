@@ -448,6 +448,7 @@ struct CopyableCommand: View {
 private struct QuickCreateSection: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
+    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     private static let maxRecents = 4
 
@@ -469,10 +470,10 @@ private struct QuickCreateSection: View {
     }
 
     /// The most recently used workloads, one per agent. Before anything has
-    /// been created, the first few agents Docker publishes kits for.
+    /// been created, the first few agents in the version picked last.
     private var workloads: [String] {
         guard !recents.workloads.isEmpty else {
-            return Agent.creatable.prefix(3).compactMap(\.workloadImage)
+            return Agent.creatable(in: agentVersion).prefix(3).compactMap { $0.workload(for: agentVersion) }
         }
         var seenAgents: Set<String> = []
         var result: [String] = []
@@ -497,7 +498,7 @@ private struct QuickCreateCard: View {
     @State private var isHovering = false
 
     static func agent(for workload: String) -> Agent? {
-        Agent(workloadImage: workload) ?? Agent(identifier: workload)
+        Agent(workload: workload) ?? Agent(identifier: workload)
     }
 
     var body: some View {

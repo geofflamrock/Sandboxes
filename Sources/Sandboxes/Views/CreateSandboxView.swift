@@ -6,6 +6,7 @@ struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
     @Environment(\.dismissWindow) private var dismissWindow
+    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
@@ -31,7 +32,7 @@ struct CreateSandboxView: View {
         .background(WindowReader(kind: .create))
         .onAppear {
             if request.workload.isEmpty {
-                request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workloadImage ?? ""
+                request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
             }
         }
         // Asked again while the window is open, such as from an agent on the
@@ -71,6 +72,7 @@ private struct CreateSandboxForm: View {
     let onCreate: () -> Void
 
     @Environment(RecentsStore.self) private var recents
+    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
 
@@ -149,14 +151,28 @@ private struct CreateSandboxForm: View {
 
     private var agentSection: some View {
         Section {
-            AgentPicker(selection: Agent(workloadImage: request.workload)) { agent in
-                if let image = agent.workloadImage {
-                    request.workload = image
+            Picker("Version", selection: $agentVersion) {
+                ForEach(AgentVersion.allCases) { version in
+                    Text(version.title).tag(version)
+                }
+            }
+            .pickerStyle(.segmented)
+            AgentPicker(
+                agents: Agent.creatable(in: agentVersion),
+                version: agentVersion,
+                selection: Agent(workload: request.workload)
+            ) { agent in
+                if let workload = agent.workload(for: agentVersion) {
+                    request.workload = workload
                 }
             }
             HStack {
-                TextField("Image", text: $request.workload, prompt: Text("docker/sbx-kit-claude"))
-                    .font(.body.monospaced())
+                TextField(
+                    agentVersion == .builtIn ? "Agent" : "Image",
+                    text: $request.workload,
+                    prompt: Text(Agent.claude.workload(for: agentVersion) ?? "")
+                )
+                .font(.body.monospaced())
                 RecentsMenu(title: "Recent Images", items: recents.workloads) {
                     request.workload = $0
                 } onClear: {
@@ -166,8 +182,27 @@ private struct CreateSandboxForm: View {
         } header: {
             Text("Agent")
         } footer: {
-            Text("Pick an agent, or enter any v3 workload kit from an OCI registry.")
+            Text(agentFooter)
                 .foregroundStyle(.secondary)
+        }
+        // Switching version swaps a picked agent for the same agent in the other version.
+        .onChange(of: agentVersion) {
+            if let agent = Agent(workload: request.workload), let workload = agent.workload(for: agentVersion) {
+                request.workload = workload
+            }
+        }
+        // Picking a recent image or typing one of Docker's agents shows its version.
+        .onChange(of: request.workload, initial: true) {
+            if let version = Agent.match(workload: request.workload)?.version {
+                agentVersion = version
+            }
+        }
+    }
+
+    private var agentFooter: String {
+        switch agentVersion {
+        case .builtIn: "Built-in agents come with sbx. Pick one, or enter a workload kit from an OCI registry."
+        case .kit: "Pick an agent, or enter any workload kit from an OCI registry."
         }
     }
 
@@ -576,16 +611,18 @@ private enum OpenPanel {
     }
 }
 
-/// A grid of agent tiles. The tile for the agent whose kit is in the image
-/// field is highlighted; a custom image highlights none.
+/// A grid of agent tiles. The tile for the agent in the image field is
+/// highlighted; a custom image highlights none.
 private struct AgentPicker: View {
+    let agents: [Agent]
+    let version: AgentVersion
     let selection: Agent?
     let onSelect: (Agent) -> Void
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-            ForEach(Agent.creatable, id: \.self) { agent in
-                AgentTile(agent: agent, isSelected: agent == selection) {
+            ForEach(agents, id: \.self) { agent in
+                AgentTile(agent: agent, workload: agent.workload(for: version), isSelected: agent == selection) {
                     onSelect(agent)
                 }
             }
@@ -596,6 +633,7 @@ private struct AgentPicker: View {
 
 private struct AgentTile: View {
     let agent: Agent
+    let workload: String?
     let isSelected: Bool
     let action: () -> Void
 
@@ -624,7 +662,7 @@ private struct AgentTile: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(agent.workloadImage ?? agent.displayName)
+        .help(workload ?? agent.displayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
