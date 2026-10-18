@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// The menu bar item: the app icon's box, with the number of requests waiting
-/// for approval when there are any.
+/// The menu bar item: the app icon's sandbox, with the number of requests
+/// waiting for approval when there are any.
 struct MenuBarLabel: View {
     @Environment(SandboxStore.self) private var store
     @Environment(\.openWindow) private var openWindow
@@ -10,7 +10,7 @@ struct MenuBarLabel: View {
     var body: some View {
         let count = store.approvals.count
         HStack(spacing: 4) {
-            Image(nsImage: .menuBarBox)
+            Image(nsImage: .menuBarSandbox)
             if count > 0 {
                 Text(count.formatted())
             }
@@ -67,16 +67,17 @@ struct MenuBarMenu: View {
 }
 
 extension NSImage {
-    /// The app icon's taped box, drawn as a template image so the menu bar
-    /// tints it. Shapes are on the 120-unit grid in scripts/generate-app-icon.py.
-    static let menuBarBox: NSImage = {
+    /// The app icon's sandbox with the agent peeking out of it, drawn as a
+    /// template image so the menu bar tints it. Shapes are in the app icon's
+    /// 1024pt coordinates from scripts/generate-app-icon.py.
+    static let menuBarSandbox: NSImage = {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: true) { _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            // The box spans x 30–90 and y 22–88 on the grid.
-            let scale = 16.0 / 66
+            // The artwork spans x 182–842 and y 234.05–789.95 in the icon.
+            let scale = 16.0 / 660
             func point(_ x: Double, _ y: Double) -> CGPoint {
-                CGPoint(x: (size.width - 60 * scale) / 2 + (x - 30) * scale, y: 1 + (y - 22) * scale)
+                CGPoint(x: 1 + (x - 182) * scale, y: (size.height - 550.9 * scale) / 2 + (y - 234.05) * scale)
             }
             func polygon(_ points: [CGPoint]) -> CGPath {
                 let path = CGMutablePath()
@@ -84,23 +85,61 @@ extension NSImage {
                 path.closeSubpath()
                 return path
             }
+            func roundedRect(_ rect: CGRect, _ radius: Double) -> CGPath {
+                CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+            }
+            // The head: rounded at the top, with its bottom a shallow curve
+            // where it disappears into the sand.
+            let head = CGMutablePath()
+            head.move(to: point(387, 504.05))
+            head.addArc(tangent1End: point(387, 328.05), tangent2End: point(637, 328.05), radius: 78 * scale)
+            head.addArc(tangent1End: point(637, 328.05), tangent2End: point(637, 504.05), radius: 78 * scale)
+            head.addLine(to: point(637, 504.05))
+            head.addQuadCurve(to: point(387, 504.05), control: point(512, 570.05))
+            head.closeSubpath()
 
+            // The box: its rim and walls as one shape.
             context.setFillColor(NSColor.black.cgColor)
-            context.addPath(polygon([point(60, 22), point(90, 38), point(90, 72), point(60, 88), point(30, 72), point(30, 38)]))
+            context.addPath(polygon([point(512, 316.15), point(842, 491.05), point(842, 615.05), point(512, 789.95), point(182, 615.05), point(182, 491.05)]))
             context.fillPath()
 
-            // Cut out the edges between the faces and the tape across the lid,
-            // since a template image only has one colour.
+            // Cut out the inside of the rim, then fill the sand back in a
+            // little smaller, so a gap separates it from the rim, since a
+            // template image only has one colour.
+            context.setBlendMode(.clear)
+            context.addPath(polygon([point(512, 345.88), point(785.9, 491.05), point(512, 636.22), point(238.1, 491.05)]))
+            context.fillPath()
+            context.setBlendMode(.normal)
+            context.addPath(polygon([point(512, 394.5), point(709.2, 499.05), point(512, 603.6), point(314.8, 499.05)]))
+            context.fillPath()
+
+            // Cut out the edges between the rim and the walls, and a gap
+            // around the head.
             context.setBlendMode(.clear)
             context.setLineWidth(1)
             context.setLineJoin(.round)
-            context.move(to: point(30, 38))
-            context.addLine(to: point(60, 54))
-            context.addLine(to: point(90, 38))
-            context.move(to: point(60, 54))
-            context.addLine(to: point(60, 88))
+            context.move(to: point(182, 491.05))
+            context.addLine(to: point(512, 665.95))
+            context.addLine(to: point(842, 491.05))
+            context.move(to: point(512, 665.95))
+            context.addLine(to: point(512, 789.95))
             context.strokePath()
-            context.addPath(polygon([point(41.4, 31.9), point(48.6, 28.1), point(78.6, 44.1), point(71.4, 47.9)]))
+            context.setLineWidth(2)
+            context.addPath(head)
+            context.strokePath()
+
+            // The agent: its head and antenna, with the eyes cut out.
+            context.setBlendMode(.normal)
+            context.addPath(head)
+            context.fillPath()
+            let light = point(512, 258.05), headTop = point(512, 328.05)
+            context.fill(CGRect(x: light.x - 0.5, y: light.y, width: 1, height: headTop.y - light.y))
+            context.fillEllipse(in: CGRect(x: light.x - 1.3, y: light.y - 1.3, width: 2.6, height: 2.6))
+            context.setBlendMode(.clear)
+            for x in [474.0, 550.0] {
+                let eye = point(x, 429.05)
+                context.addPath(roundedRect(CGRect(x: eye.x - 0.6, y: eye.y - 1, width: 1.2, height: 2), 0.6))
+            }
             context.fillPath()
             return true
         }
