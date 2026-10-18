@@ -68,7 +68,7 @@ SAND_DROP = 22
 # keeps the visor clear of the sand, with a little of the face below it.
 HEAD_WIDTH = 250
 HEAD_RADIUS = 78
-HEAD_SHOWN = 156
+HEAD_SHOWN = 176
 HEAD_DIP = 33
 ANTENNA_HEIGHT = 70
 LIGHT_RADIUS = 24

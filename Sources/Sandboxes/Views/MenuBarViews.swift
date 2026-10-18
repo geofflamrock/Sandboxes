@@ -74,10 +74,10 @@ extension NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: true) { _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            // The artwork spans x 182–842 and y 236.55–787.45 in the icon.
+            // The artwork spans x 182–842 and y 226.55–797.45 in the icon.
             let scale = 16.0 / 660
             func point(_ x: Double, _ y: Double) -> CGPoint {
-                CGPoint(x: 1 + (x - 182) * scale, y: (size.height - 550.9 * scale) / 2 + (y - 236.55) * scale)
+                CGPoint(x: 1 + (x - 182) * scale, y: (size.height - 550.9 * scale) / 2 + (y - 226.55) * scale)
             }
             func polygon(_ points: [CGPoint]) -> CGPath {
                 let path = CGMutablePath()
@@ -91,26 +91,26 @@ extension NSImage {
             // The head: rounded at the top, with its bottom a shallow curve
             // where it disappears into the sand.
             let head = CGMutablePath()
-            head.move(to: point(387, 486.55))
-            head.addArc(tangent1End: point(387, 330.55), tangent2End: point(637, 330.55), radius: 78 * scale)
-            head.addArc(tangent1End: point(637, 330.55), tangent2End: point(637, 486.55), radius: 78 * scale)
-            head.addLine(to: point(637, 486.55))
-            head.addQuadCurve(to: point(387, 486.55), control: point(512, 552.55))
+            head.move(to: point(387, 496.55))
+            head.addArc(tangent1End: point(387, 320.55), tangent2End: point(637, 320.55), radius: 78 * scale)
+            head.addArc(tangent1End: point(637, 320.55), tangent2End: point(637, 496.55), radius: 78 * scale)
+            head.addLine(to: point(637, 496.55))
+            head.addQuadCurve(to: point(387, 496.55), control: point(512, 562.55))
             head.closeSubpath()
 
             // The box: its rim and walls as one shape.
             context.setFillColor(NSColor.black.cgColor)
-            context.addPath(polygon([point(512, 313.65), point(842, 488.55), point(842, 612.55), point(512, 787.45), point(182, 612.55), point(182, 488.55)]))
+            context.addPath(polygon([point(512, 323.65), point(842, 498.55), point(842, 622.55), point(512, 797.45), point(182, 622.55), point(182, 498.55)]))
             context.fillPath()
 
             // Cut out the inside of the rim, then fill the sand back in a
             // little smaller, so a gap separates it from the rim, since a
             // template image only has one colour.
             context.setBlendMode(.clear)
-            context.addPath(polygon([point(512, 343.38), point(785.9, 488.55), point(512, 633.72), point(238.1, 488.55)]))
+            context.addPath(polygon([point(512, 353.38), point(785.9, 498.55), point(512, 643.72), point(238.1, 498.55)]))
             context.fillPath()
             context.setBlendMode(.normal)
-            context.addPath(polygon([point(512, 392), point(709.2, 496.55), point(512, 601.1), point(314.8, 496.55)]))
+            context.addPath(polygon([point(512, 402), point(709.2, 506.55), point(512, 611.1), point(314.8, 506.55)]))
             context.fillPath()
 
             // Cut out the edges between the rim and the walls, and a gap
@@ -118,11 +118,11 @@ extension NSImage {
             context.setBlendMode(.clear)
             context.setLineWidth(1)
             context.setLineJoin(.round)
-            context.move(to: point(182, 488.55))
-            context.addLine(to: point(512, 663.45))
-            context.addLine(to: point(842, 488.55))
-            context.move(to: point(512, 663.45))
-            context.addLine(to: point(512, 787.45))
+            context.move(to: point(182, 498.55))
+            context.addLine(to: point(512, 673.45))
+            context.addLine(to: point(842, 498.55))
+            context.move(to: point(512, 673.45))
+            context.addLine(to: point(512, 797.45))
             context.strokePath()
             context.setLineWidth(2)
             context.addPath(head)
@@ -132,12 +132,12 @@ extension NSImage {
             context.setBlendMode(.normal)
             context.addPath(head)
             context.fillPath()
-            let light = point(512, 260.55), headTop = point(512, 330.55)
+            let light = point(512, 250.55), headTop = point(512, 320.55)
             context.fill(CGRect(x: light.x - 0.5, y: light.y, width: 1, height: headTop.y - light.y))
             context.fillEllipse(in: CGRect(x: light.x - 1.3, y: light.y - 1.3, width: 2.6, height: 2.6))
             context.setBlendMode(.clear)
             for x in [474.0, 550.0] {
-                let eye = point(x, 431.55)
+                let eye = point(x, 421.55)
                 context.addPath(roundedRect(CGRect(x: eye.x - 0.6, y: eye.y - 1, width: 1.2, height: 2), 0.6))
             }
             context.fillPath()
