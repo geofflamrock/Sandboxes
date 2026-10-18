@@ -442,7 +442,7 @@ private struct MCPHeaderSecretsSheet: View {
                                 SecureField(
                                     "${\(secret.placeholder)}",
                                     text: binding(for: secret.placeholder),
-                                    prompt: Text(secret.isStored ? "Stored. Enter a new value to replace it" : "Paste the value")
+                                    prompt: Text(secret.isStored ? "Stored" : "Value")
                                 )
                                 if secret.isStored {
                                     RemoveButton(help: "Remove the stored value") {
@@ -679,7 +679,7 @@ private struct AddMCPServerSheet: View {
                     SecureField(
                         "${\(placeholder)}",
                         text: secretBinding(for: placeholder),
-                        prompt: Text(stored.contains(placeholder) ? "Stored. Enter a new value to replace it" : "Paste the value")
+                        prompt: Text(stored.contains(placeholder) ? "Stored" : "Value")
                     )
                 }
             } header: {
