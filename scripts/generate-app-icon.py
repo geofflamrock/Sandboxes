@@ -57,12 +57,34 @@ ANTENNA_LIGHT = "#5BE38F"
 # The sandbox: a diamond W wide (half width) and W * SLOPE tall, with walls
 # WALL deep. The sand sits SAND_DROP below the rim, inside a rim that's
 # 1 - INNER of the box's width.
-CENTRE = (512, 548)
 W = 330
 SLOPE = 0.53
 WALL = 124
 INNER = 0.83
 SAND_DROP = 22
+
+# The agent peeks out of the sand: the sides of its head show HEAD_SHOWN
+# above the sand, which it meets along a curve HEAD_DIP deep. HEAD_SHOWN
+# keeps the visor clear of the sand, with a little of the face below it.
+HEAD_WIDTH = 250
+HEAD_RADIUS = 78
+HEAD_SHOWN = 156
+HEAD_DIP = 33
+ANTENNA_HEIGHT = 70
+LIGHT_RADIUS = 24
+
+
+def head_top(cy):
+    # The lowest point of the head is a little in front of the sand's centre.
+    return cy + SAND_DROP / 2 + 20 - HEAD_SHOWN - HEAD_DIP
+
+
+# Centre the artwork on the canvas, as Apple's icon grid expects: the
+# antenna light at the top and the bottom of the walls are the same distance
+# from the middle.
+_REACH_UP = -(head_top(0) - ANTENNA_HEIGHT - LIGHT_RADIUS)
+_REACH_DOWN = W * SLOPE + WALL
+CENTRE = (512, CANVAS / 2 + (_REACH_UP - _REACH_DOWN) / 2)
 
 
 def diamond(cx, cy, w, h):
@@ -109,14 +131,18 @@ def sand():
 
 def agent():
     # A rounded head with a visor and two eyes, and an antenna on top. Its
-    # bottom sits below the sand's surface.
-    cx = CENTRE[0]
-    top, bottom = CENTRE[1] - 262, CENTRE[1] - 10
-    antenna = 70
+    # bottom is a shallow curve where it disappears into the sand.
+    cx, cy = CENTRE
+    top = head_top(cy)
+    sides = top + HEAD_SHOWN
+    left, right, r = cx - HEAD_WIDTH / 2, cx + HEAD_WIDTH / 2, HEAD_RADIUS
+    head = (f"M{left:g},{sides:g} V{top + r:g} A{r},{r} 0 0 1 {left + r:g},{top:g} "
+            f"H{right - r:g} A{r},{r} 0 0 1 {right:g},{top + r:g} "
+            f"V{sides:g} A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} Z")
     return [
-        rect(cx - 7, top - antenna, 14, antenna + 10, 7, ANTENNA),
-        f'<circle cx="{cx}" cy="{top - antenna}" r="24" fill="{ANTENNA_LIGHT}"/>',
-        rect(cx - 125, top, 250, bottom - top, 78, AGENT),
+        rect(cx - 7, top - ANTENNA_HEIGHT, 14, ANTENNA_HEIGHT + 10, 7, ANTENNA),
+        f'<circle cx="{cx}" cy="{top - ANTENNA_HEIGHT:g}" r="{LIGHT_RADIUS}" fill="{ANTENNA_LIGHT}"/>',
+        f'<path d="{head}" fill="{AGENT}"/>',
         rect(cx - 98, top + 44, 196, 114, 52, VISOR),
         rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
         rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
