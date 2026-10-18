@@ -6,7 +6,6 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage and network traffic.
 - Create new sandboxes quickly and easily.
-- Choose between sbx's built-in (v2) agents and Docker's v3 agent kits when creating a sandbox.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
