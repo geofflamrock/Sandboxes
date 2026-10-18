@@ -7,23 +7,23 @@
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#fill)"/>
   <g clip-path="url(#shape)">
   <g id="frame" transform="translate(0.0 0.0)">
-    <polygon points="182.0,483.6 512.0,658.5 512.0,782.5 182.0,607.5" fill="#C47A3C"/>
-    <polygon points="512.0,658.5 842.0,483.6 842.0,607.5 512.0,782.5" fill="#AE6530"/>
-    <polygon points="182.0,543.1 512.0,718.0 512.0,728.0 182.0,553.1" fill="#8F5226"/>
-    <polygon points="512.0,718.0 842.0,543.1 842.0,553.1 512.0,728.0" fill="#8F5226"/>
-    <polygon points="512.0,308.6 842.0,483.6 512.0,658.5 182.0,483.6" fill="#E39B5B"/>
-    <polygon points="512.0,338.4 785.9,483.6 512.0,628.7 238.1,483.6" fill="#9A5A2B"/>
+    <polygon points="182.0,491.1 512.0,666.0 512.0,790.0 182.0,615.0" fill="#C47A3C"/>
+    <polygon points="512.0,666.0 842.0,491.1 842.0,615.0 512.0,790.0" fill="#AE6530"/>
+    <polygon points="182.0,550.6 512.0,725.5 512.0,735.5 182.0,560.6" fill="#8F5226"/>
+    <polygon points="512.0,725.5 842.0,550.6 842.0,560.6 512.0,735.5" fill="#8F5226"/>
+    <polygon points="512.0,316.1 842.0,491.1 512.0,666.0 182.0,491.1" fill="#E39B5B"/>
+    <polygon points="512.0,345.9 785.9,491.1 512.0,636.2 238.1,491.1" fill="#9A5A2B"/>
   </g>
   <g id="sand" transform="translate(0.0 0.0)">
-    <polygon points="512.0,360.4 765.1,494.6 512.0,628.7 258.9,494.6" fill="#EDC77F"/>
+    <polygon points="512.0,367.9 765.1,502.1 512.0,636.2 258.9,502.1" fill="#EDC77F"/>
   </g>
   <g id="agent" transform="translate(0.0 0.0)">
-    <rect x="505" y="265.55" width="14" height="80" rx="7" fill="#1C5CDB"/>
-    <circle cx="512" cy="265.55" r="24" fill="#5BE38F"/>
-    <path d="M387,511.55 V413.55 A78,78 0 0 1 465,335.55 H559 A78,78 0 0 1 637,413.55 V511.55 A125,33 0 0 1 387,511.55 Z" fill="#2A6EEF"/>
-    <rect x="414" y="379.55" width="196" height="114" rx="52" fill="#132A5C"/>
-    <rect x="455" y="406.55" width="38" height="60" rx="19" fill="#A6D5FA"/>
-    <rect x="531" y="406.55" width="38" height="60" rx="19" fill="#A6D5FA"/>
+    <rect x="505" y="258.05" width="14" height="80" rx="7" fill="#1C5CDB"/>
+    <circle cx="512" cy="258.05" r="24" fill="#5BE38F"/>
+    <path d="M387,504.05 V406.05 A78,78 0 0 1 465,328.05 H559 A78,78 0 0 1 637,406.05 V504.05 A125,33 0 0 1 387,504.05 Z" fill="#2A6EEF"/>
+    <rect x="414" y="372.05" width="196" height="114" rx="52" fill="#132A5C"/>
+    <rect x="455" y="399.05" width="38" height="60" rx="19" fill="#A6D5FA"/>
+    <rect x="531" y="399.05" width="38" height="60" rx="19" fill="#A6D5FA"/>
   </g>
   </g>
 </svg>
