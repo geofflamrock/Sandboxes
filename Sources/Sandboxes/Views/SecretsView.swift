@@ -475,10 +475,14 @@ private struct SecretEditor: View {
         return [sandbox] + sandboxNames
     }
 
+    /// Says what goes in the field, or that there's already a stored value.
     private var valuePrompt: String {
-        switch draft.kind {
-        case .service: draft.isEditing ? "Enter a new API key or token" : "Paste the API key or token"
-        case .custom: "Paste the secret"
+        if draft.original?.source == .value {
+            return "Stored"
+        }
+        return switch draft.kind {
+        case .service: "API key or token"
+        case .custom: "Value"
         case .registry: "Password or access token"
         }
     }
