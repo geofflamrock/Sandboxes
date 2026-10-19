@@ -5,6 +5,7 @@ import SwiftUI
 enum SandboxDetailTab: String, CaseIterable, Identifiable {
     case overview
     case policies
+    case traffic
     case secrets
 
     static let selectionKey = "sandboxDetailTab"
@@ -15,6 +16,7 @@ enum SandboxDetailTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "Overview"
         case .policies: "Policies"
+        case .traffic: "Traffic"
         case .secrets: "Secrets"
         }
     }
@@ -35,8 +37,9 @@ struct SandboxDetailView: View {
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
 
-    // The policies are polled here rather than in the Policies tab so
-    // the approvals row on Overview stays current.
+    // The policies are polled here rather than in the Policies and Traffic
+    // tabs so both share one refresh and the approvals row on Overview stays
+    // current.
     var body: some View {
         TabView(selection: $tab) {
             ForEach(SandboxDetailTab.allCases) { tab in
@@ -52,8 +55,9 @@ struct SandboxDetailView: View {
                             approvalsSection
                             policySection
                             rulesSection
-                            trafficSection
                             filesystemRulesSection
+                        case .traffic:
+                            trafficSection
                         case .secrets:
                             secretsSection
                         }
@@ -243,25 +247,6 @@ struct SandboxDetailView: View {
         }
     }
 
-    private var trafficSection: some View {
-        Section {
-            if network == nil {
-                networkPlaceholder
-            }
-            if let network {
-                if network.log.isEmpty {
-                    Text("No requests yet.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(network.log) { entry in
-                    NetworkLogRow(entry: entry)
-                }
-            }
-        } header: {
-            SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingPolicies)
-        }
-    }
-
     private var filesystemRulesSection: some View {
         Section {
             if let filesystemRules {
@@ -284,6 +269,32 @@ struct SandboxDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Traffic
+
+    private var trafficSection: some View {
+        Section {
+            if network == nil {
+                networkPlaceholder
+            }
+            if let network {
+                if network.log.isEmpty {
+                    Text("No requests yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(network.log) { entry in
+                    NetworkLogRow(entry: entry)
+                }
+            }
+        } header: {
+            SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingPolicies)
+        } footer: {
+            if let networkError {
+                Text("Couldn't read the network traffic: \(networkError)")
                     .foregroundStyle(.secondary)
             }
         }
