@@ -65,7 +65,7 @@ xcodegen generate
 open Sandboxes.xcodeproj
 ```
 
-Local builds show a "Local" badge at the bottom of the sidebar. The version lives in `project.yml` (`MARKETING_VERSION`).
+Local builds show a "Local" badge at the bottom of the sidebar and have version 0.0.0, a placeholder in `project.yml` (`MARKETING_VERSION`). CI sets the real version (see [Test builds](#test-builds) and [Releases](#releases)).
 
 ### Update checks
 
@@ -91,7 +91,7 @@ To change the background fill, or how the layers are grouped, scaled or lit, ope
 
 ### Test builds
 
-Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Pull request builds are named `Sandboxes-<version>-pr<number>.dmg`, and the app shows a "PR #<number>" badge at the bottom of the sidebar so you can tell you're not on a release. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch.
+Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Test builds are ahead of the latest release, so their version is the next minor version after it: when the latest release is v0.4.0, they're 0.5.0. Pull request builds are named `Sandboxes-<version>-pr<number>-<commit>.dmg` and `main` builds `Sandboxes-<version>-build<run number>-<commit>.dmg`, where `<commit>` is the short commit SHA. The app shows a badge such as "PR #12 · abc1234" or "main · abc1234" at the bottom of the sidebar so you can tell you're not on a release. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch and the commit.
 
 To download the latest test build with the GitHub CLI:
 

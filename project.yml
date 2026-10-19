@@ -6,12 +6,14 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    # CI overrides these: releases take the version from the tag, and every CI
-    # build uses the workflow run number as the build number.
-    MARKETING_VERSION: "0.1.0"
+    # Placeholders for local builds. CI overrides both: releases take the
+    # version from the tag, other builds the next minor version after the
+    # latest release, and every CI build uses the workflow run number as the
+    # build number.
+    MARKETING_VERSION: "0.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Shown next to the version for non-release builds, e.g. "PR #12". CI sets
-    # it to an empty string for releases.
+    # Shown next to the version for non-release builds, e.g. "PR #12 · abc1234".
+    # CI sets it to an empty string for releases.
     SANDBOXES_BUILD_LABEL: Local
     SWIFT_VERSION: "5.0"
 targets:
