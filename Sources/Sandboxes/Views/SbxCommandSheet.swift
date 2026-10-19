@@ -121,6 +121,7 @@ struct SbxCommandSheet: View {
         case .install: ("Installing sbx…", "sbx Installed", "Couldn't Install sbx")
         case .upgrade: ("Upgrading sbx…", "sbx Upgraded", "Couldn't Upgrade sbx")
         case .startDaemon: ("Starting the sbx Daemon…", "Daemon Started", "Couldn't Start the Daemon")
+        case .restartDaemon: ("Restarting the sbx Daemon…", "Daemon Restarted", "Couldn't Restart the Daemon")
         case .signIn: ("Signing In to Docker…", "Signed In", "Couldn't Sign In")
         case let .authoriseMCP(server): ("Authorising “\(server)”…", "“\(server)” Authorised", "Couldn't Authorise “\(server)”")
         }

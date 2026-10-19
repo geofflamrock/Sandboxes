@@ -385,7 +385,7 @@ private struct SbxActionCard: View {
         case .upgrade: "Upgrade sbx"
         case .startDaemon: "Start Daemon"
         case .signIn: "Sign In…"
-        case .authoriseMCP, nil: ""
+        case .authoriseMCP, .restartDaemon, nil: ""
         }
     }
 

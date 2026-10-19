@@ -12,6 +12,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
 - Manage MCP servers and configure sandboxes to use them.
+- View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
 ## Getting started
@@ -142,6 +143,11 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Remove an MCP server | `sbx mcp rm NAME --force`, and when you choose **Remove Server and Secrets**, `sbx secret rm mcp:NAME:… --force` for each of its secrets and the records sbx keeps with them (after confirming in the app) |
 | Load an MCP server into a running sandbox | `sbx mcp load NAME --sandbox SANDBOX` |
 | Unload an MCP server from a running sandbox | `sbx mcp unload NAME --sandbox SANDBOX` (after confirming in the app) |
+| List settings (Management › Settings) | `sbx settings ls --json` |
+| Read a setting in full (when you edit one, and after changing it) | `sbx settings get KEY --json` |
+| Change a setting | `sbx settings set KEY -- VALUE`, from its switch for a boolean or from **Edit…** |
+| Reset a setting to its default | `sbx settings unset KEY` |
+| Restart the daemon (Management › Settings) | `sbx daemon restart`, after confirming in the app, when you change a setting that needs it or click **Restart Daemon** |
 | Open Shell | `sbx exec -it NAME bash`, in Terminal |
 | Run the agent (in Terminal) | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |

@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(SbxSettingStore.self) private var sbxSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -16,6 +17,8 @@ struct ContentView: View {
                     SecretsView()
                 } else if store.selection == .mcpServers {
                     MCPServersView()
+                } else if store.selection == .sbxSettings {
+                    SbxSettingsListView()
                 } else if let sandbox = store.selectedSandbox {
                     SandboxDetailView(sandbox: sandbox)
                 } else {
@@ -90,6 +93,18 @@ struct ContentView: View {
         } message: { error in
             Text(error.message)
         }
+        .alert(
+            sbxSettings.actionError?.title ?? "",
+            isPresented: Binding(
+                get: { sbxSettings.actionError != nil },
+                set: { if !$0 { sbxSettings.actionError = nil } }
+            ),
+            presenting: sbxSettings.actionError
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.message)
+        }
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
@@ -142,6 +157,9 @@ struct SandboxSidebar: View {
                     .badge(mcp.servers.count)
                     .tag(SidebarItem.mcpServers)
                     .help("MCP servers registered with sbx, which sandboxes reach through its MCP gateway")
+                Label("Settings", systemImage: "slider.horizontal.3")
+                    .tag(SidebarItem.sbxSettings)
+                    .help("Settings of Docker Sandboxes, such as proxies and kit policy, from sbx settings")
             }
         }
         // Removing a sandbox also removes its secrets, so keep the count right.

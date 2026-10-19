@@ -6,6 +6,8 @@ enum SidebarItem: Hashable {
     case sandbox(Sandbox.ID)
     case secrets
     case mcpServers
+    /// The settings of sbx itself, not this app's.
+    case sbxSettings
 }
 
 @MainActor

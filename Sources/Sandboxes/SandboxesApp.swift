@@ -19,6 +19,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.sbxStatus)
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
+                .environment(appDelegate.sbxSettings)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -49,6 +50,10 @@ struct SandboxesApp: App {
                 .keyboardShortcut("s", modifiers: [.command, .option])
                 Button("MCP Servers") {
                     store.selection = .mcpServers
+                    AppWindows.showMain()
+                }
+                Button("sbx Settings") {
+                    store.selection = .sbxSettings
                     AppWindows.showMain()
                 }
             }
@@ -101,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sbxStatus = SbxStatus()
     let secrets: SecretStore
     let mcpServers: MCPServerStore
+    let sbxSettings = SbxSettingStore()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
