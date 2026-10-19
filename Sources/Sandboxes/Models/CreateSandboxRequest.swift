@@ -68,6 +68,9 @@ struct CreateSandboxRequest {
     var memoryGiB = 0
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
+    /// MCP servers to load when the sandbox starts. Choosing any makes the
+    /// set fixed: the agent can't find and load other servers itself.
+    var staticMCPServers: [String] = []
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -94,6 +97,9 @@ struct CreateSandboxRequest {
         }
         for kit in kits {
             arguments += ["--kit", kit]
+        }
+        for server in staticMCPServers {
+            arguments += ["--static-mcp", server]
         }
         arguments.append(trimmedWorkload)
         // Extra folders are positional too, so they only follow a main workspace.

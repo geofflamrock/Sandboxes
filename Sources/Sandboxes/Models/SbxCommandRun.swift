@@ -2,8 +2,8 @@ import Foundation
 import Observation
 
 /// One run of a command that fixes the setup, such as installing sbx with
-/// Homebrew, starting the daemon or signing in, with its streamed output for
-/// the command sheet.
+/// Homebrew, starting the daemon or signing in, or that authorises an MCP
+/// server, with its streamed output for the command sheet.
 @MainActor
 @Observable
 final class SbxCommandRun: Identifiable {
@@ -13,12 +13,15 @@ final class SbxCommandRun: Identifiable {
         case upgrade(cask: String)
         case startDaemon
         case signIn
+        /// `sbx mcp auth`, which opens the server's authorisation page in the
+        /// browser and waits until it's approved or refused.
+        case authoriseMCP(server: String)
 
         /// Whether it runs `brew` rather than `sbx`.
         var usesHomebrew: Bool {
             switch self {
             case .install, .upgrade: true
-            case .startDaemon, .signIn: false
+            case .startDaemon, .signIn, .authoriseMCP: false
             }
         }
 
@@ -28,6 +31,7 @@ final class SbxCommandRun: Identifiable {
             case let .upgrade(cask): ["upgrade", "docker/tap/\(cask)"]
             case .startDaemon: ["daemon", "start", "--detach"]
             case .signIn: ["login"]
+            case let .authoriseMCP(server): ["mcp", "auth", server]
             }
         }
 
@@ -58,6 +62,8 @@ final class SbxCommandRun: Identifiable {
     private(set) var phase: Phase = .running
     /// The code and page from `sbx login`, once it has printed them.
     private(set) var deviceSignIn: DeviceSignIn?
+    /// The page `sbx mcp auth` opened, once it has printed it.
+    private(set) var authorisationURL: URL?
 
     @ObservationIgnored private var task: Task<Void, Never>?
 
@@ -113,6 +119,23 @@ final class SbxCommandRun: Identifiable {
         if kind == .signIn, deviceSignIn == nil {
             deviceSignIn = Self.deviceSignIn(in: output.text)
         }
+        if case .authoriseMCP = kind, authorisationURL == nil {
+            authorisationURL = Self.authorisationURL(in: output.text)
+        }
+    }
+
+    /// Finds the page in output such as:
+    ///
+    ///     Open this URL to authorize MCP server "linear":
+    ///     https://mcp.linear.app/authorize?…
+    nonisolated static func authorisationURL(in text: String) -> URL? {
+        guard let prompt = text.range(of: "Open this URL") else { return nil }
+        return text[prompt.upperBound...]
+            .split(whereSeparator: \.isNewline)
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.hasPrefix("https://") || $0.hasPrefix("http://") }
+            .flatMap { URL(string: $0) }
     }
 
     /// Finds the sign-in page in output such as:

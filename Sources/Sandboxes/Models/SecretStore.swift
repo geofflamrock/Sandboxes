@@ -12,7 +12,11 @@ final class SecretStore {
         var id: String { sandbox }
     }
 
+    /// Everything sbx lists except the records it keeps next to MCP secrets.
     private(set) var secrets: [SbxSecret] = []
+    /// Records such as `mcp:acme:api-key:endpoint`, kept so removing an MCP
+    /// server can remove them too.
+    @ObservationIgnored private(set) var mcpMetadata: [SbxSecret] = []
     private(set) var hasLoaded = false
     private(set) var loadError: String?
     /// Secrets with a removal in flight.
@@ -22,8 +26,22 @@ final class SecretStore {
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
 
+    /// Global and host secrets, apart from MCP servers' secrets, which go
+    /// to the MCP gateway rather than to sandboxes.
     var globalSecrets: [SbxSecret] {
-        secrets.filter { $0.scope.sandboxName == nil }
+        secrets.filter { $0.scope.sandboxName == nil && $0.kind != .mcp }
+    }
+
+    var mcpSecrets: [SbxSecret] {
+        secrets.filter { $0.kind == .mcp }
+    }
+
+    /// The names of every secret and record sbx keeps for the MCP server
+    /// `server`, such as `mcp:acme:api-key` and `mcp:acme:api-key:endpoint`.
+    func mcpSecretNames(forServer server: String) -> [String] {
+        (secrets + mcpMetadata)
+            .filter { $0.mcpName?.server == server }
+            .map(\.name)
     }
 
     /// Each sandbox with secrets of its own, by name.
@@ -54,10 +72,12 @@ final class SecretStore {
 
     private func load() async {
         do {
-            let latest = try await SbxSecret.fetch()
+            let all = try await SbxSecret.fetch()
+            let latest = all.filter { !$0.isMCPMetadata }
             if latest != secrets {
                 secrets = latest
             }
+            mcpMetadata = all.filter(\.isMCPMetadata)
             loadError = nil
         } catch {
             loadError = error.localizedDescription

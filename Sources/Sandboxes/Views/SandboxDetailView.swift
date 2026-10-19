@@ -29,6 +29,7 @@ struct SandboxDetailView: View {
     @State private var isLoadingNetwork = false
     @State private var approvalResponse: ApprovalResponse?
     @Environment(SecretStore.self) private var secrets
+    @Environment(MCPServerStore.self) private var mcp
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
 
@@ -86,10 +87,11 @@ struct SandboxDetailView: View {
             // Kept out of the actions' group so it doesn't widen it, and always
             // laid out so the toolbar doesn't shift when it appears.
             ToolbarItem {
+                let isBusy = store.isBusy(sandbox) || mcp.isBusy(sandbox)
                 ProgressView()
                     .controlSize(.small)
-                    .opacity(store.isBusy(sandbox) ? 1 : 0)
-                    .accessibilityHidden(!store.isBusy(sandbox))
+                    .opacity(isBusy ? 1 : 0)
+                    .accessibilityHidden(!isBusy)
             }
             .sharedBackgroundVisibility(.hidden)
             // Left of the sandbox's actions, so they stay put as tabs change, and
@@ -264,7 +266,7 @@ struct SandboxDetailView: View {
     /// registry credentials aren't given to sandboxes, so aren't listed.
     private var secretsSection: some View {
         let scoped = secrets.secrets(for: sandbox.name)
-        let global = secrets.secrets.filter { $0.scope == .global }
+        let global = secrets.globalSecrets.filter { $0.scope == .global }
         let count = scoped.count + global.count
         return Section {
             if count == 0 {

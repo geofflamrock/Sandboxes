@@ -11,6 +11,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
+- Manage MCP servers and configure sandboxes to use them.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
 ## Getting started
@@ -19,6 +20,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
+- `sbx` v0.48.0 or later to unload MCP servers from a sandbox.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
@@ -112,7 +114,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... WORKLOAD [PATH [PATH[:ro]]...]` |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]` |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
@@ -128,6 +130,16 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Add or edit a custom secret | `sbx secret set-custom --host HOST... [--env NAME] [--placeholder VALUE] [--sandbox NAME]` with `--value VALUE`, `--ref REF` or `--command COMMAND` |
 | Add or edit registry credentials | `sbx secret set --registry HOST [--username USER] [--registry-auth-endpoint URL] [--all-sandboxes \| --sandbox NAME] --password-stdin` |
 | Remove a secret | `sbx secret rm SERVICE --force [--sandbox NAME]`, `sbx secret rm --placeholder VALUE --force [--sandbox NAME]` for a custom secret, or `sbx secret rm --registry HOST --force [--all-sandboxes \| --sandbox NAME]` for registry credentials (after confirming in the app) |
+| List MCP servers (sidebar, Management › MCP Servers, New Sandbox window) | `sbx mcp ls --json` |
+| Inspect an MCP server, and its header secrets | `sbx mcp inspect NAME --json` |
+| Add an MCP server | For each `${PLACEHOLDER}` in its headers, `sbx secret set mcp:NAME:PLACEHOLDER --force` with the value on standard input, which sbx needs first (removed again if adding fails). Then `sbx mcp add NAME --url URL [--local] [--header 'Name: value']... [--client-id ID] [--scope SCOPE]... [--skip-ssrf-check] --skip-auth`, or `sbx mcp add NAME --command COMMAND [--args ARG]... [--dir DIR]` (after confirming in the app), then authorises it if it needs OAuth |
+| Authorise an MCP server | `sbx mcp auth NAME`, with its output shown in the app while sbx waits for you to approve access in the browser |
+| Set an MCP header secret | `sbx secret set mcp:NAME:PLACEHOLDER --force`, with the value on standard input |
+| Remove an MCP header secret | `sbx secret rm mcp:NAME:PLACEHOLDER --force`, then `sbx secret rm mcp:NAME:PLACEHOLDER:endpoint --force`, which sbx leaves behind (after confirming in the app) |
+| Remove an MCP server's credentials | `sbx mcp auth rm NAME --force` (after confirming in the app) |
+| Remove an MCP server | `sbx mcp rm NAME --force`, and when you choose **Remove Server and Secrets**, `sbx secret rm mcp:NAME:… --force` for each of its secrets and the records sbx keeps with them (after confirming in the app) |
+| Load an MCP server into a running sandbox | `sbx mcp load NAME --sandbox SANDBOX` |
+| Unload an MCP server from a running sandbox | `sbx mcp unload NAME --sandbox SANDBOX` (after confirming in the app) |
 | Open Shell | `sbx exec -it NAME bash`, in Terminal |
 | Run the agent (in Terminal) | `sbx run --name NAME` |
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |

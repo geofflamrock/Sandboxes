@@ -30,6 +30,19 @@ struct SecretsView: View {
                 }
             }
 
+            if !secrets.mcpSecrets.isEmpty {
+                Section {
+                    ForEach(secrets.mcpSecrets) { secret in
+                        SecretRow(secret: secret, editor: $editor, removal: $removal)
+                    }
+                } header: {
+                    Text("MCP Servers")
+                } footer: {
+                    Text("Header values and OAuth client secrets for MCP servers. Set and remove them in Management › MCP Servers. Running sandboxes pick up a change when they restart.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             ForEach(secrets.sandboxSecrets) { group in
                 let sandbox = store.sandboxes.first { $0.name == group.sandbox }
                 Section {
@@ -159,6 +172,7 @@ struct SecretRow: View {
     var readOnlyLabel: String?
     /// Whether a secret scoped to the sandbox replaces this one.
     var isOverridden = false
+    @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
 
     var body: some View {
@@ -187,6 +201,12 @@ struct SecretRow: View {
             } else if secrets.isRemoving(secret) {
                 ProgressView()
                     .controlSize(.small)
+            } else if let mcp = secret.mcpName {
+                Button("Show Server") {
+                    store.mcpServerToReveal = mcp.server
+                    store.selection = .mcpServers
+                }
+                .help("Change or remove it in Management › MCP Servers")
             } else {
                 if secret.canEdit {
                     Button("Edit…") { edit() }
@@ -230,6 +250,9 @@ struct SecretRow: View {
     /// What it's for and where its value comes from, one line each.
     private var details: [String] {
         var lines: [String] = []
+        if let mcp = secret.mcpName {
+            lines.append(mcp.key == "client_secret" ? "OAuth client secret for “\(mcp.server)”" : "Header value for “\(mcp.server)”")
+        }
         switch secret.kind {
         case .service, .other:
             break
@@ -304,7 +327,10 @@ struct SecretIcon: View {
     }
 
     private var symbol: String {
-        switch secret.kind {
+        if secret.kind == .mcp {
+            return "puzzlepiece.extension"
+        }
+        return switch secret.kind {
         case .service, .other: "key"
         case .custom: "key.horizontal"
         case .registry: "shippingbox"
@@ -449,10 +475,14 @@ private struct SecretEditor: View {
         return [sandbox] + sandboxNames
     }
 
+    /// Says what goes in the field, or that there's already a stored value.
     private var valuePrompt: String {
-        switch draft.kind {
-        case .service: draft.isEditing ? "Enter a new API key or token" : "Paste the API key or token"
-        case .custom: "Paste the secret"
+        if draft.original?.source == .value {
+            return "Stored"
+        }
+        return switch draft.kind {
+        case .service: "API key or token"
+        case .custom: "Value"
         case .registry: "Password or access token"
         }
     }
