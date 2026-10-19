@@ -71,20 +71,28 @@ HEAD_WIDTH = 250
 HEAD_RADIUS = 78
 HEAD_SHOWN = 176
 HEAD_DIP = 33
-HEAD_FORWARD = 15
+HEAD_FORWARD = 20
 ANTENNA_HEIGHT = 70
 LIGHT_RADIUS = 24
+# The whole agent is drawn AGENT_SCALE times the size above, grown from where
+# it meets the sand so it still comes out of the same spot.
+AGENT_SCALE = 1.2
+
+
+def head_bottom(cy):
+    # The lowest point of the head is in front of the sand's centre.
+    return cy + SAND_DROP / 2 + 20 + HEAD_FORWARD
 
 
 def head_top(cy):
-    # The lowest point of the head is in front of the sand's centre.
-    return cy + SAND_DROP / 2 + 20 + HEAD_FORWARD - HEAD_SHOWN - HEAD_DIP
+    return head_bottom(cy) - HEAD_SHOWN - HEAD_DIP
 
 
 # Centre the artwork on the canvas, as Apple's icon grid expects: the
 # antenna light at the top and the bottom of the walls are the same distance
 # from the middle.
-_REACH_UP = -(head_top(0) - ANTENNA_HEIGHT - LIGHT_RADIUS)
+_LIGHT_TOP = head_top(0) - ANTENNA_HEIGHT - LIGHT_RADIUS
+_REACH_UP = -(head_bottom(0) + (_LIGHT_TOP - head_bottom(0)) * AGENT_SCALE)
 _REACH_DOWN = W * SLOPE + WALL
 CENTRE = (512, CANVAS / 2 + (_REACH_UP - _REACH_DOWN) / 2)
 
@@ -141,14 +149,16 @@ def agent():
     head = (f"M{left:g},{sides:g} V{top + r:g} A{r},{r} 0 0 1 {left + r:g},{top:g} "
             f"H{right - r:g} A{r},{r} 0 0 1 {right:g},{top + r:g} "
             f"V{sides:g} A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} Z")
-    return [
+    bottom = head_bottom(cy)
+    grow = f"translate({cx:g} {bottom:g}) scale({AGENT_SCALE:g}) translate({-cx:g} {-bottom:g})"
+    return [group([
         rect(cx - 7, top - ANTENNA_HEIGHT, 14, ANTENNA_HEIGHT + 10, 7, ANTENNA),
         f'<circle cx="{cx}" cy="{top - ANTENNA_HEIGHT:g}" r="{LIGHT_RADIUS}" fill="{ANTENNA_LIGHT}"/>',
         f'<path d="{head}" fill="{AGENT}"/>',
         rect(cx - 98, top + 44, 196, 114, 52, VISOR),
         rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
         rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
-    ]
+    ], grow, indent="")]
 
 
 LAYER_SHAPES = {"Frame": frame, "Sand": sand, "Agent": agent}
