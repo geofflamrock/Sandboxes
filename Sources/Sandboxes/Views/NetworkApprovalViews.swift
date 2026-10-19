@@ -25,6 +25,8 @@ struct ApprovalResponse {
 
     var message: String {
         switch action {
+        case .approve where !approval.canAddRule:
+            "This gives “\(sandboxName)” the access it asked for."
         case .approve:
             "This adds a rule that lets “\(sandboxName)” or every sandbox reach \(approval.title). Approving for all sandboxes also dismisses other sandboxes' requests for \(approval.target.host)."
         case .deny:
@@ -56,7 +58,10 @@ struct NetworkApprovalRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            Button("Deny") { respond(.deny) }
+            // Denying adds a deny rule, which only network requests can have.
+            if approval.canAddRule {
+                Button("Deny") { respond(.deny) }
+            }
             if let option = approval.approveOption {
                 Button("Approve") { respond(.approve(option)) }
                     .buttonStyle(.borderedProminent)
@@ -94,6 +99,10 @@ private struct ApprovalResponseDialog: ViewModifier {
             presenting: response
         ) { response in
             switch response.action {
+            case let .approve(option) where !response.approval.canAddRule:
+                Button("Approve") {
+                    Task { await store.respond(to: response.approval, with: option) }
+                }
             case let .approve(option):
                 Button("Approve for This Sandbox") {
                     Task { await store.respond(to: response.approval, with: option) }

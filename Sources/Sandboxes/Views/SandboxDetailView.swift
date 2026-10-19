@@ -4,7 +4,7 @@ import SwiftUI
 /// across sandboxes, so watching traffic carries on when you switch.
 enum SandboxDetailTab: String, CaseIterable, Identifiable {
     case overview
-    case network
+    case policies
     case secrets
 
     static let selectionKey = "sandboxDetailTab"
@@ -14,7 +14,7 @@ enum SandboxDetailTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview: "Overview"
-        case .network: "Network"
+        case .policies: "Policies"
         case .secrets: "Secrets"
         }
     }
@@ -26,14 +26,16 @@ struct SandboxDetailView: View {
     @AppStorage(SandboxDetailTab.selectionKey) private var tab = SandboxDetailTab.overview
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
-    @State private var isLoadingNetwork = false
+    @State private var filesystemRules: [FilesystemRule]?
+    @State private var filesystemError: String?
+    @State private var isLoadingPolicies = false
     @State private var approvalResponse: ApprovalResponse?
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
 
-    // The network policy is polled here rather than in the Network tab so
+    // The policies are polled here rather than in the Policies tab so
     // the approvals row on Overview stays current.
     var body: some View {
         TabView(selection: $tab) {
@@ -46,11 +48,12 @@ struct SandboxDetailView: View {
                             detailsSection
                             SandboxResourcesSection(sandbox: sandbox)
                                 .id(sandbox.name)
-                        case .network:
+                        case .policies:
                             approvalsSection
                             policySection
                             rulesSection
                             trafficSection
+                            filesystemRulesSection
                         case .secrets:
                             secretsSection
                         }
@@ -65,10 +68,10 @@ struct SandboxDetailView: View {
         .onChange(of: store.approvalsToReveal, initial: true) { _, name in
             guard name == sandbox.name else { return }
             store.approvalsToReveal = nil
-            tab = .network
+            tab = .policies
         }
         .task(id: sandbox.name) {
-            await refreshNetwork()
+            await refreshPolicies()
         }
         .task(id: sandbox.name) {
             await secrets.refresh()
@@ -115,7 +118,7 @@ struct SandboxDetailView: View {
 
     // MARK: - Overview
 
-    /// Points to the Network tab, where pending approvals are answered.
+    /// Points to the Policies tab, where pending approvals are answered.
     @ViewBuilder
     private var approvalsSummarySection: some View {
         let count = store.approvals(for: sandbox).count
@@ -130,7 +133,7 @@ struct SandboxDetailView: View {
                     )
                     Spacer()
                     Button("Review") {
-                        tab = .network
+                        tab = .policies
                     }
                 }
             }
@@ -171,7 +174,7 @@ struct SandboxDetailView: View {
         }
     }
 
-    // MARK: - Network
+    // MARK: - Policies
 
     @ViewBuilder
     private var approvalsSection: some View {
@@ -209,7 +212,7 @@ struct SandboxDetailView: View {
                 networkPolicy
             }
         } header: {
-            SectionHeader(title: "Policy", isLoading: isLoadingNetwork)
+            SectionHeader(title: "Policy", isLoading: isLoadingPolicies)
         } footer: {
             if let networkError {
                 Text("Couldn't read the network policy: \(networkError)")
@@ -236,7 +239,7 @@ struct SandboxDetailView: View {
                 }
             }
         } header: {
-            SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingNetwork)
+            SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingPolicies)
         }
     }
 
@@ -255,7 +258,34 @@ struct SandboxDetailView: View {
                 }
             }
         } header: {
-            SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingNetwork)
+            SectionHeader(title: "Network Traffic", count: network?.log.count, isLoading: isLoadingPolicies)
+        }
+    }
+
+    private var filesystemRulesSection: some View {
+        Section {
+            if let filesystemRules {
+                if filesystemRules.isEmpty {
+                    Text("No rules apply to this sandbox.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(filesystemRules) { rule in
+                    FilesystemRuleRow(rule: rule)
+                }
+            } else {
+                Text(filesystemError == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            SectionHeader(title: "File System Rules", count: filesystemRules?.count, isLoading: isLoadingPolicies)
+        } footer: {
+            if let filesystemError {
+                Text("Couldn't read the file system policy: \(filesystemError)")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -315,16 +345,22 @@ struct SandboxDetailView: View {
             .foregroundStyle(.secondary)
     }
 
-    /// Reads the network policy, rules and traffic from `sbx policy` every few
-    /// seconds until the task is cancelled.
-    private func refreshNetwork() async {
+    /// Reads the network policy, rules and traffic, and the file system rules,
+    /// from `sbx policy` every few seconds until the task is cancelled. Each
+    /// reports its own failure, so one that fails doesn't hide the other.
+    private func refreshPolicies() async {
         network = nil
         networkError = nil
-        isLoadingNetwork = false
+        filesystemRules = nil
+        filesystemError = nil
+        isLoadingPolicies = false
+        let sandbox = sandbox
         while !Task.isCancelled {
-            isLoadingNetwork = true
+            isLoadingPolicies = true
+            async let latestNetwork = SandboxNetwork.fetch(for: sandbox)
+            async let latestFilesystemRules = FilesystemRule.fetch(for: sandbox)
             do {
-                let latest = try await SandboxNetwork.fetch(for: sandbox)
+                let latest = try await latestNetwork
                 guard !Task.isCancelled else { return }
                 if latest != network {
                     network = latest
@@ -334,7 +370,18 @@ struct SandboxDetailView: View {
                 guard !Task.isCancelled else { return }
                 networkError = error.localizedDescription
             }
-            isLoadingNetwork = false
+            do {
+                let latest = try await latestFilesystemRules
+                guard !Task.isCancelled else { return }
+                if latest != filesystemRules {
+                    filesystemRules = latest
+                }
+                filesystemError = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                filesystemError = error.localizedDescription
+            }
+            isLoadingPolicies = false
             try? await Task.sleep(for: .seconds(5))
         }
     }
@@ -512,21 +559,67 @@ private struct NetworkRuleRow: View {
         return lines.joined(separator: "\n")
     }
 
-    /// For example "Kit · This sandbox" or "Local · All sandboxes".
     private var origin: String {
-        var parts: [String] = []
-        if let source = rule.source, !source.isEmpty {
-            parts.append(source.lowercased() == "org" ? "Organization" : source.capitalized)
-        }
-        if let appliesTo = rule.appliesTo?.lowercased() {
-            if appliesTo == "all" || appliesTo == "global" {
-                parts.append("All sandboxes")
-            } else if appliesTo.hasPrefix("sandbox") {
-                parts.append("This sandbox")
-            }
-        }
-        return parts.joined(separator: " · ")
+        ruleOrigin(source: rule.source, appliesTo: rule.appliesTo)
     }
+}
+
+private struct FilesystemRuleRow: View {
+    let rule: FilesystemRule
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            DecisionLabel(decision: rule.decision, style: .rule)
+                .frame(width: 80, alignment: .leading)
+            Text(rule.paths.joined(separator: ", "))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Text([access, origin].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .help(details)
+    }
+
+    /// "Read", "Write" or "Read & Write", or nil if sbx doesn't say.
+    private var access: String? {
+        switch (rule.access.contains(.read), rule.access.contains(.write)) {
+        case (true, true): "Read & Write"
+        case (true, false): "Read"
+        case (false, true): "Write"
+        case (false, false): nil
+        }
+    }
+
+    private var details: String {
+        var lines = ["\(rule.decision == .allow ? "Allow" : "Deny") \(rule.paths.joined(separator: ", "))"]
+        if let access { lines.append("Access: \(access)") }
+        if !origin.isEmpty { lines.append(origin) }
+        return lines.joined(separator: "\n")
+    }
+
+    private var origin: String {
+        ruleOrigin(source: rule.source, appliesTo: rule.appliesTo)
+    }
+}
+
+/// Where a rule came from and what it applies to, for example
+/// "Kit · This sandbox" or "Local · All sandboxes".
+private func ruleOrigin(source: String?, appliesTo: String?) -> String {
+    var parts: [String] = []
+    if let source, !source.isEmpty {
+        parts.append(source.lowercased() == "org" ? "Organization" : source.capitalized)
+    }
+    if let appliesTo = appliesTo?.lowercased() {
+        if appliesTo == "all" || appliesTo == "global" {
+            parts.append("All sandboxes")
+        } else if appliesTo.hasPrefix("sandbox") {
+            parts.append("This sandbox")
+        }
+    }
+    return parts.joined(separator: " · ")
 }
 
 private struct NetworkLogRow: View {
@@ -565,7 +658,7 @@ private struct DecisionLabel: View {
         case traffic
     }
 
-    let decision: NetworkDecision
+    let decision: PolicyDecision
     let style: Style
     /// Shown in parentheses after the decision, e.g. "Allow (Balanced)".
     var detail: String?
@@ -587,7 +680,7 @@ private struct DecisionLabel: View {
     }
 }
 
-/// A small coloured circle for a sandbox state or network decision.
+/// A small coloured circle for a sandbox state or policy decision.
 struct StatusDot: View {
     let color: Color
 

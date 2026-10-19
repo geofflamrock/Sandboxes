@@ -4,7 +4,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 ### Features 
 
-- See the details of your sandboxes, including resource usage and network traffic.
+- See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
@@ -120,6 +120,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
 | Resource usage (selected running sandbox) | `sbx exec NAME sh -c …` reading `/proc/stat`, `/proc/meminfo`, `/proc/uptime` and `df` |
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
+| File system rules (selected sandbox) | `sbx policy ls NAME --type filesystem --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
 | Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option dismiss` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |

@@ -1,6 +1,6 @@
 import Foundation
 
-enum NetworkDecision: Hashable {
+enum PolicyDecision: Hashable {
     case allow
     case deny
 
@@ -20,7 +20,7 @@ enum NetworkDecision: Hashable {
 /// A network rule that applies to a sandbox, from `sbx policy ls`.
 struct NetworkRule: Identifiable, Hashable {
     let id: String
-    let decision: NetworkDecision
+    let decision: PolicyDecision
     let resources: [String]
     /// Where the rule came from: `local`, `kit` or `org`.
     let source: String?
@@ -34,7 +34,7 @@ struct NetworkRule: Identifiable, Hashable {
 struct NetworkLogEntry: Identifiable, Hashable {
     var id: String { "\(decision)|\(host)" }
     let host: String
-    let decision: NetworkDecision
+    let decision: PolicyDecision
     let count: Int
     let lastSeen: Date?
 }
@@ -48,7 +48,7 @@ struct SandboxNetwork: Hashable {
 
     /// What happens to a request that no rule matches. The Open preset is a
     /// wildcard allow rule, so look for one when the preset isn't reported.
-    var defaultDecision: NetworkDecision {
+    var defaultDecision: PolicyDecision {
         if let preset = preset?.lowercased() {
             return preset.contains("allow") || preset.contains("open") ? .allow : .deny
         }
@@ -71,20 +71,21 @@ struct SandboxNetwork: Hashable {
     static func fetch(for sandbox: Sandbox) async throws -> SandboxNetwork {
         async let rulesOutput = SbxCLI.runChecked(["policy", "ls", sandbox.name, "--type", "network", "--json"])
         async let logOutput = SbxCLI.runChecked(["policy", "log", sandbox.name, "--type", "network", "--json"])
-        let rulesJSON = try NetworkPolicyParser.document(try await rulesOutput)
-        let logJSON = try NetworkPolicyParser.document(try await logOutput)
+        let rulesJSON = try PolicyParser.document(try await rulesOutput)
+        let logJSON = try PolicyParser.document(try await logOutput)
         return SandboxNetwork(
-            preset: NetworkPolicyParser.preset(in: rulesJSON),
-            rules: NetworkPolicyParser.rules(in: rulesJSON),
-            log: NetworkPolicyParser.log(in: logJSON, sandbox: sandbox.name)
+            preset: PolicyParser.preset(in: rulesJSON),
+            rules: PolicyParser.rules(in: rulesJSON),
+            log: PolicyParser.log(in: logJSON, sandbox: sandbox.name)
         )
     }
 }
 
-/// Parses `sbx policy ls --json` and `sbx policy log --json`. Like `sbx ls`, the
-/// schema isn't documented, so this looks for rule- and entry-shaped objects
-/// anywhere in the document rather than decoding a fixed model.
-enum NetworkPolicyParser {
+/// Parses `sbx policy ls --json` and `sbx policy log --json`, for network and
+/// file system rules. Like `sbx ls`, the schema isn't documented, so this looks
+/// for rule- and entry-shaped objects anywhere in the document rather than
+/// decoding a fixed model.
+enum PolicyParser {
     typealias JSON = SandboxListParser
 
     struct ParseError: LocalizedError {
@@ -127,7 +128,11 @@ enum NetworkPolicyParser {
     /// Active network rules, deny rules first.
     static func rules(in json: Any) -> [NetworkRule] {
         var rules: [NetworkRule] = []
-        collectRules(in: json, inherited: [:], into: &rules)
+        collectRules(in: json, inherited: [:]) { object, context in
+            guard let rule = rule(from: object, context: context) else { return false }
+            rules.append(rule)
+            return true
+        }
         var seen = Set<String>()
         return rules
             .filter { seen.insert($0.id).inserted }
@@ -141,10 +146,13 @@ enum NetworkPolicyParser {
     /// Keys a policy passes down to the rules it contains.
     private static let inheritedKeys = ["source", "applies_to", "scope", "status", "type", "resource_type"]
 
-    private static func collectRules(in json: Any, inherited: [String: Any], into rules: inout [NetworkRule]) {
+    /// Walks the document, passing each object and the policy keys it inherits
+    /// to `take`, which returns whether the object was a rule. Rules aren't
+    /// searched for nested rules.
+    private static func collectRules(in json: Any, inherited: [String: Any], take: ([String: Any], [String: Any]) -> Bool) {
         if let array = json as? [Any] {
             for item in array {
-                collectRules(in: item, inherited: inherited, into: &rules)
+                collectRules(in: item, inherited: inherited, take: take)
             }
             return
         }
@@ -155,12 +163,11 @@ enum NetworkPolicyParser {
                 context[key] = value
             }
         }
-        if let rule = rule(from: object, context: context) {
-            rules.append(rule)
+        if take(object, context) {
             return
         }
         for value in object.values where value is [Any] || value is [String: Any] {
-            collectRules(in: value, inherited: context, into: &rules)
+            collectRules(in: value, inherited: context, take: take)
         }
     }
 
@@ -190,16 +197,84 @@ enum NetworkPolicyParser {
 
     /// Reads a decision from a string such as `"allow"`, or an action object
     /// such as `{"allow": {...}}`.
-    private static func decision(of object: [String: Any]) -> NetworkDecision? {
+    private static func decision(of object: [String: Any]) -> PolicyDecision? {
         let value = JSON.value(in: object, for: ["decision", "action", "effect", "rule_decision"])
         if let text = value as? String {
-            return NetworkDecision(text)
+            return PolicyDecision(text)
         }
         if let action = value as? [String: Any] {
-            return JSON.string(JSON.value(in: action, for: ["type", "decision"])).flatMap { NetworkDecision($0) }
-                ?? action.keys.lazy.compactMap { NetworkDecision($0) }.first
+            return JSON.string(JSON.value(in: action, for: ["type", "decision"])).flatMap { PolicyDecision($0) }
+                ?? action.keys.lazy.compactMap { PolicyDecision($0) }.first
         }
         return nil
+    }
+
+    // MARK: File system rules
+
+    /// Active file system rules, deny rules first.
+    static func filesystemRules(in json: Any) -> [FilesystemRule] {
+        var rules: [FilesystemRule] = []
+        collectRules(in: json, inherited: [:]) { object, context in
+            guard let rule = filesystemRule(from: object, context: context) else { return false }
+            rules.append(rule)
+            return true
+        }
+        var seen = Set<String>()
+        return rules
+            .filter { seen.insert($0.id).inserted }
+            .sorted { lhs, rhs in
+                if lhs.decision != rhs.decision { return lhs.decision == .deny }
+                let left = lhs.paths.first ?? "", right = rhs.paths.first ?? ""
+                return left.localizedStandardCompare(right) == .orderedAscending
+            }
+    }
+
+    private static func filesystemRule(from object: [String: Any], context: [String: Any]) -> FilesystemRule? {
+        guard let decision = decision(of: object) else { return nil }
+        let paths = resourceList(JSON.value(in: object, for: ["resources", "resource", "paths", "path", "patterns", "pattern"]))
+        guard !paths.isEmpty else { return nil }
+
+        // The command asks for file system rules only, so a rule without a
+        // type is one; skip any that say they're for something else.
+        let type = JSON.string(JSON.value(in: context, for: ["type", "resource_type"]))?.lowercased() ?? ""
+        let status = JSON.string(JSON.value(in: context, for: ["status"]))?.lowercased() ?? ""
+        guard type.isEmpty || type.contains("filesystem") || type.contains("file_system") || type == "fs",
+              status != "inactive"
+        else {
+            return nil
+        }
+
+        let access = access(JSON.value(in: object, for: ["actions", "access", "permissions", "operations", "action"]))
+        let appliesTo = scope(JSON.value(in: context, for: ["applies_to", "scope"]))
+        let accessID = [FilesystemRule.Access.read, .write].filter(access.contains).map { "\($0)" }
+        let fallbackID = (["filesystem", decision == .allow ? "allow" : "deny", appliesTo ?? ""] + accessID + paths).joined(separator: "|")
+        return FilesystemRule(
+            id: JSON.string(JSON.value(in: object, for: ["rule_id", "id"])) ?? fallbackID,
+            decision: decision,
+            paths: paths,
+            access: access,
+            source: JSON.string(JSON.value(in: context, for: ["source"])),
+            appliesTo: appliesTo
+        )
+    }
+
+    /// Reads actions such as `["read", "write"]`, `"read,write"`,
+    /// `fs:mount:read` or `ALLOWLIST_ACTION_FS_MOUNT_WRITE`.
+    private static func access(_ value: Any?) -> Set<FilesystemRule.Access> {
+        let items = value as? [Any] ?? value.map { [$0] } ?? []
+        var access = Set<FilesystemRule.Access>()
+        for item in items {
+            guard let text = JSON.string(item)?.lowercased() else { continue }
+            for part in text.split(whereSeparator: { $0 == "," || $0 == " " }) {
+                if part.contains("write") || part == "rw" {
+                    access.insert(.write)
+                }
+                if part.contains("read") || part == "rw" || part == "ro" {
+                    access.insert(.read)
+                }
+            }
+        }
+        return access
     }
 
     private static func resourceList(_ value: Any?) -> [String] {
@@ -250,7 +325,7 @@ enum NetworkPolicyParser {
         }
     }
 
-    private static func collectLog(in json: Any, decision: NetworkDecision?, sandbox: String, into entries: inout [NetworkLogEntry]) {
+    private static func collectLog(in json: Any, decision: PolicyDecision?, sandbox: String, into entries: inout [NetworkLogEntry]) {
         if let array = json as? [Any] {
             for item in array {
                 collectLog(in: item, decision: decision, sandbox: sandbox, into: &entries)
@@ -264,11 +339,11 @@ enum NetworkPolicyParser {
         }
         for (key, value) in object where value is [Any] || value is [String: Any] {
             // Groups such as `blocked_hosts` and `allowed_hosts` give the outcome.
-            collectLog(in: value, decision: NetworkDecision(key) ?? decision, sandbox: sandbox, into: &entries)
+            collectLog(in: value, decision: PolicyDecision(key) ?? decision, sandbox: sandbox, into: &entries)
         }
     }
 
-    private static func logEntry(from object: [String: Any], decision inherited: NetworkDecision?, sandbox: String) -> NetworkLogEntry? {
+    private static func logEntry(from object: [String: Any], decision inherited: PolicyDecision?, sandbox: String) -> NetworkLogEntry? {
         guard let host = JSON.string(JSON.value(in: object, for: ["host", "hostname", "resource", "destination"])), !host.isEmpty,
               JSON.value(in: object, for: ["count", "last_seen", "lastSeen"]) != nil
         else {
@@ -287,8 +362,8 @@ enum NetworkPolicyParser {
         )
     }
 
-    private static func entryDecision(_ object: [String: Any]) -> NetworkDecision? {
-        if let text = JSON.string(JSON.value(in: object, for: ["decision", "status", "result"])), let decision = NetworkDecision(text) {
+    private static func entryDecision(_ object: [String: Any]) -> PolicyDecision? {
+        if let text = JSON.string(JSON.value(in: object, for: ["decision", "status", "result"])), let decision = PolicyDecision(text) {
             return decision
         }
         // `string` reads booleans as "Yes" or "No".
