@@ -100,7 +100,10 @@ private struct CreateSandboxForm: View {
                         case .kits:
                             kitsSection
                             ForEach(request.kits, id: \.self) { kit in
-                                kitArgumentsSection(for: kit)
+                                kitArgumentsSection(for: kit) {
+                                    request.kits.removeAll { $0 == kit }
+                                    request.kitArgumentValues[kit] = nil
+                                }
                             }
                         case .runtime:
                             resourcesSection
@@ -343,24 +346,6 @@ private struct CreateSandboxForm: View {
 
     private var kitsSection: some View {
         Section {
-            ForEach(request.kits, id: \.self) { kit in
-                HStack {
-                    Image(systemName: KitSource(reference: kit).systemImage)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                    Text(KitSource(reference: kit) == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
-                        .font(.body.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(kit)
-                    Spacer()
-                    RemoveButton(help: "Remove kit") {
-                        request.kits.removeAll { $0 == kit }
-                        request.kitArgumentValues[kit] = nil
-                    }
-                }
-            }
-
             HStack {
                 Picker("Add from", selection: $kitDraft.source) {
                     ForEach(KitSource.allCases) { source in
@@ -459,7 +444,7 @@ private struct CreateSandboxForm: View {
 
     // MARK: Kit arguments
 
-    private func kitArgumentsSection(for kit: String) -> some View {
+    private func kitArgumentsSection(for kit: String, onRemove: (() -> Void)? = nil) -> some View {
         KitArgumentsSection(
             kit: kit,
             result: inspector.results[kit],
@@ -468,7 +453,8 @@ private struct CreateSandboxForm: View {
             } set: {
                 request.kitArgumentValues[kit] = $0
             },
-            onRetry: { inspector.inspect(kit) }
+            onRetry: { inspector.inspect(kit) },
+            onRemove: onRemove
         )
     }
 
