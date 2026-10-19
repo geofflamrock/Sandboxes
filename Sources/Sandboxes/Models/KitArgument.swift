@@ -105,9 +105,111 @@ struct KitInspection: Hashable {
     var kind: String?
     var arguments: [KitArgument] = []
 
+    /// `sbx kit inspect` refuses a kit with a required argument unless it's
+    /// given a value (as of v0.48.0), so this tries again with stand-in values
+    /// until it accepts them, then reports the arguments as the kit declares them.
     static func fetch(_ reference: String) async throws -> KitInspection {
-        let output = try await SbxCLI.runChecked(["kit", "inspect", reference, "--json"])
-        return try KitInspectionParser.parse(output, reference: reference)
+        var placeholders: [String: String] = [:]
+        var required: Set<String> = []
+        var attempts = 0
+        while true {
+            attempts += 1
+            var arguments = ["kit", "inspect", reference, "--json"]
+            for (name, value) in placeholders.sorted(by: { $0.key < $1.key }) {
+                arguments += ["--kit-arg", "\(name)=\(value)"]
+            }
+            let result = try await SbxCLI.run(arguments)
+            if result.succeeded {
+                var inspection = try KitInspectionParser.parse(result.output, reference: reference)
+                for index in inspection.arguments.indices where required.contains(inspection.arguments[index].name) {
+                    inspection.arguments[index].isRequired = true
+                }
+                return inspection
+            }
+            let retry = KitArgumentPlaceholders.retry(after: result.output, current: placeholders)
+            // Give up once a try asks for nothing new, or after a few tries.
+            guard !retry.values.isEmpty, attempts < 20 else {
+                throw SbxError.commandFailed(arguments: arguments, exitCode: result.exitCode, output: result.output)
+            }
+            placeholders.merge(retry.values) { $1 }
+            required.formUnion(retry.required)
+        }
+    }
+}
+
+/// Stand-in values for `sbx kit inspect`, chosen from its complaints about
+/// the values it was given: one for each required argument, the first
+/// choice for an argument with choices, and a value matching the pattern
+/// for one with a pattern.
+enum KitArgumentPlaceholders {
+    struct Retry {
+        /// Values to add or change, by argument name.
+        var values: [String: String] = [:]
+        /// Arguments sbx said are required.
+        var required: Set<String> = []
+    }
+
+    /// Tried in turn against an argument's pattern.
+    private static let candidates = [
+        "placeholder", "x", "0", "1", "1.0.0", "true", "main", "example",
+        "example.com", "org/repo", "https://github.com/org/repo", "https://github.com/org/repo.git",
+        "git@github.com:org/repo.git", "user@example.com", "https://example.com",
+    ]
+
+    static func retry(after output: String, current: [String: String]) -> Retry {
+        var retry = Retry()
+        // `kit arg "name" is required and no value was supplied`
+        for match in output.matches(of: #/kit arg "([^"]+)" is required and no value was supplied/#) {
+            let name = String(match.1)
+            retry.required.insert(name)
+            if current[name] == nil {
+                retry.values[name] = candidates[0]
+            }
+        }
+        // `kit arg "name": value "x" is not one of [a b]`
+        for match in output.matches(of: #/kit arg "([^"]+)": value "(?:[^"\\]|\\.)*" is not one of \[([^\]]*)\]/#) {
+            let name = String(match.1)
+            if let choice = match.2.split(separator: " ").first.map(String.init), current[name] != choice {
+                retry.values[name] = choice
+            }
+        }
+        // `kit arg "name": value "x" does not match pattern "^…$"`, with the pattern quoted as Go does.
+        for match in output.matches(of: #/kit arg "([^"]+)": value "(?:[^"\\]|\\.)*" does not match pattern "((?:[^"\\]|\\.)*)"/#) {
+            let name = String(match.1)
+            let pattern = unquoted(String(match.2))
+            if let value = candidate(matching: pattern), current[name] != value {
+                retry.values[name] = value
+            }
+        }
+        return retry
+    }
+
+    private static func candidate(matching pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "\\A(?:\(pattern))\\z") else { return nil }
+        return candidates.first { value in
+            regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) != nil
+        }
+    }
+
+    /// Undoes the escaping Go's `%q` adds inside the quotes.
+    private static func unquoted(_ text: String) -> String {
+        var result = ""
+        var escaping = false
+        for character in text {
+            if escaping {
+                switch character {
+                case "n": result.append("\n")
+                case "t": result.append("\t")
+                default: result.append(character)
+                }
+                escaping = false
+            } else if character == "\\" {
+                escaping = true
+            } else {
+                result.append(character)
+            }
+        }
+        return result
     }
 }
 
