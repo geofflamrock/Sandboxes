@@ -6,7 +6,8 @@ enum AppInfo {
     static let version = string(for: "CFBundleShortVersionString") ?? "0.0.0"
     /// The build number. CI uses the workflow run number.
     static let build = string(for: "CFBundleVersion") ?? "0"
-    /// What kind of non-release build this is, such as "PR #12", "main" or "Local".
+    /// What kind of non-release build this is, such as "PR #12 · abc1234",
+    /// "main · abc1234" or "Local".
     /// Release builds have no label.
     static let buildLabel = string(for: "SandboxesBuildLabel")
 
