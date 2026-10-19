@@ -74,38 +74,50 @@ private struct KitArgumentRow: View {
     let isFixed: Bool
     @Binding var values: [String: String]
 
+    // The label is outside the control, so a fixed argument's control is
+    // disabled while its info button still opens.
     var body: some View {
-        Group {
-            switch argument.input {
-            case .toggle:
-                Toggle(isOn: toggleBinding) { label }
-            case .choice:
-                Picker(selection: choiceBinding) {
-                    if (argument.defaultValue ?? "").isEmpty {
-                        Text(argument.isRequired ? "Not Chosen" : "None").tag("")
-                        Divider()
-                    }
-                    ForEach(argument.choices, id: \.self) { choice in
-                        Text(choice == argument.defaultValue ? "\(choice) (Default)" : choice).tag(choice)
-                    }
-                } label: {
-                    label
-                }
-            case .text:
-                TextField(text: textBinding, prompt: Text(prompt)) { label }
-            }
+        LabeledContent {
+            control
+                .labelsHidden()
+                .accessibilityLabel(argument.name)
+                .disabled(isFixed)
+        } label: {
+            label
         }
-        .disabled(isFixed)
     }
 
+    @ViewBuilder
+    private var control: some View {
+        switch argument.input {
+        case .toggle:
+            Toggle(argument.name, isOn: toggleBinding)
+        case .choice:
+            Picker(argument.name, selection: choiceBinding) {
+                if (argument.defaultValue ?? "").isEmpty {
+                    Text(argument.isRequired ? "Not Chosen" : "None").tag("")
+                    Divider()
+                }
+                ForEach(argument.choices, id: \.self) { choice in
+                    Text(choice == argument.defaultValue ? "\(choice) (Default)" : choice).tag(choice)
+                }
+            }
+        case .text:
+            TextField(argument.name, text: textBinding, prompt: Text(prompt))
+        }
+    }
+
+    /// The name, with the description behind an info button as System
+    /// Settings does, so a long one doesn't stretch the row. A problem with
+    /// the value stays in view.
     private var label: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(argument.name)
-                .font(.body.monospaced())
-            ForEach(details, id: \.self) { detail in
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Text(argument.name)
+                    .font(.body.monospaced())
+                if !details.isEmpty {
+                    InfoButton(text: details.joined(separator: "\n\n"))
+                }
             }
             if let problem = argument.problem(with: values[argument.name]),
                values[argument.name]?.isEmpty == false || argument.input != .text {
@@ -162,6 +174,29 @@ private struct KitArgumentRow: View {
             (values[argument.name] ?? argument.defaultValue) == "true"
         } set: {
             store($0 ? "true" : "false")
+        }
+    }
+}
+
+/// An ⓘ button that shows `text` in a popover, and as a tooltip on hover.
+private struct InfoButton: View {
+    let text: String
+    @State private var isShowing = false
+
+    var body: some View {
+        Button("More Information", systemImage: "info.circle") {
+            isShowing.toggle()
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(text)
+        .popover(isPresented: $isShowing, arrowEdge: .trailing) {
+            Text(text)
+                .frame(width: 280, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding()
         }
     }
 }
