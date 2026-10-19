@@ -10,6 +10,9 @@ struct CreateSandboxView: View {
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
+    /// Kits already inspected stay known while the window is open, so going
+    /// back to edit options doesn't read them again.
+    @State private var inspector = KitInspector()
 
     var body: some View {
         Group {
@@ -22,6 +25,7 @@ struct CreateSandboxView: View {
             } else {
                 CreateSandboxForm(
                     request: $request,
+                    inspector: inspector,
                     onCancel: close,
                     onCreate: start
                 )
@@ -68,6 +72,7 @@ struct CreateSandboxView: View {
 
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
+    let inspector: KitInspector
     let onCancel: () -> Void
     let onCreate: () -> Void
 
@@ -87,10 +92,16 @@ private struct CreateSandboxForm: View {
                         switch tab {
                         case .general:
                             agentSection
+                            if KitArgument.isInspectable(workload: request.trimmedWorkload) {
+                                kitArgumentsSection(for: request.trimmedWorkload)
+                            }
                             nameSection
                             workspaceSection
                         case .kits:
                             kitsSection
+                            ForEach(request.kits, id: \.self) { kit in
+                                kitArgumentsSection(for: kit)
+                            }
                         case .runtime:
                             resourcesSection
                             environmentSection
@@ -108,6 +119,24 @@ private struct CreateSandboxForm: View {
         .task {
             await mcp.refresh()
         }
+        // A typed workload is inspected once typing pauses, rather than for
+        // every partial reference. Docker's own agents are inspected straight away.
+        .task(id: request.trimmedWorkload) {
+            let workload = request.trimmedWorkload
+            guard KitArgument.isInspectable(workload: workload) else { return }
+            if inspector.results[workload] == nil && Agent.match(workload: workload) == nil {
+                try? await Task.sleep(for: .milliseconds(700))
+                guard !Task.isCancelled else { return }
+            }
+            inspector.inspect(workload)
+        }
+        .onChange(of: request.kits, initial: true) {
+            for kit in request.kits {
+                inspector.inspect(kit)
+            }
+        }
+        .onChange(of: request.argumentKits, initial: true, syncDeclaredArguments)
+        .onChange(of: inspector.results, syncDeclaredArguments)
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
         // As a bar, the form fades as it scrolls under them, as windows do.
         .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -327,6 +356,7 @@ private struct CreateSandboxForm: View {
                     Spacer()
                     RemoveButton(help: "Remove kit") {
                         request.kits.removeAll { $0 == kit }
+                        request.kitArgumentValues[kit] = nil
                     }
                 }
             }
@@ -425,6 +455,32 @@ private struct CreateSandboxForm: View {
     private func add(kit: String) {
         guard !kit.isEmpty, !request.kits.contains(kit) else { return }
         request.kits.append(kit)
+    }
+
+    // MARK: Kit arguments
+
+    private func kitArgumentsSection(for kit: String) -> some View {
+        KitArgumentsSection(
+            kit: kit,
+            result: inspector.results[kit],
+            values: Binding {
+                request.kitArgumentValues[kit] ?? [:]
+            } set: {
+                request.kitArgumentValues[kit] = $0
+            },
+            onRetry: { inspector.inspect(kit) }
+        )
+    }
+
+    /// Copies what inspecting the picked kits found into the request, which
+    /// needs it to check values and build the command.
+    private func syncDeclaredArguments() {
+        for kit in request.argumentKits {
+            if case let .loaded(inspection) = inspector.results[kit],
+               request.declaredKitArguments[kit] != inspection.arguments {
+                request.setDeclaredArguments(inspection.arguments, for: kit)
+            }
+        }
     }
 
     // MARK: Resources

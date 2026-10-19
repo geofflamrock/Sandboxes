@@ -71,6 +71,11 @@ struct CreateSandboxRequest {
     /// MCP servers to load when the sandbox starts. Choosing any makes the
     /// set fixed: the agent can't find and load other servers itself.
     var staticMCPServers: [String] = []
+    /// The arguments each kit declares, by kit reference, once `sbx kit inspect` has read them.
+    var declaredKitArguments: [String: [KitArgument]] = [:]
+    /// Values entered for kits' arguments, by kit reference and then argument
+    /// name. An argument without one is left to its default.
+    var kitArgumentValues: [String: [String: String]] = [:]
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -98,6 +103,7 @@ struct CreateSandboxRequest {
         for kit in kits {
             arguments += ["--kit", kit]
         }
+        arguments += kitArgumentFlags
         for server in staticMCPServers {
             arguments += ["--static-mcp", server]
         }
@@ -121,6 +127,7 @@ struct CreateSandboxRequest {
         for kit in kits {
             arguments += ["--kit", kit]
         }
+        arguments += kitArgumentFlags
         arguments.append(trimmedWorkload)
         return arguments.map(Self.quoteIfNeeded).joined(separator: " ")
     }
@@ -146,7 +153,49 @@ struct CreateSandboxRequest {
                 return "“\(variable.trimmedKey)” isn't a valid environment variable name."
             }
         }
+        for kit in argumentKits {
+            for argument in declaredKitArguments[kit] ?? [] {
+                if let problem = argument.problem(with: kitArgumentValues[kit]?[argument.name]) {
+                    return problem
+                }
+            }
+        }
         return nil
+    }
+
+    /// The workload, when it's a kit, then the mixins: the kits whose arguments can be set.
+    var argumentKits: [String] {
+        (KitArgument.isInspectable(workload: trimmedWorkload) ? [trimmedWorkload] : []) + kits
+    }
+
+    /// Records what `kit` declares. A required toggle without a default
+    /// starts off, which has to be passed as `false`.
+    mutating func setDeclaredArguments(_ arguments: [KitArgument], for kit: String) {
+        declaredKitArguments[kit] = arguments
+        for argument in arguments where argument.input == .toggle && argument.isRequired && argument.defaultValue == nil {
+            if kitArgumentValues[kit]?[argument.name] == nil {
+                kitArgumentValues[kit, default: [:]][argument.name] = "false"
+            }
+        }
+    }
+
+    /// `--kit-arg` for each value entered. A name that more than one picked
+    /// kit declares is aimed at its kit, since a bare name sets it on all of them.
+    private var kitArgumentFlags: [String] {
+        let kits = argumentKits
+        var flags: [String] = []
+        for kit in kits {
+            let declared = Set((declaredKitArguments[kit] ?? []).map(\.name))
+            for (name, value) in (kitArgumentValues[kit] ?? [:]).sorted(by: { $0.key < $1.key })
+            where declared.contains(name) && !value.isEmpty {
+                let shared = kits.contains { other in
+                    other != kit && declaredKitArguments[other]?.contains { $0.name == name } == true
+                }
+                let handle = shared ? KitArgument.handle(for: kit) : nil
+                flags += ["--kit-arg", KitArgument.flag(name: name, value: value, handle: handle)]
+            }
+        }
+        return flags
     }
 
     private static func quoteIfNeeded(_ value: String) -> String {

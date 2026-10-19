@@ -6,6 +6,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
+- Set the arguments a workload or mixin kit declares when you create a sandbox, with a toggle, a menu of its choices or a text field checked against its pattern.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
@@ -114,7 +115,8 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]` |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
