@@ -69,15 +69,16 @@ struct MenuBarMenu: View {
 extension NSImage {
     /// The app icon's sandbox with the agent peeking out of it, drawn as a
     /// template image so the menu bar tints it. Shapes are in the app icon's
-    /// 1024pt coordinates from scripts/generate-app-icon.py.
+    /// 1024pt coordinates from scripts/generate-app-icon.py, before it
+    /// recentres the artwork, with the agent already grown by its AGENT_SCALE.
     static let menuBarSandbox: NSImage = {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: true) { _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            // The artwork spans x 182–842 and y 234.05–789.95 in the icon.
+            // The artwork spans x 182–842 and y 178.45–789.95 in the icon.
             let scale = 16.0 / 660
             func point(_ x: Double, _ y: Double) -> CGPoint {
-                CGPoint(x: 1 + (x - 182) * scale, y: (size.height - 550.9 * scale) / 2 + (y - 234.05) * scale)
+                CGPoint(x: 1 + (x - 182) * scale, y: (size.height - 611.5 * scale) / 2 + (y - 178.45) * scale)
             }
             func polygon(_ points: [CGPoint]) -> CGPath {
                 let path = CGMutablePath()
@@ -91,11 +92,11 @@ extension NSImage {
             // The head: rounded at the top, with its bottom a shallow curve
             // where it disappears into the sand.
             let head = CGMutablePath()
-            head.move(to: point(387, 504.05))
-            head.addArc(tangent1End: point(387, 328.05), tangent2End: point(637, 328.05), radius: 78 * scale)
-            head.addArc(tangent1End: point(637, 328.05), tangent2End: point(637, 504.05), radius: 78 * scale)
-            head.addLine(to: point(637, 504.05))
-            head.addQuadCurve(to: point(387, 504.05), control: point(512, 570.05))
+            head.move(to: point(362, 502.45))
+            head.addArc(tangent1End: point(362, 291.25), tangent2End: point(662, 291.25), radius: 93.6 * scale)
+            head.addArc(tangent1End: point(662, 291.25), tangent2End: point(662, 502.45), radius: 93.6 * scale)
+            head.addLine(to: point(662, 502.45))
+            head.addQuadCurve(to: point(362, 502.45), control: point(512, 581.65))
             head.closeSubpath()
 
             // The box: its rim and walls as one shape.
@@ -132,13 +133,13 @@ extension NSImage {
             context.setBlendMode(.normal)
             context.addPath(head)
             context.fillPath()
-            let light = point(512, 258.05), headTop = point(512, 328.05)
-            context.fill(CGRect(x: light.x - 0.5, y: light.y, width: 1, height: headTop.y - light.y))
-            context.fillEllipse(in: CGRect(x: light.x - 1.3, y: light.y - 1.3, width: 2.6, height: 2.6))
+            let light = point(512, 207.25), headTop = point(512, 291.25)
+            context.fill(CGRect(x: light.x - 0.6, y: light.y, width: 1.2, height: headTop.y - light.y))
+            context.fillEllipse(in: CGRect(x: light.x - 1.55, y: light.y - 1.55, width: 3.1, height: 3.1))
             context.setBlendMode(.clear)
-            for x in [474.0, 550.0] {
-                let eye = point(x, 429.05)
-                context.addPath(roundedRect(CGRect(x: eye.x - 0.6, y: eye.y - 1, width: 1.2, height: 2), 0.6))
+            for x in [466.4, 557.6] {
+                let eye = point(x, 412.45)
+                context.addPath(roundedRect(CGRect(x: eye.x - 0.7, y: eye.y - 1.2, width: 1.4, height: 2.4), 0.7))
             }
             context.fillPath()
             return true
