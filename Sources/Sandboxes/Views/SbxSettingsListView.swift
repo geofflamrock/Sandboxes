@@ -238,9 +238,7 @@ private struct SbxSettingRow: View {
             SettingBadge(text: "Restart Needed", color: .orange)
                 .help("Changed since the daemon last restarted. Restart it to apply the change everywhere.")
         } else if setting.requiresRestart {
-            Image(systemName: "arrow.clockwise")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            SettingBadge(text: "Requires restart", color: .secondary)
                 .help("Changes apply everywhere once the daemon restarts")
         }
     }
