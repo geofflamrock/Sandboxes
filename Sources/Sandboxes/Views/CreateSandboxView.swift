@@ -91,13 +91,16 @@ private struct CreateSandboxForm: View {
                     Form {
                         switch tab {
                         case .general:
+                            nameSection
                             agentSection
                             if KitArgument.isInspectable(workload: request.trimmedWorkload) {
                                 kitArgumentsSection(for: request.trimmedWorkload)
                             }
-                            nameSection
                         case .workspace:
                             workspaceSection
+                            if request.workspace != nil {
+                                additionalWorkspacesSection
+                            }
                         case .kits:
                             kitsSection
                             ForEach(request.kits, id: \.self) { kit in
@@ -285,28 +288,6 @@ private struct CreateSandboxForm: View {
             }
             .pickerStyle(.segmented)
             .disabled(request.workspace == nil)
-
-            if request.workspace != nil {
-                ForEach($request.additionalWorkspaces) { $folder in
-                    HStack {
-                        Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(folder.url.path)
-                        Spacer()
-                        Toggle("Read-only", isOn: $folder.isReadOnly)
-                            .toggleStyle(.checkbox)
-                            .help("Stop the agent changing anything in this folder")
-                        RemoveButton(help: "Don't mount this folder") {
-                            request.additionalWorkspaces.removeAll { $0.id == folder.id }
-                        }
-                    }
-                }
-                Button("Add Another Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
-                    .buttonStyle(.borderless)
-            }
-        } header: {
-            Text("Workspace")
         } footer: {
             Text(workspaceFooter)
                 .foregroundStyle(.secondary)
@@ -317,10 +298,34 @@ private struct CreateSandboxForm: View {
         guard request.workspace != nil else {
             return "Without a workspace the agent works in the sandbox's own filesystem."
         }
-        if request.additionalWorkspaces.isEmpty {
-            return request.mode.explanation
+        return request.mode.explanation
+    }
+
+    private var additionalWorkspacesSection: some View {
+        Section {
+            ForEach($request.additionalWorkspaces) { $folder in
+                HStack {
+                    Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(folder.url.path)
+                    Spacer()
+                    Toggle("Read-only", isOn: $folder.isReadOnly)
+                        .toggleStyle(.checkbox)
+                        .help("Stop the agent changing anything in this folder")
+                    RemoveButton(help: "Don't mount this folder") {
+                        request.additionalWorkspaces.removeAll { $0.id == folder.id }
+                    }
+                }
+            }
+            Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
+                .buttonStyle(.borderless)
+        } header: {
+            Text("Additional Folders")
+        } footer: {
+            Text("These folders are mounted at the same paths as on your Mac.")
+                .foregroundStyle(.secondary)
         }
-        return request.mode.explanation + " Other folders are mounted at the same paths as on your Mac."
     }
 
     private func chooseWorkspace() {
