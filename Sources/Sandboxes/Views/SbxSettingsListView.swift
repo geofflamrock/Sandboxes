@@ -235,7 +235,7 @@ private struct SbxSettingRow: View {
             EmptyView()
         }
         if settings.keysAwaitingRestart.contains(setting.key) {
-            SettingBadge(text: "Restart Needed", color: .orange)
+            SettingBadge(text: "Restart needed", color: .orange)
                 .help("Changed since the daemon last restarted. Restart it to apply the change everywhere.")
         } else if setting.requiresRestart {
             SettingBadge(text: "Requires restart", color: .secondary)
