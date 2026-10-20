@@ -100,10 +100,21 @@ struct KitArgument: Hashable, Identifiable {
 /// What `sbx kit inspect` reports about a kit that the New Sandbox window needs.
 struct KitInspection: Hashable {
     let reference: String
+    /// The kit's name, when the output has one at the top level. Kit
+    /// descriptors don't name themselves, so this is the name sbx gives it.
+    var name: String?
     var displayName: String?
     /// `workload` or `mixin`.
     var kind: String?
     var arguments: [KitArgument] = []
+
+    /// What an environment file's `agent:` names this workload kit as: the
+    /// name inspect reports, or else the last component of its repository
+    /// name, as sbx's docs describe
+    /// (https://docs.docker.com/ai/sandboxes/configuration/environment-files/#add-v3-kits).
+    var agentName: String {
+        name ?? KitArgument.handle(for: reference)
+    }
 
     /// `sbx kit inspect` refuses a kit with a required argument unless it's
     /// given a value (as of v0.48.0), so this tries again with stand-in values
@@ -270,8 +281,11 @@ enum KitInspectionParser {
             ?? records.first { field($0, ["schemaVersion", "kind", "displayName"]) != nil }
             ?? records.first
         guard let descriptor else { throw ParseError(output: trimmed) }
+        // Only the top level: names further in are capabilities' display labels.
+        let topLevel = (json as? [String: Any]) ?? ((json as? [Any])?.first as? [String: Any])
         return KitInspection(
             reference: reference,
+            name: topLevel.flatMap { text($0, ["name"]) },
             displayName: text(descriptor, ["displayName", "display_name", "title"]),
             kind: text(descriptor, ["kind"]),
             arguments: arguments(from: field(descriptor, argumentKeys))

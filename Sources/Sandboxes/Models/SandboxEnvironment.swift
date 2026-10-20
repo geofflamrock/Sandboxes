@@ -39,8 +39,20 @@ struct SandboxEnvironment: Identifiable, Sendable {
 
     /// The agent the file names, for its icon.
     var agent: Agent? {
-        guard let workload = definition?.agent else { return nil }
+        guard let name = definition?.agent else { return nil }
+        let workload = workloadKit?.source ?? name
         return Agent(workload: workload) ?? Agent(identifier: workload)
+    }
+
+    /// The kit that provides a v3 agent: the one the agent's name refers to,
+    /// or else the first kit, where the app writes it, when the name isn't a
+    /// built-in agent's.
+    var workloadKit: Kit? {
+        guard let name = definition?.agent, let kits = definition?.kits else { return nil }
+        if let kit = kits.first(where: { $0.source == name || KitArgument.handle(for: $0.source) == name }) {
+            return kit
+        }
+        return Agent.match(workload: name)?.version == .builtIn ? nil : kits.first
     }
 
     /// A path from the file, resolved the way sbx does: relative paths start
@@ -184,7 +196,12 @@ extension SandboxEnvironment {
         if !request.trimmedName.isEmpty {
             lines.append("name: \(quote(request.trimmedName))")
         }
-        lines.append("agent: \(quote(request.trimmedWorkload))")
+        // A v3 agent is named by its kit's name, with the kit itself listed
+        // under kits below; a built-in agent by its own name.
+        let workload = request.trimmedWorkload
+        let isKit = KitArgument.isInspectable(workload: workload)
+        let agent = isKit ? (request.workloadKitName ?? KitArgument.handle(for: workload)) : workload
+        lines.append("agent: \(quote(agent))")
 
         if let workspace = request.workspace {
             if request.mode == .clone {
@@ -332,8 +349,8 @@ struct EnvironmentCreateRequest {
     var credentialApprovalCommandLine: String {
         var arguments = ["sbx", "create"]
         let definition = environment.definition
-        let kits = (definition?.kits ?? []).filter { $0.source != definition?.agent }
-        for kit in kits {
+        let workloadKit = environment.workloadKit
+        for kit in definition?.kits ?? [] where kit.source != workloadKit?.source {
             arguments += ["--kit", kit.source]
         }
         for kit in definition?.kits ?? [] {
@@ -341,7 +358,7 @@ struct EnvironmentCreateRequest {
                 arguments += ["--kit-arg", KitArgument.flag(name: name, value: value, handle: KitArgument.handle(for: kit.source))]
             }
         }
-        arguments.append(definition?.agent ?? "")
+        arguments.append(workloadKit?.source ?? definition?.agent ?? "")
         return arguments.map(CreateSandboxRequest.quoteIfNeeded).joined(separator: " ")
     }
 

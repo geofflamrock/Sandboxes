@@ -76,6 +76,9 @@ struct CreateSandboxRequest {
     /// Values entered for kits' arguments, by kit reference and then argument
     /// name. An argument without one is left to its default.
     var kitArgumentValues: [String: [String: String]] = [:]
+    /// The workload kit's name once it's been inspected. An environment file
+    /// names a v3 agent by it: sbx doesn't accept the image there.
+    var workloadKitName: String?
     /// Whether to also save this setup as an environment once the sandbox is
     /// created, and its name. An empty name uses the suggested one.
     var savesEnvironment = false

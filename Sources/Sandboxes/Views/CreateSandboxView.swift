@@ -567,6 +567,12 @@ private struct CreateSandboxForm: View {
                 request.setDeclaredArguments(inspection.arguments, for: kit)
             }
         }
+        let workload = request.trimmedWorkload
+        if case let .loaded(inspection) = inspector.results[workload] {
+            request.workloadKitName = inspection.agentName
+        } else {
+            request.workloadKitName = nil
+        }
     }
 
     // MARK: Resources
