@@ -103,6 +103,9 @@ private struct CreateSandboxForm: View {
                             }
                         case .kits:
                             kitsSection
+                            if !availableRecentKits.isEmpty {
+                                recentKitsSection
+                            }
                             ForEach(request.kits, id: \.self) { kit in
                                 kitArgumentsSection(for: kit) {
                                     request.kits.removeAll { $0 == kit }
@@ -352,22 +355,12 @@ private struct CreateSandboxForm: View {
 
     private var kitsSection: some View {
         Section {
-            HStack {
-                Picker("Add from", selection: $kitDraft.source) {
-                    ForEach(KitSource.allCases) { source in
-                        Label(source.title, systemImage: source.systemImage).tag(source)
-                    }
-                }
-                .pickerStyle(.segmented)
-                RecentsMenu(
-                    title: "Recent Kits",
-                    items: recents.kits.filter { !request.kits.contains($0) }
-                ) {
-                    add(kit: $0)
-                } onClear: {
-                    recents.clearKits()
+            Picker("Add from", selection: $kitDraft.source) {
+                ForEach(KitSource.allCases) { source in
+                    Label(source.title, systemImage: source.systemImage).tag(source)
                 }
             }
+            .pickerStyle(.segmented)
 
             switch kitDraft.source {
             case .registry:
@@ -411,6 +404,49 @@ private struct CreateSandboxForm: View {
                 .foregroundStyle(.secondary)
         }
     }
+
+    // MARK: Recent kits
+
+    /// Recent kits that aren't added already, so a card can't add a kit
+    /// twice, which sbx refuses.
+    private var availableRecentKits: [String] {
+        recents.kits.filter { !request.kits.contains($0) }
+    }
+
+    /// Cards for the most recent kits, so one used before is a click away.
+    /// Older ones are in the More menu rather than pushing the added kits
+    /// further down.
+    private var recentKitsSection: some View {
+        let kits = availableRecentKits
+        let shown = kits.prefix(Self.recentKitCardLimit)
+        let more = kits.dropFirst(Self.recentKitCardLimit)
+        return Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
+                ForEach(Array(shown), id: \.self) { kit in
+                    RecentKitCard(kit: kit) { add(kit: kit) }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            HStack {
+                Text("Recent Kits")
+                Spacer()
+                if !more.isEmpty {
+                    Menu("More") {
+                        ForEach(Array(more), id: \.self) { kit in
+                            Button(kit) { add(kit: kit) }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                Button("Clear") { recents.clearKits() }
+                    .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    private static let recentKitCardLimit = 6
 
     private var kitsFooter: String {
         let intro = "Mixin kits add tools and settings to the agent."
@@ -770,6 +806,48 @@ private struct AgentTile: View {
     private var background: Color {
         if isSelected { return Color.accentColor.opacity(0.15) }
         return isHovering ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.05)
+    }
+}
+
+/// A kit used before, by its short name and where it's from, which adds it
+/// when clicked.
+private struct RecentKitCard: View {
+    let kit: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        let source = KitSource(reference: kit)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: source.systemImage)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(KitArgument.handle(for: kit))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(isHovering ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.05), in: .rect(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+            }
+            .contentShape(.rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("Add “\(kit)”")
     }
 }
 
