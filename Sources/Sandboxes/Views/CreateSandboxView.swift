@@ -96,6 +96,7 @@ private struct CreateSandboxForm: View {
                                 kitArgumentsSection(for: request.trimmedWorkload)
                             }
                             nameSection
+                        case .workspace:
                             workspaceSection
                         case .kits:
                             kitsSection
@@ -627,6 +628,7 @@ private struct CreateSandboxForm: View {
 
 private enum CreateSheetTab: CaseIterable, Identifiable {
     case general
+    case workspace
     case kits
     case runtime
     case mcp
@@ -636,6 +638,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .workspace: "Workspace"
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .mcp: "MCP"
