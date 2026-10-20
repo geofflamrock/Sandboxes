@@ -10,6 +10,9 @@ struct CreateSandboxView: View {
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
+    /// Kits already inspected stay known while the window is open, so going
+    /// back to edit options doesn't read them again.
+    @State private var inspector = KitInspector()
 
     var body: some View {
         Group {
@@ -22,6 +25,7 @@ struct CreateSandboxView: View {
             } else {
                 CreateSandboxForm(
                     request: $request,
+                    inspector: inspector,
                     onCancel: close,
                     onCreate: start
                 )
@@ -68,6 +72,7 @@ struct CreateSandboxView: View {
 
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
+    let inspector: KitInspector
     let onCancel: () -> Void
     let onCreate: () -> Void
 
@@ -86,11 +91,27 @@ private struct CreateSandboxForm: View {
                     Form {
                         switch tab {
                         case .general:
-                            agentSection
                             nameSection
+                            agentSection
+                            if KitArgument.isInspectable(workload: request.trimmedWorkload) {
+                                kitArgumentsSection(for: request.trimmedWorkload)
+                            }
+                        case .workspace:
                             workspaceSection
+                            if request.workspace != nil {
+                                additionalWorkspacesSection
+                            }
                         case .kits:
                             kitsSection
+                            if !availableRecentKits.isEmpty {
+                                recentKitsSection
+                            }
+                            ForEach(request.kits, id: \.self) { kit in
+                                kitArgumentsSection(for: kit) {
+                                    request.kits.removeAll { $0 == kit }
+                                    request.kitArgumentValues[kit] = nil
+                                }
+                            }
                         case .runtime:
                             resourcesSection
                             environmentSection
@@ -108,6 +129,24 @@ private struct CreateSandboxForm: View {
         .task {
             await mcp.refresh()
         }
+        // A typed workload is inspected once typing pauses, rather than for
+        // every partial reference. Docker's own agents are inspected straight away.
+        .task(id: request.trimmedWorkload) {
+            let workload = request.trimmedWorkload
+            guard KitArgument.isInspectable(workload: workload) else { return }
+            if inspector.results[workload] == nil && Agent.match(workload: workload) == nil {
+                try? await Task.sleep(for: .milliseconds(700))
+                guard !Task.isCancelled else { return }
+            }
+            inspector.inspect(workload)
+        }
+        .onChange(of: request.kits, initial: true) {
+            for kit in request.kits {
+                inspector.inspect(kit)
+            }
+        }
+        .onChange(of: request.argumentKits, initial: true, syncDeclaredArguments)
+        .onChange(of: inspector.results, syncDeclaredArguments)
         // The command and the buttons reflect every tab, so they stay in view whichever is open.
         // As a bar, the form fades as it scrolls under them, as windows do.
         .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -252,28 +291,6 @@ private struct CreateSandboxForm: View {
             }
             .pickerStyle(.segmented)
             .disabled(request.workspace == nil)
-
-            if request.workspace != nil {
-                ForEach($request.additionalWorkspaces) { $folder in
-                    HStack {
-                        Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(folder.url.path)
-                        Spacer()
-                        Toggle("Read-only", isOn: $folder.isReadOnly)
-                            .toggleStyle(.checkbox)
-                            .help("Stop the agent changing anything in this folder")
-                        RemoveButton(help: "Don't mount this folder") {
-                            request.additionalWorkspaces.removeAll { $0.id == folder.id }
-                        }
-                    }
-                }
-                Button("Add Another Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
-                    .buttonStyle(.borderless)
-            }
-        } header: {
-            Text("Workspace")
         } footer: {
             Text(workspaceFooter)
                 .foregroundStyle(.secondary)
@@ -284,10 +301,34 @@ private struct CreateSandboxForm: View {
         guard request.workspace != nil else {
             return "Without a workspace the agent works in the sandbox's own filesystem."
         }
-        if request.additionalWorkspaces.isEmpty {
-            return request.mode.explanation
+        return request.mode.explanation
+    }
+
+    private var additionalWorkspacesSection: some View {
+        Section {
+            ForEach($request.additionalWorkspaces) { $folder in
+                HStack {
+                    Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(folder.url.path)
+                    Spacer()
+                    Toggle("Read-only", isOn: $folder.isReadOnly)
+                        .toggleStyle(.checkbox)
+                        .help("Stop the agent changing anything in this folder")
+                    RemoveButton(help: "Don't mount this folder") {
+                        request.additionalWorkspaces.removeAll { $0.id == folder.id }
+                    }
+                }
+            }
+            Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
+                .buttonStyle(.borderless)
+        } header: {
+            Text("Additional Folders")
+        } footer: {
+            Text("These folders are mounted at the same paths as on your Mac.")
+                .foregroundStyle(.secondary)
         }
-        return request.mode.explanation + " Other folders are mounted at the same paths as on your Mac."
     }
 
     private func chooseWorkspace() {
@@ -314,39 +355,12 @@ private struct CreateSandboxForm: View {
 
     private var kitsSection: some View {
         Section {
-            ForEach(request.kits, id: \.self) { kit in
-                HStack {
-                    Image(systemName: KitSource(reference: kit).systemImage)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                    Text(KitSource(reference: kit) == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
-                        .font(.body.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(kit)
-                    Spacer()
-                    RemoveButton(help: "Remove kit") {
-                        request.kits.removeAll { $0 == kit }
-                    }
+            Picker("Add from", selection: $kitDraft.source) {
+                ForEach(KitSource.allCases) { source in
+                    Label(source.title, systemImage: source.systemImage).tag(source)
                 }
             }
-
-            HStack {
-                Picker("Add from", selection: $kitDraft.source) {
-                    ForEach(KitSource.allCases) { source in
-                        Label(source.title, systemImage: source.systemImage).tag(source)
-                    }
-                }
-                .pickerStyle(.segmented)
-                RecentsMenu(
-                    title: "Recent Kits",
-                    items: recents.kits.filter { !request.kits.contains($0) }
-                ) {
-                    add(kit: $0)
-                } onClear: {
-                    recents.clearKits()
-                }
-            }
+            .pickerStyle(.segmented)
 
             switch kitDraft.source {
             case .registry:
@@ -391,6 +405,49 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Recent kits
+
+    /// Recent kits that aren't added already, so a card can't add a kit
+    /// twice, which sbx refuses.
+    private var availableRecentKits: [String] {
+        recents.kits.filter { !request.kits.contains($0) }
+    }
+
+    /// Cards for the most recent kits, so one used before is a click away.
+    /// Older ones are in the More menu rather than pushing the added kits
+    /// further down.
+    private var recentKitsSection: some View {
+        let kits = availableRecentKits
+        let shown = kits.prefix(Self.recentKitCardLimit)
+        let more = kits.dropFirst(Self.recentKitCardLimit)
+        return Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
+                ForEach(Array(shown), id: \.self) { kit in
+                    RecentKitCard(kit: kit) { add(kit: kit) }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            HStack {
+                Text("Recent Kits")
+                Spacer()
+                if !more.isEmpty {
+                    Menu("More") {
+                        ForEach(Array(more), id: \.self) { kit in
+                            Button(kit) { add(kit: kit) }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                Button("Clear") { recents.clearKits() }
+                    .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    private static let recentKitCardLimit = 6
+
     private var kitsFooter: String {
         let intro = "Mixin kits add tools and settings to the agent."
         switch kitDraft.source {
@@ -425,6 +482,33 @@ private struct CreateSandboxForm: View {
     private func add(kit: String) {
         guard !kit.isEmpty, !request.kits.contains(kit) else { return }
         request.kits.append(kit)
+    }
+
+    // MARK: Kit arguments
+
+    private func kitArgumentsSection(for kit: String, onRemove: (() -> Void)? = nil) -> some View {
+        KitArgumentsSection(
+            kit: kit,
+            result: inspector.results[kit],
+            values: Binding {
+                request.kitArgumentValues[kit] ?? [:]
+            } set: {
+                request.kitArgumentValues[kit] = $0
+            },
+            onRetry: { inspector.inspect(kit) },
+            onRemove: onRemove
+        )
+    }
+
+    /// Copies what inspecting the picked kits found into the request, which
+    /// needs it to check values and build the command.
+    private func syncDeclaredArguments() {
+        for kit in request.argumentKits {
+            if case let .loaded(inspection) = inspector.results[kit],
+               request.declaredKitArguments[kit] != inspection.arguments {
+                request.setDeclaredArguments(inspection.arguments, for: kit)
+            }
+        }
     }
 
     // MARK: Resources
@@ -585,6 +669,7 @@ private struct CreateSandboxForm: View {
 
 private enum CreateSheetTab: CaseIterable, Identifiable {
     case general
+    case workspace
     case kits
     case runtime
     case mcp
@@ -594,6 +679,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .workspace: "Workspace"
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .mcp: "MCP"
@@ -720,6 +806,48 @@ private struct AgentTile: View {
     private var background: Color {
         if isSelected { return Color.accentColor.opacity(0.15) }
         return isHovering ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.05)
+    }
+}
+
+/// A kit used before, by its short name and where it's from, which adds it
+/// when clicked.
+private struct RecentKitCard: View {
+    let kit: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        let source = KitSource(reference: kit)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: source.systemImage)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(KitArgument.handle(for: kit))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(isHovering ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.05), in: .rect(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+            }
+            .contentShape(.rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("Add “\(kit)”")
     }
 }
 

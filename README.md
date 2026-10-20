@@ -114,7 +114,8 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]` |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
 | Remove | `sbx rm --force NAME` (after confirming in the app) |
