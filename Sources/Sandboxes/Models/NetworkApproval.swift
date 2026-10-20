@@ -18,12 +18,27 @@ struct NetworkApproval: Identifiable, Hashable {
     let options: [Option]
 
     var approveOption: Option? {
-        options.first { NetworkDecision($0.id) == .allow }
+        options.first { PolicyDecision($0.id) == .allow }
     }
 
     /// Leaves the destination blocked until the sandbox asks for it again.
     var dismissOption: Option? {
         options.first { $0.id.lowercased().contains("dismiss") }
+    }
+
+    /// What's being asked for, from the ID's prefix, e.g. `network` in
+    /// `network:cWtN-4x…`. Nil when the ID has no prefix.
+    var kind: String? {
+        let parts = id.split(separator: ":", maxSplits: 1)
+        return parts.count == 2 ? parts[0].lowercased() : nil
+    }
+
+    /// Whether approving or denying for a scope can add a rule. As of v0.48.0,
+    /// approvals are only asked for network access, and `sbx policy allow` and
+    /// `deny` only take network rules. Any other kind of request is answered
+    /// with its own options.
+    var canAddRule: Bool {
+        kind == nil || kind == "network"
     }
 
     static func respondArguments(approval: NetworkApproval, option: Option) -> [String] {
@@ -74,7 +89,7 @@ struct NetworkApproval: Identifiable, Hashable {
     static func fetch() async throws -> [NetworkApproval] {
         let jsonArguments = ["policy", "approval", "ls", "--json"]
         let result = try await SbxCLI.run(jsonArguments)
-        if result.succeeded, let json = try? NetworkPolicyParser.document(result.output) {
+        if result.succeeded, let json = try? PolicyParser.document(result.output) {
             return NetworkApprovalParser.approvals(inJSON: json)
         }
         if result.succeeded {
