@@ -125,7 +125,7 @@ final class SandboxStore {
         AppWindows.showCreate()
     }
 
-    /// Opens the New Sandbox window to save an environment file.
+    /// Opens the New Sandbox window as New Environment File, to save one.
     func presentNewEnvironment() {
         createWorkload = nil
         createTarget = .environment

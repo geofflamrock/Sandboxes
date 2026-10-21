@@ -96,7 +96,7 @@ final class EnvironmentStore {
 
         var errorDescription: String? {
             switch self {
-            case let .exists(name): "There's already an environment called “\(name)”. Choose another name."
+            case let .exists(name): "There's already an environment file called “\(name)”. Choose another name."
             }
         }
     }
@@ -165,7 +165,7 @@ final class EnvironmentStore {
         refresh()
     }
 
-    /// Asks for the values of the file's arguments, if it has any, then shows
+    /// Asks for the sandbox's name and the file's other options, then shows
     /// what applying it changes before creating the sandbox.
     func startCreating(from file: EnvironmentFile) {
         guard file.problem == nil else {
@@ -176,11 +176,13 @@ final class EnvironmentStore {
     }
 
     /// Runs `sbx env run` in the default terminal, where sbx asks to approve
-    /// the plan and then attaches to the agent.
+    /// the plan and then attaches to the agent. The project directory is the
+    /// file's folder.
     func runInTerminal(_ file: EnvironmentFile) {
         do {
-            try TerminalLauncher.open(sbxArguments: ["env", "run"] + EnvironmentRun.fileArguments(for: file, values: [:]))
-            recordLink(for: file)
+            let arguments = EnvironmentRun.fileArguments(name: file.name, values: [:], declared: file.arguments, path: file.url.path)
+            try TerminalLauncher.open(sbxArguments: ["env", "run"] + arguments)
+            recordLink(file.sandboxName(projectDirectory: file.url.deletingLastPathComponent().path), to: file)
         } catch {
             actionError = .init(title: "Couldn't Open Terminal", message: error.localizedDescription)
         }
@@ -194,16 +196,22 @@ final class EnvironmentStore {
         NSWorkspace.shared.activateFileViewerSelecting([file.url])
     }
 
-    /// The file the app created `sandbox` from, if it's still on the list.
-    func environment(forSandbox name: String) -> EnvironmentFile? {
-        guard let path = sandboxLinks[name] else { return nil }
-        return environments.first { $0.url.path == path }
+    /// The sandboxes the app created from `file`, and the one it creates
+    /// without another name, whether or not they exist.
+    func sandboxNames(for file: EnvironmentFile) -> Set<String> {
+        var names = Set(sandboxLinks.filter { $0.value == file.url.path }.keys)
+        // Without a project directory chosen, sbx uses the file's folder, which isn't a project in the library.
+        let folder = file.isInLibrary ? nil : file.url.deletingLastPathComponent().path
+        if let name = file.sandboxName(projectDirectory: folder) {
+            names.insert(name)
+        }
+        return names
     }
 
-    func recordLink(for file: EnvironmentFile) {
-        guard let name = file.sandboxName else { return }
+    func recordLink(_ sandbox: String?, to file: EnvironmentFile) {
+        guard let sandbox else { return }
         var links = sandboxLinks
-        links[name] = file.url.path
+        links[sandbox] = file.url.path
         defaults.set(links, forKey: Self.sandboxLinksKey)
     }
 
@@ -217,15 +225,15 @@ final class EnvironmentStore {
     }
 }
 
-/// Creating a sandbox from an environment file: values for the file's
-/// arguments, then `sbx env plan` to show what it changes, then
+/// Creating a sandbox from an environment file: its name, project directory
+/// and other options, then `sbx env plan` to show what it changes, then
 /// `sbx env create --force` once that's approved. sbx asks for approval at a
 /// prompt the app can't answer, so `--force` approves this one run.
 @MainActor
 @Observable
 final class EnvironmentRun: Identifiable {
     enum Phase: Equatable {
-        case arguments
+        case options
         case planning
         case reviewing
         case creating
@@ -236,87 +244,176 @@ final class EnvironmentRun: Identifiable {
 
     let id = UUID()
     let file: EnvironmentFile
+    /// Starts as the file's `name:`. Another name creates another sandbox from the same file.
+    var name: String
+    /// The folder `${{ env.projectDir }}` stands for, when the file uses it.
+    var projectDirectory = ""
+    /// Whether to pass `--clone`, when the file doesn't set `workspace.clone` itself.
+    var mode: WorkspaceMode = .direct
     var argumentValues: [String: String] = [:]
-    private(set) var phase: Phase
+    private(set) var phase: Phase = .options
     let planOutput = ConsoleOutput()
     let createOutput = ConsoleOutput()
     /// Whether the plan had already been shown when it failed, so Back can go to it.
     private(set) var didPlan = false
 
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// The file sbx reads: the file itself, or a copy with the project directory filled in.
+    @ObservationIgnored private var plannedPath: String?
+    @ObservationIgnored private var copyURL: URL?
 
     init(file: EnvironmentFile) {
         self.file = file
-        phase = file.arguments.isEmpty ? .planning : .arguments
+        name = file.name ?? ""
+        // Run from elsewhere, sbx uses the file's own folder, which suits a file kept in its project.
+        if file.usesProjectDirectory && !file.isInLibrary {
+            projectDirectory = file.url.deletingLastPathComponent().path
+        }
         // A required toggle without a default starts off, which has to be passed.
         for argument in file.arguments where argument.input == .toggle && argument.isRequired && argument.defaultValue == nil {
             argumentValues[argument.name] = "false"
         }
-        if phase == .planning {
-            plan()
-        }
     }
 
-    /// Why the values entered can't be used yet, if they can't.
+    var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Whether to offer clone mode: the file mounts a workspace without saying how.
+    var offersClone: Bool { file.workspace != nil && !file.setsClone }
+
+    /// The project directory with `~` expanded, when the file uses one.
+    private var normalizedProjectDirectory: String? {
+        file.usesProjectDirectory ? WorkspacePath.normalized(projectDirectory) : nil
+    }
+
+    /// The sandbox this creates, when it can be known before sbx creates it.
+    var sandboxName: String? {
+        trimmedName.isEmpty ? file.sandboxName(projectDirectory: normalizedProjectDirectory) : trimmedName
+    }
+
+    /// Why the options entered can't be used yet, if they can't.
     var validationMessage: String? {
-        file.arguments.lazy.compactMap { $0.problem(with: self.argumentValues[$0.name]) }.first
+        if !trimmedName.isEmpty, let problem = CreateSandboxRequest.nameProblem(trimmedName) {
+            return problem
+        }
+        if file.usesProjectDirectory {
+            guard normalizedProjectDirectory != nil else {
+                return "Choose the project directory."
+            }
+            if let problem = WorkspacePath.problem(with: projectDirectory, inEnvironmentFile: false) {
+                return problem
+            }
+            // It's put into the file as it is, so it mustn't end the YAML string around it.
+            if projectDirectory.contains(where: { "\"'\\#\n".contains($0) }) {
+                return "Choose a project directory whose path has no quotes, backslashes or #."
+            }
+        }
+        return file.arguments.lazy.compactMap { $0.problem(with: self.argumentValues[$0.name]) }.first
     }
 
-    var planCommandLine: String { Self.commandLine(["env", "plan"] + Self.fileArguments(for: file, values: argumentValues)) }
-    var createCommandLine: String { Self.commandLine(createArguments) }
-
-    private var createArguments: [String] {
-        ["env", "create"] + Self.fileArguments(for: file, values: argumentValues) + ["--force"]
-    }
-
-    /// The file, its name when it sets one so the sandbox is known, and the
-    /// values entered for its arguments.
-    static func fileArguments(for file: EnvironmentFile, values: [String: String]) -> [String] {
+    /// `--name` when there is one so the sandbox is known, `--clone` when
+    /// chosen, the values entered for the file's arguments, and the file.
+    static func fileArguments(name: String?, clone: Bool = false, values: [String: String], declared: [KitArgument], path: String) -> [String] {
         var arguments: [String] = []
-        if let name = file.name, !name.isEmpty {
+        if let name, !name.isEmpty {
             arguments += ["--name", name]
         }
-        let declared = Set(file.arguments.map(\.name))
+        if clone {
+            arguments.append("--clone")
+        }
+        let declared = Set(declared.map(\.name))
         for (name, value) in values.sorted(by: { $0.key < $1.key }) where declared.contains(name) && !value.isEmpty {
             arguments += ["--env-arg", "\(name)=\(value)"]
         }
-        return arguments + [file.url.path]
+        return arguments + [path]
+    }
+
+    private func arguments(_ command: String, path: String) -> [String] {
+        ["env", command] + Self.fileArguments(
+            name: trimmedName,
+            clone: offersClone && mode == .clone,
+            values: argumentValues,
+            declared: file.arguments,
+            path: path
+        )
     }
 
     func plan() {
         didPlan = false
         phase = .planning
-        let arguments = ["env", "plan"] + Self.fileArguments(for: file, values: argumentValues)
-        stream(arguments, into: planOutput) { [weak self] in
+        let path: String
+        do {
+            path = try preparePath()
+        } catch {
+            planOutput.clear()
+            phase = .failed(error.localizedDescription)
+            return
+        }
+        plannedPath = path
+        stream(arguments("plan", path: path), into: planOutput) { [weak self] in
             self?.didPlan = true
             self?.phase = .reviewing
         }
     }
 
+    /// Creates the sandbox from the same file the plan read.
     func create(onSuccess: @escaping @MainActor () -> Void) {
         phase = .creating
-        stream(createArguments, into: createOutput) { [weak self] in
+        let arguments = arguments("create", path: plannedPath ?? file.url.path) + ["--force"]
+        stream(arguments, into: createOutput) { [weak self] in
             self?.phase = .succeeded
+            self?.removeCopy()
             onSuccess()
         }
     }
 
-    /// Back to the plan from a failed create, or to the arguments from a failed plan.
+    /// Back to the plan from a failed create, or to the options from a failed plan.
     func back() {
-        if didPlan {
-            phase = .reviewing
-        } else if !file.arguments.isEmpty {
-            phase = .arguments
-        }
+        phase = didPlan ? .reviewing : .options
     }
 
     func cancel() {
         task?.cancel()
     }
 
+    /// Stops sbx and removes the copy of the file, when the sheet closes.
+    func finish() {
+        task?.cancel()
+        removeCopy()
+    }
+
+    /// sbx has no option for the project directory: it's the folder of the
+    /// first file passed. So a file that uses it in another folder is copied
+    /// with the folder filled in, next to the original so its relative paths
+    /// and `${{ env.fileDir }}` stay the same. It's hidden, so the
+    /// environment files list doesn't show it.
+    private func preparePath() throws -> String {
+        removeCopy()
+        guard let directory = normalizedProjectDirectory,
+              URL(fileURLWithPath: directory).standardizedFileURL != file.url.deletingLastPathComponent().standardizedFileURL else {
+            return file.url.path
+        }
+        let text = try String(contentsOf: file.url, encoding: .utf8)
+        let copy = file.url.deletingLastPathComponent()
+            .appendingPathComponent(".\(EnvironmentFile.fallbackName(for: file.url))-\(UUID().uuidString.prefix(8).lowercased()).sbxenv.yaml")
+        try text.replacing(EnvironmentFile.projectDirectoryPattern, with: directory)
+            .write(to: copy, atomically: true, encoding: .utf8)
+        copyURL = copy
+        return copy.path
+    }
+
+    private func removeCopy() {
+        if let copyURL {
+            try? FileManager.default.removeItem(at: copyURL)
+        }
+        copyURL = nil
+    }
+
     private func stream(_ arguments: [String], into output: ConsoleOutput, onSuccess: @escaping @MainActor () -> Void) {
         output.clear()
         output.append("$ \(Self.commandLine(arguments))\n\n")
+        if copyURL != nil, let directory = normalizedProjectDirectory {
+            output.append("This reads a copy of \(file.url.lastPathComponent) with \(WorkspacePath.projectDirectory) replaced by \(directory).\n\n")
+        }
         task = Task {
             do {
                 let exitCode = try await SbxCLI.stream(arguments) { text in

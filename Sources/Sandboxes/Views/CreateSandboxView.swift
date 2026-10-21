@@ -66,11 +66,11 @@ struct CreateSandboxView: View {
         if let editingURL {
             return "Edit “\(EnvironmentFile.fallbackName(for: editingURL))”"
         }
-        return request.target == .environment ? "New Environment" : "New Sandbox"
+        return request.target == .environment ? "New Environment File" : "New Sandbox"
     }
 
     /// Starts with what the window was opened for: an environment file to
-    /// edit, or a sandbox or environment with the workload asked for.
+    /// edit, or a new sandbox or environment file with the workload asked for.
     private func applyPreset() {
         saveError = nil
         if let edit = store.environmentEdit {
@@ -90,7 +90,7 @@ struct CreateSandboxView: View {
         }
     }
 
-    /// Writes the environment file, then shows it in Management › Environments.
+    /// Writes the environment file, then shows it in Management › Environment Files.
     private func save() {
         do {
             try environments.save(request, to: editingURL)
@@ -304,16 +304,6 @@ private struct CreateSandboxForm: View {
 
     private var actionBar: some View {
         HStack {
-            Picker("Create", selection: $request.target) {
-                ForEach(CreateSandboxRequest.Target.allCases) { target in
-                    Text(target.title).tag(target)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .disabled(isEditing)
-            .help("Create a sandbox now, or save these options as an environment file to create sandboxes from")
             if let message = saveError ?? request.validationMessage, saveError != nil || !request.workload.isEmpty || !request.name.isEmpty {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
@@ -398,7 +388,7 @@ private struct CreateSandboxForm: View {
             TextField("Name", text: $request.name, prompt: Text(request.target == .environment ? "Required" : "Automatic"))
                 .disabled(isEditing)
         } footer: {
-            Text(isEditing ? "Rename the environment from Management › Environments." : nameFooter)
+            Text(isEditing ? "Rename the environment file from Management › Environment Files." : nameFooter)
                 .foregroundStyle(.secondary)
         }
     }
@@ -406,7 +396,7 @@ private struct CreateSandboxForm: View {
     private var nameFooter: String {
         switch request.target {
         case .sandbox: "Leave empty to let sbx choose a name."
-        case .environment: "Names the environment and the sandbox it creates."
+        case .environment: "Names the environment file, and the sandboxes created from it unless they're given another name."
         }
     }
 
@@ -415,21 +405,12 @@ private struct CreateSandboxForm: View {
     private var workspaceSection: some View {
         Section {
             LabeledContent("Folder") {
-                HStack {
-                    if let workspace = request.workspace {
-                        Label((workspace.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(workspace.path)
-                        RemoveButton(help: "Don't mount a workspace") {
-                            request.workspace = nil
-                            request.additionalWorkspaces = []
-                        }
-                    } else {
-                        Text("None")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Choose…", action: chooseWorkspace)
+                WorkspacePathField(
+                    path: $request.workspacePath,
+                    allowsProjectDirectory: request.target == .environment,
+                    panelMessage: "Choose the folder the agent works in."
+                ) { url in
+                    request.additionalWorkspaces.removeAll { $0.normalizedPath == url.path }
                 }
             }
             Picker("Mode", selection: $request.mode) {
@@ -447,20 +428,24 @@ private struct CreateSandboxForm: View {
 
     private var workspaceFooter: String {
         guard request.workspace != nil else {
-            return "Without a workspace the agent works in the sandbox's own filesystem."
+            return request.target == .environment
+                ? "Without a workspace the agent works in the sandbox's own filesystem. \(Self.projectDirectoryHint)"
+                : "Without a workspace the agent works in the sandbox's own filesystem."
         }
         return request.mode.explanation
     }
+
+    private static let projectDirectoryHint = "Use \(WorkspacePath.projectDirectory) for the project directory chosen when a sandbox is created from the file, or a folder in it such as \(WorkspacePath.projectDirectory)/src."
 
     private var additionalWorkspacesSection: some View {
         Section {
             ForEach($request.additionalWorkspaces) { $folder in
                 HStack {
-                    Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(folder.url.path)
-                    Spacer()
+                    WorkspacePathField(
+                        path: $folder.path,
+                        allowsProjectDirectory: request.target == .environment,
+                        panelMessage: "Choose a folder to mount alongside the workspace."
+                    )
                     Toggle("Read-only", isOn: $folder.isReadOnly)
                         .toggleStyle(.checkbox)
                         .help("Stop the agent changing anything in this folder")
@@ -469,20 +454,22 @@ private struct CreateSandboxForm: View {
                     }
                 }
             }
-            Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
-                .buttonStyle(.borderless)
+            HStack {
+                Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
+                Button("Add Path", systemImage: "text.cursor") {
+                    request.additionalWorkspaces.append(AdditionalWorkspace())
+                }
+                .help("Type the path of a folder to mount")
+                Spacer()
+            }
+            .buttonStyle(.borderless)
         } header: {
             Text("Additional Folders")
         } footer: {
-            Text("These folders are mounted at the same paths as on your Mac.")
+            Text(request.target == .environment
+                ? "These folders are mounted at the same paths as on your Mac. \(Self.projectDirectoryHint)"
+                : "These folders are mounted at the same paths as on your Mac.")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    private func chooseWorkspace() {
-        if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder the agent works in.").first {
-            request.workspace = url
-            request.additionalWorkspaces.removeAll { $0.url == url }
         }
     }
 
@@ -493,9 +480,9 @@ private struct CreateSandboxForm: View {
             prompt: "Add",
             message: "Choose folders to mount alongside the workspace, such as docs or a related repository."
         )
-        let existing = Set(request.additionalWorkspaces.map(\.url) + [request.workspace].compactMap { $0 })
-        for url in urls where !existing.contains(url) {
-            request.additionalWorkspaces.append(AdditionalWorkspace(url: url))
+        let existing = Set(request.additionalWorkspaces.compactMap(\.normalizedPath) + [request.workspace].compactMap { $0 })
+        for url in urls where !existing.contains(url.path) {
+            request.additionalWorkspaces.append(AdditionalWorkspace(path: url.path))
         }
     }
 
@@ -865,6 +852,44 @@ private struct KitDraft {
     mutating func clearFields() {
         image = ""
         git = GitKitDraft()
+    }
+}
+
+/// A folder's path, typed or chosen in an open panel. In an environment file
+/// it can also be the project directory, or a folder in it.
+private struct WorkspacePathField: View {
+    @Binding var path: String
+    let allowsProjectDirectory: Bool
+    let panelMessage: String
+    var onChoose: (URL) -> Void = { _ in }
+
+    var body: some View {
+        HStack {
+            TextField("Folder", text: $path, prompt: Text(allowsProjectDirectory ? "~/src/project or \(WorkspacePath.projectDirectory)" : "None"))
+                .labelsHidden()
+                .font(.body.monospaced())
+                .help(path)
+            if allowsProjectDirectory {
+                Button("Use Project Directory", systemImage: "folder.badge.gearshape", action: useProjectDirectory)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Use the project directory chosen when a sandbox is created from the file. Type a subfolder after it, such as /src.")
+            }
+            Button("Choose…") {
+                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: panelMessage).first {
+                    path = url.path
+                    onChoose(url)
+                }
+            }
+        }
+    }
+
+    /// Sets the path to the project directory, unless it's already in it.
+    private func useProjectDirectory() {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !WorkspacePath.usesProjectDirectory(trimmed) {
+            path = WorkspacePath.projectDirectory
+        }
     }
 }
 

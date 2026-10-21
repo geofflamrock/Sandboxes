@@ -38,7 +38,7 @@ struct SandboxesApp: App {
                     store.presentCreate()
                 }
                 .keyboardShortcut("n")
-                Button("New Environment…") {
+                Button("New Environment File…") {
                     store.presentNewEnvironment()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -55,7 +55,7 @@ struct SandboxesApp: App {
                     Task { await store.refresh() }
                 }
                 .keyboardShortcut("r")
-                Button("Environments") {
+                Button("Environment Files") {
                     store.selection = .environments
                     AppWindows.showMain()
                 }

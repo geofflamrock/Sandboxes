@@ -457,7 +457,7 @@ private struct EnvironmentsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                HomeSectionHeader(title: "Create from an Environment")
+                HomeSectionHeader(title: "Create from an Environment File")
                 Spacer()
                 if !environments.environments.isEmpty {
                     Button("Show All") { store.selection = .environments }
@@ -519,7 +519,7 @@ private struct EnvironmentCard: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(file.map { "Review the plan for “\($0.displayName)”, then create its sandbox" } ?? "Open an environment file, such as sbxenv.yaml")
+        .help(file.map { "Create a sandbox from “\($0.displayName)” after reviewing its plan" } ?? "Open an environment file, such as sbxenv.yaml")
     }
 }
 

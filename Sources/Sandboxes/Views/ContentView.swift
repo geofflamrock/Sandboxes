@@ -93,7 +93,7 @@ private struct EnvironmentPresentations: ViewModifier {
         content
             .sheet(item: $environments.run) { run in
                 EnvironmentRunSheet(run: run) {
-                    environments.recordLink(for: run.file)
+                    environments.recordLink(run.sandboxName, to: run.file)
                     Task { await store.refresh() }
                 }
             }
@@ -152,10 +152,10 @@ struct SandboxSidebar: View {
             }
             // Search only filters sandboxes, so these stay put.
             Section("Management", isExpanded: $managementExpanded) {
-                Label("Environments", systemImage: "square.stack.3d.up")
+                Label("Environment Files", systemImage: "square.stack.3d.up")
                     .badge(environments.environments.count)
                     .tag(SidebarItem.environments)
-                    .help("Environment files that describe a sandbox, to create it from")
+                    .help("Files that describe a sandbox, to create sandboxes from")
                 Label("Secrets", systemImage: "key")
                     .badge(secrets.secrets.count)
                     .tag(SidebarItem.secrets)

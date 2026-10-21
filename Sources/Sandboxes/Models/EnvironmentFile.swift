@@ -19,6 +19,11 @@ struct EnvironmentFile: Identifiable, Hashable {
     /// Whether it runs commands on the Mac: lifecycle commands, or secrets
     /// that come from a command.
     var hasHostCommands = false
+    /// Whether it uses `${{ env.projectDir }}`, which is the folder chosen
+    /// when a sandbox is created from it.
+    var usesProjectDirectory = false
+    /// Whether `workspace.clone` is set, rather than left for `--clone` to choose.
+    var setsClone = false
     /// Why the file couldn't be read, if it couldn't.
     var problem: String?
     var modified: Date?
@@ -31,12 +36,22 @@ struct EnvironmentFile: Identifiable, Hashable {
         return Self.fallbackName(for: url)
     }
 
-    /// The sandbox it creates: its `name:`, or else `<agent>-<workspace folder>`,
-    /// as sbx names it.
-    var sandboxName: String? {
+    /// The sandbox it creates without `--name`: its `name:`, or else
+    /// `<agent>-<workspace folder>`, as sbx names it. A workspace in the
+    /// project directory needs the directory to know.
+    func sandboxName(projectDirectory: String? = nil) -> String? {
         if let name, !name.isEmpty { return name }
         guard let agent, let workspace else { return nil }
-        return "\(agent)-\(URL(fileURLWithPath: workspace).lastPathComponent)"
+        let path: String
+        if WorkspacePath.usesProjectDirectory(workspace) {
+            guard let projectDirectory else { return nil }
+            path = WorkspacePath.resolving(workspace, projectDirectory: projectDirectory)
+        } else if workspace.contains("${{") {
+            return nil
+        } else {
+            path = workspace
+        }
+        return "\(agent)-\(URL(fileURLWithPath: path).lastPathComponent)"
     }
 
     var summary: String {
@@ -61,6 +76,7 @@ struct EnvironmentFile: Identifiable, Hashable {
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
             file.load(try EnvironmentYAML.parse(text))
+            file.usesProjectDirectory = text.contains(projectDirectoryPattern)
         } catch {
             file.problem = error.localizedDescription
         }
@@ -73,8 +89,9 @@ struct EnvironmentFile: Identifiable, Hashable {
         let directory = url.deletingLastPathComponent()
         let workspaceValue = document["workspace"]
         if let path = workspaceValue?.string ?? workspaceValue?["path"]?.string, !path.isEmpty {
-            workspace = Self.resolve(path, against: directory)
+            workspace = Self.resolve(Self.canonicalizingProjectDirectory(in: path), against: directory)
         }
+        setsClone = workspaceValue?["clone"] != nil
         kits = (document["kits"]?.list ?? []).compactMap { $0.string ?? $0["source"]?.string }
         arguments = (document["args"]?.map ?? []).map { entry in
             KitArgument(
@@ -92,6 +109,15 @@ struct EnvironmentFile: Identifiable, Hashable {
             ["secret", "username"].contains { registry.value[$0]?["command"] != nil }
         }
         hasHostCommands = lifecycle.contains { !($0.value.list ?? []).isEmpty } || commandSecrets || commandRegistries
+    }
+
+    /// `${{ env.projectDir }}`, which sbx accepts with or without the spaces.
+    static var projectDirectoryPattern: Regex<Substring> { #/\$\{\{\s*env\.projectDir\s*\}\}/# }
+
+    /// `text` with each reference to the project directory spelt as
+    /// `WorkspacePath.projectDirectory`.
+    static func canonicalizingProjectDirectory(in text: String) -> String {
+        text.replacing(projectDirectoryPattern, with: WorkspacePath.projectDirectory)
     }
 
     /// An absolute path for `path`, which may be relative to the file's folder
@@ -142,16 +168,17 @@ extension CreateSandboxRequest {
         if let workspace {
             if mode == .clone {
                 entries.append(YAMLEntry(key: "workspace", value: .map([
-                    YAMLEntry(key: "path", value: .scalar(workspace.path)),
+                    YAMLEntry(key: "path", value: .scalar(workspace)),
                     YAMLEntry(key: "clone", value: .plain("true")),
                 ])))
             } else {
-                entries.append(YAMLEntry(key: "workspace", value: .scalar(workspace.path)))
+                entries.append(YAMLEntry(key: "workspace", value: .scalar(workspace)))
             }
-            if !additionalWorkspaces.isEmpty {
-                entries.append(YAMLEntry(key: "additionalWorkspaces", value: .list(additionalWorkspaces.map { folder in
+            let folders = enteredAdditionalWorkspaces
+            if !folders.isEmpty {
+                entries.append(YAMLEntry(key: "additionalWorkspaces", value: .list(folders.map { folder in
                     YAMLValue.map([
-                        YAMLEntry(key: "path", value: .scalar(folder.url.path)),
+                        YAMLEntry(key: "path", value: .scalar(folder.normalizedPath ?? "")),
                         YAMLEntry(key: "readOnly", value: .plain(folder.isReadOnly ? "true" : "false")),
                     ])
                 })))
@@ -234,12 +261,12 @@ extension CreateSandboxRequest {
                 }
             case "workspace":
                 if let path = value.string {
-                    workspace = Self.workspaceURL(path, against: directory)
-                    if workspace == nil { unsupported.append("workspace") }
+                    workspacePath = Self.workspacePath(path, against: directory) ?? ""
+                    if workspacePath.isEmpty { unsupported.append("workspace") }
                 } else if let fields = value.map, let path = value["path"]?.string,
                           fields.allSatisfy({ ["path", "clone"].contains($0.key) }) {
-                    workspace = Self.workspaceURL(path, against: directory)
-                    if workspace == nil { unsupported.append("workspace") }
+                    workspacePath = Self.workspacePath(path, against: directory) ?? ""
+                    if workspacePath.isEmpty { unsupported.append("workspace") }
                     mode = value["clone"]?.bool == true ? .clone : .direct
                 } else {
                     unsupported.append("workspace")
@@ -249,11 +276,11 @@ extension CreateSandboxRequest {
                 for item in items {
                     guard let fields = item.map, let path = item["path"]?.string,
                           fields.allSatisfy({ ["path", "readOnly"].contains($0.key) }),
-                          let url = Self.workspaceURL(path, against: directory) else {
+                          let path = Self.workspacePath(path, against: directory) else {
                         unsupported.append("additionalWorkspaces")
                         continue
                     }
-                    additionalWorkspaces.append(AdditionalWorkspace(url: url, isReadOnly: item["readOnly"]?.bool ?? false))
+                    additionalWorkspaces.append(AdditionalWorkspace(path: path, isReadOnly: item["readOnly"]?.bool ?? false))
                 }
             case "env":
                 guard let variables = value.map else { unsupported.append("env"); continue }
@@ -311,9 +338,13 @@ extension CreateSandboxRequest {
         }
     }
 
-    private static func workspaceURL(_ path: String, against directory: URL) -> URL? {
-        guard !path.contains("${{"), !path.isEmpty else { return nil }
-        return URL(fileURLWithPath: EnvironmentFile.resolve(path, against: directory), isDirectory: true)
+    /// An absolute path, or one in the project directory. Other references,
+    /// such as to the file's arguments, can't be shown.
+    private static func workspacePath(_ path: String, against directory: URL) -> String? {
+        let path = EnvironmentFile.canonicalizingProjectDirectory(in: path)
+        guard !path.isEmpty else { return nil }
+        let resolved = EnvironmentFile.resolve(path, against: directory)
+        return WorkspacePath.problem(with: resolved, inEnvironmentFile: true) == nil ? resolved : nil
     }
 
     /// Whole gibibytes from a size such as `8g`, `8G` or `8192m`, which is

@@ -68,7 +68,7 @@ private struct GeneralSettingsView: View {
                             .truncationMode(.middle)
                             .help(EnvironmentStore.directory.path)
                         Button("Choose…") {
-                            if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder new environments are saved in.").first {
+                            if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder new environment files are saved in.").first {
                                 environmentsDirectory = url.path
                             }
                         }
@@ -78,9 +78,9 @@ private struct GeneralSettingsView: View {
                     }
                 }
             } header: {
-                Text("Environments")
+                Text("Environment Files")
             } footer: {
-                Text("Environments are saved here, one folder each. Keep it outside the folders sandboxes mount, so an agent can't change the commands an environment runs on your Mac.")
+                Text("Environment files are saved here, one folder each. Keep it outside the folders sandboxes mount, so an agent can't change the commands an environment file runs on your Mac.")
                     .foregroundStyle(.secondary)
             }
 

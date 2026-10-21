@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Management › Environments: environment files saved from the New Sandbox
-/// window or opened from elsewhere, with ways to create a sandbox from one,
+/// Management › Environment Files: files saved from the New Environment File
+/// window or opened from elsewhere, with ways to create sandboxes from one,
 /// edit, open and delete them.
 struct EnvironmentsView: View {
     @Environment(SandboxStore.self) private var store
@@ -23,23 +23,23 @@ struct EnvironmentsView: View {
         Form {
             Section {
                 if environments.environments.isEmpty {
-                    Text(environments.hasLoaded ? "No environments." : "Loading…")
+                    Text(environments.hasLoaded ? "No environment files." : "Loading…")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(environments.environments) { file in
-                    EnvironmentRow(file: file, sandbox: sandbox(for: file)) { action in
+                    EnvironmentRow(file: file, sandboxes: sandboxes(for: file)) { action in
                         perform(action, on: file)
                     }
                 }
             } header: {
-                Text("Environments")
+                Text("Environment Files")
             } footer: {
-                Text("An environment file keeps a sandbox's agent, kits, workspace and settings, so you can create the same sandbox again or share it. New environments are saved in \((EnvironmentStore.directory.path as NSString).abbreviatingWithTildeInPath). Creating a sandbox shows what the file changes on your Mac first, including any commands it runs here.")
+                Text("An environment file keeps a sandbox's agent, kits, workspace and settings, so you can create the same sandbox again, create several from it, or share it. New environment files are saved in \((EnvironmentStore.directory.path as NSString).abbreviatingWithTildeInPath). Creating a sandbox shows what the file changes on your Mac first, including any commands it runs here.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Environments")
+        .navigationTitle("Environment Files")
         .onAppear { environments.refresh() }
         // A file may have been changed in an editor.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -60,7 +60,7 @@ struct EnvironmentsView: View {
                 .help("Add an environment file from anywhere on your Mac to the list")
             }
             ToolbarItem {
-                Button("New Environment", systemImage: "plus") {
+                Button("New Environment File", systemImage: "plus") {
                     store.presentNewEnvironment()
                 }
                 .help("Save a sandbox's options as an environment file")
@@ -92,8 +92,8 @@ struct EnvironmentsView: View {
             Button("Cancel", role: .cancel) {}
         } message: { file in
             Text(file.isInLibrary
-                ? "This changes the name in the file and its folder, and names the sandboxes it creates from now on. Sandboxes already created keep their names."
-                : "This changes the name in the file, which names the sandboxes it creates from now on. Sandboxes already created keep their names.")
+                ? "This changes the name in the file and its folder, and the name sandboxes created from it start with. Sandboxes already created keep their names."
+                : "This changes the name in the file, which is the name sandboxes created from it start with. Sandboxes already created keep their names.")
         }
         .alert(
             "Can't Edit “\(uneditable?.file.displayName ?? "")” Here",
@@ -112,19 +112,18 @@ struct EnvironmentsView: View {
         return file.isInLibrary ? "Delete “\(file.displayName)”?" : "Remove “\(file.displayName)” from the List?"
     }
 
-    private func sandbox(for file: EnvironmentFile) -> Sandbox? {
-        guard let name = file.sandboxName else { return nil }
-        return store.sandboxes.first { $0.name == name }
+    /// The sandboxes created from the file that still exist.
+    private func sandboxes(for file: EnvironmentFile) -> [Sandbox] {
+        let names = environments.sandboxNames(for: file)
+        return store.sandboxes.filter { names.contains($0.name) }
     }
 
     private func perform(_ action: EnvironmentRow.Action, on file: EnvironmentFile) {
         switch action {
         case .create: environments.startCreating(from: file)
         case .runInTerminal: environments.runInTerminal(file)
-        case .showSandbox:
-            if let sandbox = sandbox(for: file) {
-                store.selection = .sandbox(sandbox.id)
-            }
+        case let .showSandbox(id):
+            store.selection = .sandbox(id)
         case .rename:
             newName = file.name ?? file.displayName
             renaming = file
@@ -156,13 +155,13 @@ struct EnvironmentsView: View {
     }
 }
 
-/// An environment file, with whether its sandbox exists, a button to create
-/// it, and a menu of everything else.
+/// An environment file, with the sandboxes created from it, a button to
+/// create another, and a menu of everything else.
 private struct EnvironmentRow: View {
     enum Action {
         case create
         case runInTerminal
-        case showSandbox
+        case showSandbox(Sandbox.ID)
         case rename
         case edit
         case openInEditor
@@ -171,8 +170,20 @@ private struct EnvironmentRow: View {
     }
 
     let file: EnvironmentFile
-    let sandbox: Sandbox?
+    let sandboxes: [Sandbox]
     let perform: (Action) -> Void
+
+    /// Run in Terminal uses the file's folder as the project directory,
+    /// which for a file in the environment files folder isn't a project.
+    private var canRunInTerminal: Bool {
+        file.problem == nil && !(file.usesProjectDirectory && file.isInLibrary)
+    }
+
+    private var runInTerminalHelp: String {
+        canRunInTerminal || file.problem != nil
+            ? "Create the sandbox if needed, and run its agent in Terminal"
+            : "This file uses a project directory. Choose it with Create Sandbox… instead."
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -200,26 +211,29 @@ private struct EnvironmentRow: View {
                     .textSelection(.enabled)
             }
             Spacer()
-            if let sandbox {
+            if let sandbox = sandboxes.first, sandboxes.count == 1 {
                 HStack(spacing: 6) {
                     StatusDot(color: sandbox.state.color)
                     Text(sandbox.statusLabel)
                         .foregroundStyle(.secondary)
                 }
-                .help("A sandbox called “\(sandbox.name)” exists")
-            } else if file.problem == nil {
+                .help("“\(sandbox.name)” was created from this file")
+            } else if !sandboxes.isEmpty {
+                Text("\(sandboxes.count) Sandboxes")
+                    .foregroundStyle(.secondary)
+                    .help(sandboxes.map { "“\($0.name)”" }.formatted(.list(type: .and)) + " were created from this file")
+            }
+            if file.problem == nil {
                 Button("Create…") { perform(.create) }
-                    .help("Review what the file changes, then create its sandbox")
+                    .help("Choose the sandbox's name and options, review what the file changes, then create it")
             }
             Menu {
-                if sandbox != nil {
-                    Button("Show Sandbox") { perform(.showSandbox) }
-                } else {
-                    Button("Create Sandbox…") { perform(.create) }
-                        .disabled(file.problem != nil)
-                }
-                Button("Run in Terminal") { perform(.runInTerminal) }
+                Button("Create Sandbox…") { perform(.create) }
                     .disabled(file.problem != nil)
+                Button("Run in Terminal") { perform(.runInTerminal) }
+                    .disabled(!canRunInTerminal)
+                    .help(runInTerminalHelp)
+                showSandboxButtons
                 Divider()
                 Button("Rename…") { perform(.rename) }
                     .disabled(file.problem != nil)
@@ -239,15 +253,29 @@ private struct EnvironmentRow: View {
         }
         .contextMenu {
             Button("Create Sandbox…") { perform(.create) }
-                .disabled(file.problem != nil || sandbox != nil)
-            Button("Run in Terminal") { perform(.runInTerminal) }
                 .disabled(file.problem != nil)
+            Button("Run in Terminal") { perform(.runInTerminal) }
+                .disabled(!canRunInTerminal)
+            showSandboxButtons
             Divider()
             Button("Rename…") { perform(.rename) }
                 .disabled(file.problem != nil)
             Button("Edit…") { perform(.edit) }
             Button("Open in Editor") { perform(.openInEditor) }
             Button("Show in Finder") { perform(.showInFinder) }
+        }
+    }
+
+    @ViewBuilder
+    private var showSandboxButtons: some View {
+        if let sandbox = sandboxes.first, sandboxes.count == 1 {
+            Button("Show Sandbox") { perform(.showSandbox(sandbox.id)) }
+        } else if !sandboxes.isEmpty {
+            Menu("Show Sandbox") {
+                ForEach(sandboxes) { sandbox in
+                    Button(sandbox.name) { perform(.showSandbox(sandbox.id)) }
+                }
+            }
         }
     }
 }
@@ -269,12 +297,24 @@ enum EnvironmentFilePanel {
 
 // MARK: - Creating a sandbox from a file
 
-/// Values for the file's arguments, then the plan sbx shows, then the output
-/// of creating the sandbox once the plan is approved.
+/// The sandbox's name and the file's options, then the plan sbx shows, then
+/// the output of creating the sandbox once the plan is approved.
 struct EnvironmentRunSheet: View {
     let run: EnvironmentRun
     let onCreated: () -> Void
+    @Environment(SandboxStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+
+    /// Why the options can't be used yet, including a name that's taken.
+    private var validationMessage: String? {
+        if let message = run.validationMessage {
+            return message
+        }
+        if let name = run.sandboxName, store.sandboxes.contains(where: { $0.name == name }) {
+            return "There's already a sandbox called “\(name)”. Enter another name."
+        }
+        return nil
+    }
 
     var body: some View {
         @Bindable var run = run
@@ -283,18 +323,8 @@ struct EnvironmentRunSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 switch run.phase {
-                case .arguments:
-                    Form {
-                        Section {
-                            ForEach(run.file.arguments) { argument in
-                                KitArgumentRow(argument: argument, isFixed: false, values: $run.argumentValues)
-                            }
-                        } footer: {
-                            Text("The environment file declares these. Leave one empty to use its default.")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .formStyle(.grouped)
+                case .options:
+                    EnvironmentRunOptions(run: run)
                 case .planning, .reviewing:
                     ConsoleOutputView(output: run.planOutput)
                     if run.phase == .reviewing {
@@ -313,6 +343,7 @@ struct EnvironmentRunSheet: View {
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 520)
         .interactiveDismissDisabled(run.phase == .planning || run.phase == .creating)
+        .onDisappear { run.finish() }
     }
 
     private var reviewNotice: some View {
@@ -331,12 +362,12 @@ struct EnvironmentRunSheet: View {
 
     private var buttons: some View {
         HStack {
-            if run.phase == .arguments, let message = run.validationMessage {
+            if run.phase == .options, let message = validationMessage {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-            } else if run.phase != .arguments {
+            } else if run.phase != .options {
                 Button("Copy Output", systemImage: "doc.on.doc") {
                     let output = run.didPlan && run.phase != .reviewing ? run.createOutput : run.planOutput
                     NSPasteboard.general.clearContents()
@@ -345,13 +376,13 @@ struct EnvironmentRunSheet: View {
             }
             Spacer()
             switch run.phase {
-            case .arguments:
+            case .options:
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Review Plan") { run.plan() }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.glassProminent)
-                    .disabled(run.validationMessage != nil)
+                    .disabled(validationMessage != nil)
             case .planning, .creating:
                 Button("Cancel", role: .cancel) { run.cancel() }
                     .keyboardShortcut(.cancelAction)
@@ -368,11 +399,9 @@ struct EnvironmentRunSheet: View {
             case .failed, .cancelled:
                 Button("Close") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                if run.didPlan || !run.file.arguments.isEmpty {
-                    Button("Back") { run.back() }
-                        .keyboardShortcut(.defaultAction)
-                        .buttonStyle(.glassProminent)
-                }
+                Button("Back") { run.back() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.glassProminent)
             }
         }
         .controlSize(.large)
@@ -382,7 +411,7 @@ struct EnvironmentRunSheet: View {
     private var header: some View {
         HStack(spacing: 10) {
             switch run.phase {
-            case .arguments:
+            case .options:
                 Image(systemName: "square.stack.3d.up")
                     .foregroundStyle(.secondary)
                 Text("Create from “\(run.file.displayName)”")
@@ -417,5 +446,78 @@ struct EnvironmentRunSheet: View {
             }
         }
         .font(.headline)
+    }
+}
+
+/// What to create from the file: the sandbox's name, the folder the file's
+/// `${{ env.projectDir }}` stands for, clone mode, and the file's arguments.
+private struct EnvironmentRunOptions: View {
+    let run: EnvironmentRun
+
+    var body: some View {
+        @Bindable var run = run
+
+        Form {
+            Section {
+                TextField("Name", text: $run.name, prompt: Text(run.file.sandboxName(projectDirectory: WorkspacePath.normalized(run.projectDirectory)) ?? "Automatic"))
+            } footer: {
+                Text(run.file.name?.isEmpty == false
+                    ? "Starts as the name in the file. Enter another name to create another sandbox from it."
+                    : "Leave empty to let sbx choose a name. Enter a name to create more than one sandbox from the file.")
+                    .foregroundStyle(.secondary)
+            }
+
+            if run.file.usesProjectDirectory {
+                Section {
+                    LabeledContent("Folder") {
+                        HStack {
+                            TextField("Folder", text: $run.projectDirectory, prompt: Text("~/src/project"))
+                                .labelsHidden()
+                                .font(.body.monospaced())
+                            Button("Choose…") {
+                                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the project directory for “\(run.file.displayName)”.").first {
+                                    run.projectDirectory = url.path
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Project Directory")
+                } footer: {
+                    Text("The file uses \(WorkspacePath.projectDirectory), which is this folder, such as for the workspace it mounts.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if run.offersClone {
+                Section {
+                    Picker("Mode", selection: $run.mode) {
+                        ForEach(WorkspaceMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Workspace")
+                } footer: {
+                    Text(run.mode.explanation)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !run.file.arguments.isEmpty {
+                Section {
+                    ForEach(run.file.arguments) { argument in
+                        KitArgumentRow(argument: argument, isFixed: false, values: $run.argumentValues)
+                    }
+                } header: {
+                    Text("Arguments")
+                } footer: {
+                    Text("The environment file declares these. Leave one empty to use its default.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 }
