@@ -375,6 +375,12 @@ final class EnvironmentRun: Identifiable {
         phase = didPlan ? .reviewing : .options
     }
 
+    /// Back to the options from the plan, to change them and review a new plan.
+    func editOptions() {
+        didPlan = false
+        phase = .options
+    }
+
     func cancel() {
         task?.cancel()
     }

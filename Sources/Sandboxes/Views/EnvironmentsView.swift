@@ -376,6 +376,8 @@ struct EnvironmentRunSheet: View {
             case .reviewing:
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
+                Button("Edit Options") { run.editOptions() }
+                    .help("Change the name and options, then review a new plan")
                 Button("Create Sandbox") { run.create(onSuccess: onCreated) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.glassProminent)
