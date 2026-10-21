@@ -251,6 +251,8 @@ final class EnvironmentRun: Identifiable {
 
     let id = UUID()
     let file: EnvironmentFile
+    /// The file as it is now, to show in the sheet.
+    let fileText: String?
     /// Starts as the file's `name:`. Another name creates another sandbox from the same file.
     var name: String
     /// Whether to pass `--clone`, when the file doesn't set `workspace.clone` itself.
@@ -271,6 +273,7 @@ final class EnvironmentRun: Identifiable {
 
     init(file: EnvironmentFile) {
         self.file = file
+        fileText = try? String(contentsOf: file.url, encoding: .utf8)
         name = file.name ?? ""
         defaults = EnvironmentDefaults.read()
         // A required toggle without a default starts off, which has to be passed.
@@ -280,6 +283,10 @@ final class EnvironmentRun: Identifiable {
     }
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Whether sbx can add defaults to the file at all: run in a folder, it
+    /// only reads `sbxenv.yaml`.
+    var canAddDefaults: Bool { file.url.lastPathComponent == EnvironmentStore.fileName }
 
     /// Why the defaults can't be added, when there are some.
     var defaultsUnavailableReason: String? { defaults?.reasonNotToInclude(in: file) }

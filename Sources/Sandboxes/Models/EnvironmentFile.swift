@@ -171,11 +171,11 @@ struct EnvironmentDefaults {
 
     /// Why sbx can't, or shouldn't, add the defaults to `file`, if so.
     func reasonNotToInclude(in file: EnvironmentFile) -> String? {
+        if file.url.lastPathComponent != EnvironmentStore.fileName {
+            return "Your defaults in ~/.sbxenv.yaml aren't added. sbx only adds them to a file called \(EnvironmentStore.fileName), which it reads from the folder it runs in."
+        }
         if let problem {
             return "Couldn't read ~/.sbxenv.yaml: \(problem)"
-        }
-        if file.url.lastPathComponent != EnvironmentStore.fileName {
-            return "sbx only adds your defaults to a file called \(EnvironmentStore.fileName), which it reads from the folder it runs in."
         }
         // The project directory is the folder sbx runs in. For a file in the
         // environment files folder, that's its own folder, not a project.

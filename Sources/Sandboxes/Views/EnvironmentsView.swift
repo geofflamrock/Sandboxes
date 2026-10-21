@@ -440,6 +440,7 @@ struct EnvironmentRunSheet: View {
 /// user's defaults, clone mode, and the file's arguments.
 private struct EnvironmentRunOptions: View {
     let run: EnvironmentRun
+    @AppStorage("environmentRunFileExpanded") private var isFileExpanded = false
 
     /// Whether the file, or the defaults added to it, use `${{ env.projectDir }}`.
     private var usesProjectDirectory: Bool {
@@ -452,6 +453,32 @@ private struct EnvironmentRunOptions: View {
 
         Form {
             Section {
+                // Collapsed, the options stay in view; the file is there to check what it does.
+                DisclosureGroup(isExpanded: $isFileExpanded) {
+                    ScrollView {
+                        Text(run.fileText ?? "Couldn't read the file.")
+                            .font(.callout.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                    .frame(height: 160)
+                    .background(.background.secondary, in: .rect(cornerRadius: 6))
+                } label: {
+                    LabeledContent {
+                        Text((run.file.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .help(run.file.url.path)
+                    } label: {
+                        Label(run.file.url.lastPathComponent, systemImage: "doc.text")
+                    }
+                }
+            } header: {
+                Text("Environment File")
+            }
+
+            Section {
                 TextField("Name", text: $run.name, prompt: Text(run.sandboxName ?? "Automatic"))
             } footer: {
                 Text(run.file.name?.isEmpty == false
@@ -462,26 +489,34 @@ private struct EnvironmentRunOptions: View {
 
             if run.defaults != nil {
                 Section {
-                    // Shown off when the defaults can't be added, whatever was chosen.
-                    Toggle("Include My Defaults", isOn: Binding(
-                        get: { run.usesDefaults },
-                        set: { run.includesDefaults = $0 }
-                    ))
-                    .disabled(run.defaultsUnavailableReason != nil)
-                    LabeledContent("File") {
-                        Button("Open ~/.sbxenv.yaml") {
-                            NSWorkspace.shared.open(EnvironmentDefaults.url)
+                    if run.canAddDefaults {
+                        // Shown off when the defaults can't be added, whatever was chosen.
+                        Toggle("Include My Defaults", isOn: Binding(
+                            get: { run.usesDefaults },
+                            set: { run.includesDefaults = $0 }
+                        ))
+                        .disabled(run.defaultsUnavailableReason != nil)
+                        LabeledContent("File") {
+                            Button("Open ~/.sbxenv.yaml") {
+                                NSWorkspace.shared.open(EnvironmentDefaults.url)
+                            }
+                            .buttonStyle(.link)
                         }
-                        .buttonStyle(.link)
+                    } else {
+                        // There's no choice to make, so only say why.
+                        Text(run.defaultsUnavailableReason ?? "")
+                            .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Defaults")
                 } footer: {
-                    Text(run.defaultsUnavailableReason
-                        ?? (run.usesDefaults
-                            ? "sbx runs in the file's folder and adds the settings in ~/.sbxenv.yaml, as when you run it there yourself. The file's own settings win."
-                            : "sbx is given the file, so only its own settings are used."))
-                        .foregroundStyle(.secondary)
+                    if run.canAddDefaults {
+                        Text(run.defaultsUnavailableReason
+                            ?? (run.usesDefaults
+                                ? "sbx runs in the file's folder and adds the settings in ~/.sbxenv.yaml, as when you run it there yourself. The file's own settings win."
+                                : "sbx is given the file, so only its own settings are used."))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
