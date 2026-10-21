@@ -441,6 +441,7 @@ struct EnvironmentRunSheet: View {
 private struct EnvironmentRunOptions: View {
     let run: EnvironmentRun
     @AppStorage("environmentRunFileExpanded") private var isFileExpanded = false
+    @AppStorage("environmentRunDefaultsExpanded") private var isDefaultsExpanded = false
 
     /// Whether the file, or the defaults added to it, use `${{ env.projectDir }}`.
     private var usesProjectDirectory: Bool {
@@ -453,27 +454,7 @@ private struct EnvironmentRunOptions: View {
 
         Form {
             Section {
-                // Collapsed, the options stay in view; the file is there to check what it does.
-                DisclosureGroup(isExpanded: $isFileExpanded) {
-                    ScrollView {
-                        Text(run.fileText ?? "Couldn't read the file.")
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                    }
-                    .frame(height: 160)
-                    .background(.background.secondary, in: .rect(cornerRadius: 6))
-                } label: {
-                    LabeledContent {
-                        Text((run.file.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath)
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                            .help(run.file.url.path)
-                    } label: {
-                        Label(run.file.url.lastPathComponent, systemImage: "doc.text")
-                    }
-                }
+                EnvironmentFilePreview(url: run.file.url, text: run.fileText, isExpanded: $isFileExpanded)
             } header: {
                 Text("Environment File")
             }
@@ -496,12 +477,7 @@ private struct EnvironmentRunOptions: View {
                             set: { run.includesDefaults = $0 }
                         ))
                         .disabled(run.defaultsUnavailableReason != nil)
-                        LabeledContent("File") {
-                            Button("Open ~/.sbxenv.yaml") {
-                                NSWorkspace.shared.open(EnvironmentDefaults.url)
-                            }
-                            .buttonStyle(.link)
-                        }
+                        EnvironmentFilePreview(url: EnvironmentDefaults.url, text: run.defaultsText, isExpanded: $isDefaultsExpanded)
                     } else {
                         // There's no choice to make, so only say why.
                         Text(run.defaultsUnavailableReason ?? "")
@@ -569,5 +545,46 @@ private struct EnvironmentRunOptions: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// A file the create sheet uses: its name and folder on one line, a link
+/// to open it in an editor, and its YAML when expanded. Collapsed, the
+/// options stay in view; the file is there to check what it does.
+private struct EnvironmentFilePreview: View {
+    let url: URL
+    let text: String?
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            ScrollView {
+                Text(text ?? "Couldn't read the file.")
+                    .font(.callout.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            .frame(height: 160)
+            .background(.background.secondary, in: .rect(cornerRadius: 6))
+        } label: {
+            // One line: a long folder is cut short from the start, rather than wrapping.
+            HStack(spacing: 8) {
+                Label(url.lastPathComponent, systemImage: "doc.text")
+                    .lineLimit(1)
+                    .fixedSize()
+                Text((url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .help(url.path)
+                Button("Open in Editor") {
+                    NSWorkspace.shared.open(url)
+                }
+                .buttonStyle(.link)
+                .fixedSize()
+            }
+        }
     }
 }

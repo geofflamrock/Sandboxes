@@ -259,6 +259,8 @@ final class EnvironmentRun: Identifiable {
     var mode: WorkspaceMode = .direct
     /// `~/.sbxenv.yaml`, when there is one.
     let defaults: EnvironmentDefaults?
+    /// The defaults file as it is now, to show in the sheet.
+    let defaultsText: String?
     /// Whether to add the user's defaults: sbx runs in the file's folder
     /// rather than being given the file, as when it's run there by hand.
     var includesDefaults = true
@@ -276,6 +278,7 @@ final class EnvironmentRun: Identifiable {
         fileText = try? String(contentsOf: file.url, encoding: .utf8)
         name = file.name ?? ""
         defaults = EnvironmentDefaults.read()
+        defaultsText = defaults == nil ? nil : try? String(contentsOf: EnvironmentDefaults.url, encoding: .utf8)
         // A required toggle without a default starts off, which has to be passed.
         for argument in file.arguments where argument.input == .toggle && argument.isRequired && argument.defaultValue == nil {
             argumentValues[argument.name] = "false"
