@@ -176,7 +176,7 @@ private struct EnvironmentRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: file.problem == nil ? "doc.text" : "exclamationmark.triangle")
+            Image(systemName: file.problem == nil ? "square.stack.3d.up" : "exclamationmark.triangle")
                 .foregroundStyle(file.problem == nil ? Color.secondary : Color.orange)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
@@ -383,7 +383,7 @@ struct EnvironmentRunSheet: View {
         HStack(spacing: 10) {
             switch run.phase {
             case .arguments:
-                Image(systemName: "doc.text")
+                Image(systemName: "square.stack.3d.up")
                     .foregroundStyle(.secondary)
                 Text("Create from “\(run.file.displayName)”")
             case .planning:

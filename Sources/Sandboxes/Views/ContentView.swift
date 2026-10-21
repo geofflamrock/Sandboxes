@@ -152,7 +152,7 @@ struct SandboxSidebar: View {
             }
             // Search only filters sandboxes, so these stay put.
             Section("Management", isExpanded: $managementExpanded) {
-                Label("Environments", systemImage: "doc.text")
+                Label("Environments", systemImage: "square.stack.3d.up")
                     .badge(environments.environments.count)
                     .tag(SidebarItem.environments)
                     .help("Environment files that describe a sandbox, to create it from")

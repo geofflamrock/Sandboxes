@@ -493,7 +493,7 @@ private struct EnvironmentCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: file == nil ? "folder" : "doc.text")
+                Image(systemName: file == nil ? "folder" : "square.stack.3d.up")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(file == nil ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     .frame(width: 40, height: 40)
