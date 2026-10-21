@@ -10,6 +10,8 @@ struct EnvironmentsView: View {
     @Environment(EnvironmentStore.self) private var environments
     /// A file the New Sandbox window can't edit, and why.
     @State private var uneditable: Uneditable?
+    @State private var renaming: EnvironmentFile?
+    @State private var newName = ""
 
     struct Uneditable: Identifiable {
         let id = UUID()
@@ -81,6 +83,19 @@ struct EnvironmentsView: View {
                 : "The file stays where it is. Sandboxes already created from it aren't affected.")
         }
         .alert(
+            "Rename “\(renaming?.displayName ?? "")”",
+            isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+            presenting: renaming
+        ) { file in
+            TextField("Name", text: $newName)
+            Button("Rename") { rename(file) }
+            Button("Cancel", role: .cancel) {}
+        } message: { file in
+            Text(file.isInLibrary
+                ? "This changes the name in the file and its folder, and names the sandboxes it creates from now on. Sandboxes already created keep their names."
+                : "This changes the name in the file, which names the sandboxes it creates from now on. Sandboxes already created keep their names.")
+        }
+        .alert(
             "Can't Edit “\(uneditable?.file.displayName ?? "")” Here",
             isPresented: Binding(get: { uneditable != nil }, set: { if !$0 { uneditable = nil } }),
             presenting: uneditable
@@ -110,10 +125,21 @@ struct EnvironmentsView: View {
             if let sandbox = sandbox(for: file) {
                 store.selection = .sandbox(sandbox.id)
             }
+        case .rename:
+            newName = file.name ?? file.displayName
+            renaming = file
         case .edit: edit(file)
         case .openInEditor: environments.openInEditor(file)
         case .showInFinder: environments.showInFinder(file)
         case .delete: environments.deletionCandidate = file
+        }
+    }
+
+    private func rename(_ file: EnvironmentFile) {
+        do {
+            try environments.rename(file, to: newName)
+        } catch {
+            environments.actionError = .init(title: "Couldn't Rename “\(file.displayName)”", message: error.localizedDescription)
         }
     }
 
@@ -137,6 +163,7 @@ private struct EnvironmentRow: View {
         case create
         case runInTerminal
         case showSandbox
+        case rename
         case edit
         case openInEditor
         case showInFinder
@@ -194,6 +221,8 @@ private struct EnvironmentRow: View {
                 Button("Run in Terminal") { perform(.runInTerminal) }
                     .disabled(file.problem != nil)
                 Divider()
+                Button("Rename…") { perform(.rename) }
+                    .disabled(file.problem != nil)
                 Button("Edit…") { perform(.edit) }
                 Button("Open in Editor") { perform(.openInEditor) }
                 Button("Show in Finder") { perform(.showInFinder) }
@@ -214,6 +243,8 @@ private struct EnvironmentRow: View {
             Button("Run in Terminal") { perform(.runInTerminal) }
                 .disabled(file.problem != nil)
             Divider()
+            Button("Rename…") { perform(.rename) }
+                .disabled(file.problem != nil)
             Button("Edit…") { perform(.edit) }
             Button("Open in Editor") { perform(.openInEditor) }
             Button("Show in Finder") { perform(.showInFinder) }

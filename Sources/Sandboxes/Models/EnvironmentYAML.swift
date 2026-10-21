@@ -355,6 +355,30 @@ enum EnvironmentYAML {
         return result
     }
 
+    // MARK: Editing
+
+    /// `text` with its top-level `name:` set to `name`, changing only that
+    /// line so the rest of a hand-written file stays as it was. A file without
+    /// one gets it after `schemaVersion:`, or at the top.
+    static func settingName(_ name: String, in text: String) throws -> String {
+        var lines = text.components(separatedBy: "\n")
+        let line = "name: \(quote(name))"
+        if let index = lines.firstIndex(where: { $0.wholeMatch(of: #/(name|"name"|'name')\s*:(\s.*)?/#) != nil }) {
+            lines[index] = line
+        } else if let index = lines.firstIndex(where: { $0.hasPrefix("schemaVersion:") }) {
+            lines.insert(line, at: index + 1)
+        } else {
+            lines.insert(line, at: 0)
+        }
+        let result = lines.joined(separator: "\n")
+        // A `name:` written some other way, such as in a flow mapping, isn't
+        // safe to change line by line.
+        guard try parse(result)["name"]?.string == name else {
+            throw ParseError(line: 1, message: "Couldn't find where the file sets its name.")
+        }
+        return result
+    }
+
     // MARK: Writing
 
     /// Block-style YAML with every `.scalar` in double quotes, so values such

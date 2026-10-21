@@ -158,13 +158,8 @@ struct CreateSandboxRequest {
         if target == .environment && trimmedName.isEmpty {
             return "Enter a name for the environment."
         }
-        if !trimmedName.isEmpty {
-            if trimmedName == "default" {
-                return "The name “default” is reserved."
-            }
-            if trimmedName.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
-                return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
-            }
+        if !trimmedName.isEmpty, let problem = Self.nameProblem(trimmedName) {
+            return problem
         }
         for variable in environment where !variable.isBlank {
             if variable.trimmedKey.isEmpty {
@@ -180,6 +175,17 @@ struct CreateSandboxRequest {
                     return problem
                 }
             }
+        }
+        return nil
+    }
+
+    /// Why sbx won't accept `name` for a sandbox, if it won't.
+    static func nameProblem(_ name: String) -> String? {
+        if name == "default" {
+            return "The name “default” is reserved."
+        }
+        if name.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
+            return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
         }
         return nil
     }

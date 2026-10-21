@@ -101,6 +101,44 @@ final class EnvironmentStore {
         }
     }
 
+    /// Sets the file's `name:`, which names the sandbox it creates, and moves
+    /// an environment in the environments folder to a folder of that name.
+    /// Sandboxes already created from it keep their names.
+    func rename(_ file: EnvironmentFile, to newName: String) throws {
+        let newName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let problem = CreateSandboxRequest.nameProblem(newName) {
+            throw RenameError(message: problem)
+        }
+        let fileManager = FileManager.default
+        let text = try String(contentsOf: file.url, encoding: .utf8)
+        let renamed = try EnvironmentYAML.settingName(newName, in: text)
+        var url = file.url
+        if file.isInLibrary {
+            let folder = file.url.deletingLastPathComponent()
+            let destination = folder.deletingLastPathComponent().appendingPathComponent(newName, isDirectory: true)
+            if destination.standardizedFileURL != folder.standardizedFileURL {
+                // A folder differing only in case is the same one on most Macs.
+                if fileManager.fileExists(atPath: destination.path) && destination.path.lowercased() != folder.path.lowercased() {
+                    throw SaveError.exists(newName)
+                }
+                try fileManager.moveItem(at: folder, to: destination)
+                url = destination.appendingPathComponent(Self.fileName)
+            }
+        }
+        try renamed.write(to: url, atomically: true, encoding: .utf8)
+        // Links to sandboxes created before keep pointing at the file.
+        if url != file.url {
+            let links = sandboxLinks.mapValues { $0 == file.url.path ? url.path : $0 }
+            defaults.set(links, forKey: Self.sandboxLinksKey)
+        }
+        refresh()
+    }
+
+    struct RenameError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
     /// Adds a file chosen in an open panel to the list, and returns it.
     @discardableResult
     func open(_ url: URL) -> EnvironmentFile {

@@ -30,7 +30,7 @@ struct CreateSandboxView: View {
                 CreateSandboxForm(
                     request: $request,
                     inspector: inspector,
-                    isEditing: editingURL != nil,
+                    editingURL: editingURL,
                     saveError: saveError,
                     onCancel: close,
                     onCreate: start,
@@ -123,8 +123,8 @@ struct CreateSandboxView: View {
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
     let inspector: KitInspector
-    /// Editing an environment file, which can't turn into a sandbox.
-    let isEditing: Bool
+    /// The environment file being edited, which can't turn into a sandbox.
+    let editingURL: URL?
     let saveError: String?
     let onCancel: () -> Void
     let onCreate: () -> Void
@@ -135,6 +135,9 @@ private struct CreateSandboxForm: View {
     @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
+    @AppStorage("environmentFilePreviewExpanded") private var isFilePreviewExpanded = false
+
+    private var isEditing: Bool { editingURL != nil }
 
     // In a window, the tab bar only style puts the tabs in the title bar
     // rather than drawing a bordered box around the content.
@@ -242,36 +245,60 @@ private struct CreateSandboxForm: View {
         case .environment:
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Environment File")
-                        .font(.headline)
+                    // Collapsed, the window shows more of the form; the file is only a preview.
+                    Button {
+                        withAnimation(.snappy) { isFilePreviewExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isFilePreviewExpanded ? 90 : 0))
+                            Text("Environment File")
+                                .font(.headline)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isFilePreviewExpanded ? "Hide the file" : "Show the file")
                     Spacer()
-                    if !isEditing && !request.trimmedName.isEmpty {
-                        Text(savedPath)
+                    if let filePath {
+                        Text(filePath)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.head)
-                            .help(savedPath)
+                            .textSelection(.enabled)
+                            .help(filePath)
                     }
                 }
-                ScrollView {
-                    Text(previewRequest.environmentFileText)
-                        .font(.callout.monospaced())
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
+                if isFilePreviewExpanded {
+                    ScrollView {
+                        Text(previewRequest.environmentFileText)
+                            .font(.callout.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                    .frame(height: 140)
+                    .background(.background.secondary, in: .rect(cornerRadius: 6))
                 }
-                .frame(height: 140)
-                .background(.background.secondary, in: .rect(cornerRadius: 6))
             }
         }
     }
 
-    /// Where Save puts a new environment.
-    private var savedPath: String {
-        let url = EnvironmentStore.directory
-            .appendingPathComponent(request.trimmedName, isDirectory: true)
-            .appendingPathComponent(EnvironmentStore.fileName)
+    /// The file being edited, or where Save puts a new environment once it has a name.
+    private var filePath: String? {
+        let url: URL
+        if let editingURL {
+            url = editingURL
+        } else if !request.trimmedName.isEmpty {
+            url = EnvironmentStore.directory
+                .appendingPathComponent(request.trimmedName, isDirectory: true)
+                .appendingPathComponent(EnvironmentStore.fileName)
+        } else {
+            return nil
+        }
         return (url.path as NSString).abbreviatingWithTildeInPath
     }
 
@@ -371,7 +398,7 @@ private struct CreateSandboxForm: View {
             TextField("Name", text: $request.name, prompt: Text(request.target == .environment ? "Required" : "Automatic"))
                 .disabled(isEditing)
         } footer: {
-            Text(nameFooter)
+            Text(isEditing ? "Rename the environment from Management › Environments." : nameFooter)
                 .foregroundStyle(.secondary)
         }
     }
