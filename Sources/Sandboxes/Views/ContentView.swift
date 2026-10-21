@@ -93,7 +93,7 @@ private struct EnvironmentPresentations: ViewModifier {
         content
             .sheet(item: $environments.run) { run in
                 EnvironmentRunSheet(run: run) {
-                    environments.recordLink(run.sandboxName, to: run.file)
+                    environments.recordLink(run.sandboxName, to: run.file, includingDefaults: run.usesDefaults)
                     Task { await store.refresh() }
                 }
             }

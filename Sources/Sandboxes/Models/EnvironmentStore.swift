@@ -13,7 +13,10 @@ final class EnvironmentStore {
     /// Sandbox names and the files the app created them from. sbx doesn't
     /// record which file a sandbox came from.
     private static let sandboxLinksKey = "environmentSandboxLinks"
-    static let fileName = "sbxenv.yaml"
+    /// Sandboxes created with `~/.sbxenv.yaml` added, which later `sbx env`
+    /// commands for them need to match.
+    private static let sandboxesWithDefaultsKey = "environmentSandboxesWithDefaults"
+    nonisolated static let fileName = "sbxenv.yaml"
 
     private(set) var environments: [EnvironmentFile] = []
     private(set) var hasLoaded = false
@@ -176,12 +179,13 @@ final class EnvironmentStore {
     }
 
     /// Runs `sbx env run` in the default terminal, where sbx asks to approve
-    /// the plan and then attaches to the agent.
+    /// the plan and then attaches to the agent. Like the create sheet, it adds
+    /// the user's defaults when they can be.
     func runInTerminal(_ file: EnvironmentFile) {
+        let run = EnvironmentRun(file: file)
         do {
-            let arguments = EnvironmentRun.fileArguments(name: file.name, values: [:], declared: file.arguments, path: file.url.path)
-            try TerminalLauncher.open(sbxArguments: ["env", "run"] + arguments)
-            recordLink(file.sandboxName, to: file)
+            try TerminalLauncher.open(sbxArguments: run.arguments("run"), in: run.directory)
+            recordLink(run.sandboxName, to: file, includingDefaults: run.usesDefaults)
         } catch {
             actionError = .init(title: "Couldn't Open Terminal", message: error.localizedDescription)
         }
@@ -205,11 +209,18 @@ final class EnvironmentStore {
         return names
     }
 
-    func recordLink(_ sandbox: String?, to file: EnvironmentFile) {
+    func recordLink(_ sandbox: String?, to file: EnvironmentFile, includingDefaults: Bool) {
         guard let sandbox else { return }
         var links = sandboxLinks
         links[sandbox] = file.url.path
         defaults.set(links, forKey: Self.sandboxLinksKey)
+        var withDefaults = Set(defaults.stringArray(forKey: Self.sandboxesWithDefaultsKey) ?? [])
+        if includingDefaults {
+            withDefaults.insert(sandbox)
+        } else {
+            withDefaults.remove(sandbox)
+        }
+        defaults.set(withDefaults.sorted(), forKey: Self.sandboxesWithDefaultsKey)
     }
 
     private var sandboxLinks: [String: String] {
@@ -244,6 +255,11 @@ final class EnvironmentRun: Identifiable {
     var name: String
     /// Whether to pass `--clone`, when the file doesn't set `workspace.clone` itself.
     var mode: WorkspaceMode = .direct
+    /// `~/.sbxenv.yaml`, when there is one.
+    let defaults: EnvironmentDefaults?
+    /// Whether to add the user's defaults: sbx runs in the file's folder
+    /// rather than being given the file, as when it's run there by hand.
+    var includesDefaults = true
     var argumentValues: [String: String] = [:]
     private(set) var phase: Phase = .options
     let planOutput = ConsoleOutput()
@@ -256,6 +272,7 @@ final class EnvironmentRun: Identifiable {
     init(file: EnvironmentFile) {
         self.file = file
         name = file.name ?? ""
+        defaults = EnvironmentDefaults.read()
         // A required toggle without a default starts off, which has to be passed.
         for argument in file.arguments where argument.input == .toggle && argument.isRequired && argument.defaultValue == nil {
             argumentValues[argument.name] = "false"
@@ -264,13 +281,30 @@ final class EnvironmentRun: Identifiable {
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// Whether to offer clone mode: the file mounts a workspace without saying how.
-    var offersClone: Bool { file.workspace != nil && !file.setsClone }
+    /// Why the defaults can't be added, when there are some.
+    var defaultsUnavailableReason: String? { defaults?.reasonNotToInclude(in: file) }
+
+    var usesDefaults: Bool { includesDefaults && defaults != nil && defaultsUnavailableReason == nil }
+
+    /// The workspace the sandbox mounts: the file's, or else the defaults'.
+    var workspace: String? {
+        file.workspace ?? (usesDefaults ? defaults?.workspace(for: file) : nil)
+    }
+
+    /// Whether to offer clone mode: a workspace is mounted without saying how.
+    var offersClone: Bool {
+        workspace != nil && !file.setsClone && !(usesDefaults && defaults?.setsClone == true)
+    }
 
     /// The sandbox this creates, when it can be known before sbx creates it.
     var sandboxName: String? {
-        trimmedName.isEmpty ? file.sandboxName : trimmedName
+        if !trimmedName.isEmpty { return trimmedName }
+        if let name = file.name, !name.isEmpty { return name }
+        return EnvironmentFile.derivedSandboxName(agent: file.agent ?? (usesDefaults ? defaults?.agent : nil), workspace: workspace)
     }
+
+    /// Where sbx runs: the file's folder when the defaults are added.
+    var directory: URL? { usesDefaults ? file.projectDirectory : nil }
 
     /// Why the options entered can't be used yet, if they can't.
     var validationMessage: String? {
@@ -281,8 +315,9 @@ final class EnvironmentRun: Identifiable {
     }
 
     /// `--name` when there is one so the sandbox is known, `--clone` when
-    /// chosen, the values entered for the file's arguments, and the file.
-    static func fileArguments(name: String?, clone: Bool = false, values: [String: String], declared: [KitArgument], path: String) -> [String] {
+    /// chosen, the values entered for the file's arguments, and the file,
+    /// unless sbx reads it from the folder it runs in.
+    static func fileArguments(name: String?, clone: Bool = false, values: [String: String], declared: [KitArgument], path: String?) -> [String] {
         var arguments: [String] = []
         if let name, !name.isEmpty {
             arguments += ["--name", name]
@@ -294,16 +329,17 @@ final class EnvironmentRun: Identifiable {
         for (name, value) in values.sorted(by: { $0.key < $1.key }) where declared.contains(name) && !value.isEmpty {
             arguments += ["--env-arg", "\(name)=\(value)"]
         }
-        return arguments + [path]
+        return arguments + (path.map { [$0] } ?? [])
     }
 
-    private func arguments(_ command: String) -> [String] {
+    /// The arguments for `sbx env <command>`, run in `directory`.
+    func arguments(_ command: String) -> [String] {
         ["env", command] + Self.fileArguments(
             name: trimmedName,
             clone: offersClone && mode == .clone,
             values: argumentValues,
             declared: file.arguments,
-            path: file.url.path
+            path: usesDefaults ? nil : file.url.path
         )
     }
 
@@ -335,10 +371,14 @@ final class EnvironmentRun: Identifiable {
 
     private func stream(_ arguments: [String], into output: ConsoleOutput, onSuccess: @escaping @MainActor () -> Void) {
         output.clear()
+        let directory = directory
+        if let directory {
+            output.append("$ cd \(CreateSandboxRequest.quoteIfNeeded((directory.path as NSString).abbreviatingWithTildeInPath))\n")
+        }
         output.append("$ \(Self.commandLine(arguments))\n\n")
         task = Task {
             do {
-                let exitCode = try await SbxCLI.stream(arguments) { text in
+                let exitCode = try await SbxCLI.stream(arguments, in: directory) { text in
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated { output.append(text) }
                     }

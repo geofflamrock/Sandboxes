@@ -43,6 +43,11 @@ struct EnvironmentFile: Identifiable, Hashable {
     /// `<agent>-<workspace folder>`, as sbx names it.
     var sandboxName: String? {
         if let name, !name.isEmpty { return name }
+        return Self.derivedSandboxName(agent: agent, workspace: workspace)
+    }
+
+    /// `<agent>-<workspace folder>`, as sbx names a sandbox when nothing names it.
+    static func derivedSandboxName(agent: String?, workspace: String?) -> String? {
         guard let agent, let workspace, !workspace.contains("${{") else { return nil }
         return "\(agent)-\(URL(fileURLWithPath: workspace).lastPathComponent)"
     }
@@ -114,6 +119,70 @@ struct EnvironmentFile: Identifiable, Hashable {
         let expanded = (path as NSString).expandingTildeInPath
         if expanded.hasPrefix("/") { return URL(fileURLWithPath: expanded).standardizedFileURL.path }
         return directory.appendingPathComponent(expanded).standardizedFileURL.path
+    }
+}
+
+// MARK: - User defaults
+
+/// `~/.sbxenv.yaml`, which sbx adds under an environment file when it runs
+/// in the file's folder rather than being given the file. The file's own
+/// settings win, and lists such as `ports` are combined.
+struct EnvironmentDefaults {
+    static var url: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sbxenv.yaml")
+    }
+
+    var agent: String?
+    /// As written. sbx only accepts `${{ env.projectDir }}` or a folder in it here.
+    var workspace: String?
+    var setsClone = false
+    /// Whether anything other than the workspace uses the project directory,
+    /// such as an additional folder.
+    var usesProjectDirectoryElsewhere = false
+    /// Why the file couldn't be read, if it couldn't.
+    var problem: String?
+
+    /// The defaults, or nil when there's no defaults file.
+    static func read() -> EnvironmentDefaults? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        var defaults = EnvironmentDefaults()
+        do {
+            let document = try EnvironmentYAML.parse(String(contentsOf: url, encoding: .utf8))
+            defaults.agent = document["agent"]?.string
+            let workspace = document["workspace"]
+            if let path = workspace?.string ?? workspace?["path"]?.string, !path.isEmpty {
+                defaults.workspace = path
+            }
+            defaults.setsClone = workspace?["clone"] != nil
+            let rest = (document.map ?? []).filter { $0.key != "workspace" }
+            defaults.usesProjectDirectoryElsewhere = EnvironmentYAML.write(.map(rest)).contains(EnvironmentFile.projectDirectoryPattern)
+        } catch {
+            defaults.problem = error.localizedDescription
+        }
+        return defaults
+    }
+
+    /// The workspace the defaults give `file`: only when the file doesn't
+    /// set one, with the project directory as the file's folder.
+    func workspace(for file: EnvironmentFile) -> String? {
+        guard file.workspace == nil, let workspace else { return nil }
+        return workspace.replacing(EnvironmentFile.projectDirectoryPattern, with: file.projectDirectory.path)
+    }
+
+    /// Why sbx can't, or shouldn't, add the defaults to `file`, if so.
+    func reasonNotToInclude(in file: EnvironmentFile) -> String? {
+        if let problem {
+            return "Couldn't read ~/.sbxenv.yaml: \(problem)"
+        }
+        if file.url.lastPathComponent != EnvironmentStore.fileName {
+            return "sbx only adds your defaults to a file called \(EnvironmentStore.fileName), which it reads from the folder it runs in."
+        }
+        // The project directory is the folder sbx runs in. For a file in the
+        // environment files folder, that's its own folder, not a project.
+        if file.isInLibrary && (workspace(for: file) != nil || usesProjectDirectoryElsewhere) {
+            return "Your defaults mount the project directory, which for this file is its own folder in Environment Files rather than a project, so they're left out."
+        }
+        return nil
     }
 }
 

@@ -436,17 +436,23 @@ struct EnvironmentRunSheet: View {
     }
 }
 
-/// What to create from the file: the sandbox's name, clone mode, and the
-/// file's arguments.
+/// What to create from the file: the sandbox's name, whether to add the
+/// user's defaults, clone mode, and the file's arguments.
 private struct EnvironmentRunOptions: View {
     let run: EnvironmentRun
+
+    /// Whether the file, or the defaults added to it, use `${{ env.projectDir }}`.
+    private var usesProjectDirectory: Bool {
+        run.file.usesProjectDirectory
+            || (run.usesDefaults && (run.defaults?.workspace(for: run.file) != nil || run.defaults?.usesProjectDirectoryElsewhere == true))
+    }
 
     var body: some View {
         @Bindable var run = run
 
         Form {
             Section {
-                TextField("Name", text: $run.name, prompt: Text(run.file.sandboxName ?? "Automatic"))
+                TextField("Name", text: $run.name, prompt: Text(run.sandboxName ?? "Automatic"))
             } footer: {
                 Text(run.file.name?.isEmpty == false
                     ? "Starts as the name in the file. Enter another name to create another sandbox from it."
@@ -454,7 +460,32 @@ private struct EnvironmentRunOptions: View {
                     .foregroundStyle(.secondary)
             }
 
-            if run.file.usesProjectDirectory {
+            if run.defaults != nil {
+                Section {
+                    // Shown off when the defaults can't be added, whatever was chosen.
+                    Toggle("Include My Defaults", isOn: Binding(
+                        get: { run.usesDefaults },
+                        set: { run.includesDefaults = $0 }
+                    ))
+                    .disabled(run.defaultsUnavailableReason != nil)
+                    LabeledContent("File") {
+                        Button("Open ~/.sbxenv.yaml") {
+                            NSWorkspace.shared.open(EnvironmentDefaults.url)
+                        }
+                        .buttonStyle(.link)
+                    }
+                } header: {
+                    Text("Defaults")
+                } footer: {
+                    Text(run.defaultsUnavailableReason
+                        ?? (run.usesDefaults
+                            ? "sbx runs in the file's folder and adds the settings in ~/.sbxenv.yaml, as when you run it there yourself. The file's own settings win."
+                            : "sbx is given the file, so only its own settings are used."))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if usesProjectDirectory {
                 Section {
                     LabeledContent("Folder") {
                         Text((run.file.projectDirectory.path as NSString).abbreviatingWithTildeInPath)
@@ -468,7 +499,7 @@ private struct EnvironmentRunOptions: View {
                 } footer: {
                     Text(run.file.isInLibrary
                         ? "The file uses ${{ env.projectDir }}, which sbx makes the folder the file is in. That's its folder in the environment files folder, not a project, so mount folders by their full paths instead."
-                        : "The file uses ${{ env.projectDir }}, which sbx makes the folder the file is in.")
+                        : "${{ env.projectDir }} is the folder the file is in.")
                         .foregroundStyle(.secondary)
                 }
             }
