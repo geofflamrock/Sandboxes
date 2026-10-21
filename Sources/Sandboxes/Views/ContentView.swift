@@ -5,7 +5,6 @@ struct ContentView: View {
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
     @Environment(SbxSettingStore.self) private var sbxSettings
-    @Environment(EnvironmentStore.self) private var environments
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -13,7 +12,6 @@ struct ContentView: View {
         @Bindable var mcp = mcp
         @Bindable var secrets = secrets
         @Bindable var sbxSettings = sbxSettings
-        @Bindable var environments = environments
 
         NavigationSplitView {
             SandboxSidebar()
@@ -70,13 +68,7 @@ struct ContentView: View {
         .actionErrorAlert(error: $mcp.actionError)
         .actionErrorAlert(error: $secrets.actionError)
         .actionErrorAlert(error: $sbxSettings.actionError)
-        .sheet(item: $environments.run) { run in
-            EnvironmentRunSheet(run: run) {
-                environments.recordLink(for: run.file)
-                Task { await store.refresh() }
-            }
-        }
-        .actionErrorAlert(error: $environments.actionError)
+        .modifier(EnvironmentPresentations())
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
@@ -86,6 +78,26 @@ struct ContentView: View {
         .onDisappear {
             store.windowDidClose()
         }
+    }
+}
+
+/// Creating a sandbox from an environment file, and the environments' errors,
+/// over the main window. Separate so the window's modifiers type-check in time.
+private struct EnvironmentPresentations: ViewModifier {
+    @Environment(SandboxStore.self) private var store
+    @Environment(EnvironmentStore.self) private var environments
+
+    func body(content: Content) -> some View {
+        @Bindable var environments = environments
+
+        content
+            .sheet(item: $environments.run) { run in
+                EnvironmentRunSheet(run: run) {
+                    environments.recordLink(for: run.file)
+                    Task { await store.refresh() }
+                }
+            }
+            .actionErrorAlert(error: $environments.actionError)
     }
 }
 
