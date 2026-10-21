@@ -5,11 +5,15 @@ import UniformTypeIdentifiers
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
+    @Environment(EnvironmentStore.self) private var environments
     @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
+    /// The environment file being edited, which Save writes back to.
+    @State private var editingURL: URL?
+    @State private var saveError: String?
     /// Kits already inspected stay known while the window is open, so going
     /// back to edit options doesn't read them again.
     @State private var inspector = KitInspector()
@@ -26,30 +30,76 @@ struct CreateSandboxView: View {
                 CreateSandboxForm(
                     request: $request,
                     inspector: inspector,
+                    isEditing: editingURL != nil,
+                    saveError: saveError,
                     onCancel: close,
-                    onCreate: start
+                    onCreate: start,
+                    onSave: save
                 )
             }
         }
+        .navigationTitle(title)
         .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
         .background(WindowReader(kind: .create))
-        .onAppear {
-            if request.workload.isEmpty {
-                request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
+        .onAppear(perform: applyPreset)
+        // Asked again while the window is open, such as from an agent on the
+        // home page: switch to what was asked for unless a sandbox is being created.
+        .onChange(of: store.createRequests) {
+            if run == nil {
+                applyPreset()
             }
         }
-        // Asked again while the window is open, such as from an agent on the
-        // home page: switch to that agent unless a sandbox is being created.
-        .onChange(of: store.createRequests) {
-            if run == nil, let workload = store.createWorkload {
-                request.workload = workload
-            }
+        .onChange(of: request.name) {
+            saveError = nil
         }
         // Start afresh the next time the window opens.
         .onDisappear {
             request = CreateSandboxRequest()
             run = nil
+            editingURL = nil
+            saveError = nil
+        }
+    }
+
+    private var title: String {
+        if let editingURL {
+            return "Edit “\(EnvironmentFile.fallbackName(for: editingURL))”"
+        }
+        return request.target == .environment ? "New Environment" : "New Sandbox"
+    }
+
+    /// Starts with what the window was opened for: an environment file to
+    /// edit, or a sandbox or environment with the workload asked for.
+    private func applyPreset() {
+        saveError = nil
+        if let edit = store.environmentEdit {
+            request = edit.request
+            editingURL = edit.url
+            return
+        }
+        if editingURL != nil {
+            request = CreateSandboxRequest()
+            editingURL = nil
+        }
+        request.target = store.createTarget
+        if let workload = store.createWorkload {
+            request.workload = workload
+        } else if request.workload.isEmpty {
+            request.workload = recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
+        }
+    }
+
+    /// Writes the environment file, then shows it in Management › Environments.
+    private func save() {
+        do {
+            try environments.save(request, to: editingURL)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            store.selection = .environments
+            close()
+            AppWindows.showMain()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 
@@ -73,8 +123,12 @@ struct CreateSandboxView: View {
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
     let inspector: KitInspector
+    /// Editing an environment file, which can't turn into a sandbox.
+    let isEditing: Bool
+    let saveError: String?
     let onCancel: () -> Void
     let onCreate: () -> Void
+    let onSave: () -> Void
 
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
@@ -86,7 +140,7 @@ private struct CreateSandboxForm: View {
     // rather than drawing a bordered box around the content.
     var body: some View {
         TabView(selection: $tab) {
-            ForEach(CreateSheetTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 Tab(value: tab) {
                     Form {
                         switch tab {
@@ -126,6 +180,11 @@ private struct CreateSandboxForm: View {
             }
         }
         .tabViewStyle(.tabBarOnly)
+        .onChange(of: request.target) {
+            if !visibleTabs.contains(tab) {
+                tab = .general
+            }
+        }
         .task {
             await mcp.refresh()
         }
@@ -158,33 +217,87 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    /// The tabs for what's being made. An environment file doesn't pick MCP
+    /// servers the way `sbx create` does: it registers servers itself.
+    private var visibleTabs: [CreateSheetTab] {
+        request.target == .environment ? CreateSheetTab.allCases.filter { $0 != .mcp } : CreateSheetTab.allCases
+    }
+
     // MARK: Footer
 
+    @ViewBuilder
     private var commandSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Command")
-                .font(.headline)
-            Text(commandPreview)
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
+        switch request.target {
+        case .sandbox:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Command")
+                    .font(.headline)
+                Text(previewRequest.commandLine)
+                    .font(.callout.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(.background.secondary, in: .rect(cornerRadius: 6))
+            }
+        case .environment:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Environment File")
+                        .font(.headline)
+                    Spacer()
+                    if !isEditing && !request.trimmedName.isEmpty {
+                        Text(savedPath)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .help(savedPath)
+                    }
+                }
+                ScrollView {
+                    Text(previewRequest.environmentFileText)
+                        .font(.callout.monospaced())
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(height: 140)
                 .background(.background.secondary, in: .rect(cornerRadius: 6))
+            }
         }
+    }
+
+    /// Where Save puts a new environment.
+    private var savedPath: String {
+        let url = EnvironmentStore.directory
+            .appendingPathComponent(request.trimmedName, isDirectory: true)
+            .appendingPathComponent(EnvironmentStore.fileName)
+        return (url.path as NSString).abbreviatingWithTildeInPath
     }
 
     private var actionBar: some View {
         HStack {
-            if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
+            Picker("Create", selection: $request.target) {
+                ForEach(CreateSandboxRequest.Target.allCases) { target in
+                    Text(target.title).tag(target)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .disabled(isEditing)
+            .help("Create a sandbox now, or save these options as an environment file to create sandboxes from")
+            if let message = saveError ?? request.validationMessage, saveError != nil || !request.workload.isEmpty || !request.name.isEmpty {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .textSelection(.enabled)
             }
             Spacer()
             Button("Cancel", role: .cancel, action: onCancel)
                 .keyboardShortcut(.cancelAction)
-            Button("Create", action: create)
+            Button(request.target == .environment ? "Save" : "Create", action: create)
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.glassProminent)
                 .disabled(request.validationMessage != nil)
@@ -255,10 +368,18 @@ private struct CreateSandboxForm: View {
 
     private var nameSection: some View {
         Section {
-            TextField("Name", text: $request.name, prompt: Text("Automatic"))
+            TextField("Name", text: $request.name, prompt: Text(request.target == .environment ? "Required" : "Automatic"))
+                .disabled(isEditing)
         } footer: {
-            Text("Leave empty to let sbx choose a name.")
+            Text(nameFooter)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var nameFooter: String {
+        switch request.target {
+        case .sandbox: "Leave empty to let sbx choose a name."
+        case .environment: "Names the environment and the sandbox it creates."
         }
     }
 
@@ -566,7 +687,7 @@ private struct CreateSandboxForm: View {
                 }
                 .font(.body.monospaced())
             }
-            ForEach(request.environmentFiles, id: \.self) { file in
+            ForEach(request.target == .sandbox ? request.environmentFiles : [], id: \.self) { file in
                 HStack {
                     Label((file.path as NSString).abbreviatingWithTildeInPath, systemImage: "doc.text")
                         .lineLimit(1)
@@ -582,14 +703,19 @@ private struct CreateSandboxForm: View {
                 Button("Add Variable", systemImage: "plus") {
                     request.environment.append(EnvironmentVariable())
                 }
-                Button("Add File…", systemImage: "doc.badge.plus", action: addEnvironmentFiles)
+                // An environment file can't read variables from other files.
+                if request.target == .sandbox {
+                    Button("Add File…", systemImage: "doc.badge.plus", action: addEnvironmentFiles)
+                }
                 Spacer()
             }
             .buttonStyle(.borderless)
         } header: {
             Text("Environment")
         } footer: {
-            Text("Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files.")
+            Text(request.target == .sandbox
+                ? "Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files."
+                : "Set in the sandbox and saved in the environment file, so store credentials as secrets instead.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -652,18 +778,22 @@ private struct CreateSandboxForm: View {
 
     // MARK: Command
 
-    /// The command as it will run, including a kit that's entered but not yet added.
-    private var commandPreview: String {
+    /// The request as it will run or be saved, including a kit that's
+    /// entered but not yet added.
+    private var previewRequest: CreateSandboxRequest {
         var preview = request
         if let pending = kitDraft.reference, !preview.kits.contains(pending) {
             preview.kits.append(pending)
         }
-        return preview.commandLine
+        return preview
     }
 
     private func create() {
         addDraftKit()
-        onCreate()
+        switch request.target {
+        case .sandbox: onCreate()
+        case .environment: onSave()
+        }
     }
 }
 

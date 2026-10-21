@@ -29,6 +29,7 @@ struct HomeView: View {
                     PendingApprovalsCard(approvalResponse: $approvalResponse)
                         .id(HomeAnchor.approvals)
                     QuickCreateSection()
+                    EnvironmentsSection()
                 }
                 .frame(maxWidth: 880, alignment: .leading)
                 .padding(24)
@@ -440,6 +441,85 @@ struct CopyableCommand: View {
             try? await Task.sleep(for: .seconds(2))
             didCopy = false
         }
+    }
+}
+
+// MARK: - Environments
+
+/// Cards for the most recently changed environment files, which create
+/// their sandbox, and one to open a file from anywhere.
+private struct EnvironmentsSection: View {
+    @Environment(SandboxStore.self) private var store
+    @Environment(EnvironmentStore.self) private var environments
+
+    private static let maxCards = 5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                HomeSectionHeader(title: "Create from an Environment")
+                Spacer()
+                if !environments.environments.isEmpty {
+                    Button("Show All") { store.selection = .environments }
+                        .buttonStyle(.link)
+                }
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
+                ForEach(environments.environments.filter { $0.problem == nil }.prefix(Self.maxCards)) { file in
+                    EnvironmentCard(file: file) {
+                        environments.startCreating(from: file)
+                    }
+                }
+                EnvironmentCard(file: nil) {
+                    if EnvironmentFilePanel.open(into: environments) != nil {
+                        store.selection = .environments
+                    }
+                }
+            }
+        }
+        .onAppear { environments.refresh() }
+    }
+}
+
+/// A card that creates the sandbox an environment file describes, or opens
+/// a file when `file` is nil.
+private struct EnvironmentCard: View {
+    let file: EnvironmentFile?
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: file == nil ? "folder" : "doc.text")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(file == nil ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .frame(width: 40, height: 40)
+                    .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file?.displayName ?? "Open File…")
+                        .font(.headline)
+                        .lineLimit(1)
+                    if let file {
+                        Text(file.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(CardBackground(isHighlighted: isHovering))
+            .contentShape(.rect(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(file.map { "Review the plan for “\($0.displayName)”, then create its sandbox" } ?? "Open an environment file, such as sbxenv.yaml")
     }
 }
 

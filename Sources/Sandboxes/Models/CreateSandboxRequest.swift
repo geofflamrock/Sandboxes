@@ -56,6 +56,23 @@ enum HostResources {
 }
 
 struct CreateSandboxRequest {
+    /// What the New Sandbox window makes: a sandbox, or an environment file
+    /// with the same options.
+    enum Target: String, CaseIterable, Identifiable {
+        case sandbox
+        case environment
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .sandbox: "Sandbox"
+            case .environment: "Environment"
+            }
+        }
+    }
+
+    var target: Target = .sandbox
     var workload = ""
     var kits: [String] = []
     var workspace: URL?
@@ -137,6 +154,10 @@ struct CreateSandboxRequest {
         if trimmedWorkload.isEmpty {
             return "Choose an agent or enter an image."
         }
+        // The name is the environment's folder, and the sandbox it creates.
+        if target == .environment && trimmedName.isEmpty {
+            return "Enter a name for the environment."
+        }
         if !trimmedName.isEmpty {
             if trimmedName == "default" {
                 return "The name “default” is reserved."
@@ -198,7 +219,7 @@ struct CreateSandboxRequest {
         return flags
     }
 
-    private static func quoteIfNeeded(_ value: String) -> String {
+    static func quoteIfNeeded(_ value: String) -> String {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:@=+,~"))
         if !value.isEmpty && value.unicodeScalars.allSatisfy(safe.contains) {
             return value

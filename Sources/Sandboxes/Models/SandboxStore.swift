@@ -4,10 +4,18 @@ import Observation
 /// What's selected in the sidebar: a sandbox, or one of the management pages.
 enum SidebarItem: Hashable {
     case sandbox(Sandbox.ID)
+    case environments
     case secrets
     case mcpServers
     /// The settings of sbx itself, not this app's.
     case sbxSettings
+}
+
+/// An environment file opened in the New Sandbox window to edit, with the
+/// options read from it.
+struct EnvironmentEdit {
+    let url: URL
+    let request: CreateSandboxRequest
 }
 
 @MainActor
@@ -43,6 +51,11 @@ final class SandboxStore {
     /// Counts requests to create a sandbox, so an open New Sandbox window can
     /// switch to the workload asked for.
     private(set) var createRequests = 0
+    /// What the New Sandbox window makes when it opens: a sandbox or an
+    /// environment file.
+    private(set) var createTarget: CreateSandboxRequest.Target = .sandbox
+    /// An environment file the New Sandbox window opens to edit.
+    private(set) var environmentEdit: EnvironmentEdit?
     var removalCandidate: Sandbox?
     var actionError: ActionError?
     /// Where the open button and double-clicking open a sandbox: the last
@@ -106,6 +119,26 @@ final class SandboxStore {
     /// Opens the New Sandbox window, starting with `workload` when it's given.
     func presentCreate(workload: String? = nil) {
         createWorkload = workload
+        createTarget = .sandbox
+        environmentEdit = nil
+        createRequests += 1
+        AppWindows.showCreate()
+    }
+
+    /// Opens the New Sandbox window to save an environment file.
+    func presentNewEnvironment() {
+        createWorkload = nil
+        createTarget = .environment
+        environmentEdit = nil
+        createRequests += 1
+        AppWindows.showCreate()
+    }
+
+    /// Opens the New Sandbox window with an environment file's options, to save it again.
+    func presentEdit(_ edit: EnvironmentEdit) {
+        createWorkload = nil
+        createTarget = .environment
+        environmentEdit = edit
         createRequests += 1
         AppWindows.showCreate()
     }

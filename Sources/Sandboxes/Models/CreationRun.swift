@@ -83,6 +83,11 @@ final class ConsoleOutput {
 
     var text: String { lines.joined(separator: "\n") }
 
+    func clear() {
+        lines = [""]
+        overwritePending = false
+    }
+
     func append(_ raw: String) {
         var lines = self.lines
         for character in Self.stripANSI(raw) {

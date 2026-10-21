@@ -122,7 +122,7 @@ struct KitArgumentsSection: View {
     }
 }
 
-private struct KitArgumentRow: View {
+struct KitArgumentRow: View {
     let argument: KitArgument
     /// A build argument of a published kit was used when it was built, so it can't change.
     let isFixed: Bool

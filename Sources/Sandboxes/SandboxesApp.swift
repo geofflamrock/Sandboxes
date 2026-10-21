@@ -20,6 +20,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
                 .environment(appDelegate.sbxSettings)
+                .environment(appDelegate.environments)
                 .frame(minWidth: 720, minHeight: 440)
         }
         .commands {
@@ -37,12 +38,27 @@ struct SandboxesApp: App {
                     store.presentCreate()
                 }
                 .keyboardShortcut("n")
+                Button("New Environment…") {
+                    store.presentNewEnvironment()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Open Environment File…") {
+                    if EnvironmentFilePanel.open(into: appDelegate.environments) != nil {
+                        store.selection = .environments
+                        AppWindows.showMain()
+                    }
+                }
+                .keyboardShortcut("o")
             }
             CommandGroup(after: .toolbar) {
                 Button("Refresh") {
                     Task { await store.refresh() }
                 }
                 .keyboardShortcut("r")
+                Button("Environments") {
+                    store.selection = .environments
+                    AppWindows.showMain()
+                }
                 Button("Secrets") {
                     store.selection = .secrets
                     AppWindows.showMain()
@@ -76,6 +92,7 @@ struct SandboxesApp: App {
                 .environment(store)
                 .environment(recents)
                 .environment(appDelegate.mcpServers)
+                .environment(appDelegate.environments)
         }
         .defaultSize(width: 640, height: 700)
         .windowResizability(.contentMinSize)
@@ -95,6 +112,7 @@ struct SandboxesApp: App {
                 .environment(store)
                 .environment(updates)
                 .environment(appDelegate.sbxStatus)
+                .environment(appDelegate.environments)
         }
     }
 }
@@ -107,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let secrets: SecretStore
     let mcpServers: MCPServerStore
     let sbxSettings = SbxSettingStore()
+    let environments = EnvironmentStore()
     private var refreshTask: Task<Void, Never>?
     private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
