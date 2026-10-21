@@ -19,8 +19,8 @@ struct EnvironmentFile: Identifiable, Hashable {
     /// Whether it runs commands on the Mac: lifecycle commands, or secrets
     /// that come from a command.
     var hasHostCommands = false
-    /// Whether it uses `${{ env.projectDir }}`, which is the folder chosen
-    /// when a sandbox is created from it.
+    /// Whether it uses `${{ env.projectDir }}`. Given the file's path, sbx
+    /// makes that the file's own folder.
     var usesProjectDirectory = false
     /// Whether `workspace.clone` is set, rather than left for `--clone` to choose.
     var setsClone = false
@@ -36,22 +36,15 @@ struct EnvironmentFile: Identifiable, Hashable {
         return Self.fallbackName(for: url)
     }
 
+    /// The folder `${{ env.projectDir }}` stands for.
+    var projectDirectory: URL { url.deletingLastPathComponent() }
+
     /// The sandbox it creates without `--name`: its `name:`, or else
-    /// `<agent>-<workspace folder>`, as sbx names it. A workspace in the
-    /// project directory needs the directory to know.
-    func sandboxName(projectDirectory: String? = nil) -> String? {
+    /// `<agent>-<workspace folder>`, as sbx names it.
+    var sandboxName: String? {
         if let name, !name.isEmpty { return name }
-        guard let agent, let workspace else { return nil }
-        let path: String
-        if WorkspacePath.usesProjectDirectory(workspace) {
-            guard let projectDirectory else { return nil }
-            path = WorkspacePath.resolving(workspace, projectDirectory: projectDirectory)
-        } else if workspace.contains("${{") {
-            return nil
-        } else {
-            path = workspace
-        }
-        return "\(agent)-\(URL(fileURLWithPath: path).lastPathComponent)"
+        guard let agent, let workspace, !workspace.contains("${{") else { return nil }
+        return "\(agent)-\(URL(fileURLWithPath: workspace).lastPathComponent)"
     }
 
     var summary: String {
@@ -89,7 +82,7 @@ struct EnvironmentFile: Identifiable, Hashable {
         let directory = url.deletingLastPathComponent()
         let workspaceValue = document["workspace"]
         if let path = workspaceValue?.string ?? workspaceValue?["path"]?.string, !path.isEmpty {
-            workspace = Self.resolve(Self.canonicalizingProjectDirectory(in: path), against: directory)
+            workspace = Self.resolve(path.replacing(Self.projectDirectoryPattern, with: directory.path), against: directory)
         }
         setsClone = workspaceValue?["clone"] != nil
         kits = (document["kits"]?.list ?? []).compactMap { $0.string ?? $0["source"]?.string }
@@ -113,12 +106,6 @@ struct EnvironmentFile: Identifiable, Hashable {
 
     /// `${{ env.projectDir }}`, which sbx accepts with or without the spaces.
     static var projectDirectoryPattern: Regex<Substring> { #/\$\{\{\s*env\.projectDir\s*\}\}/# }
-
-    /// `text` with each reference to the project directory spelt as
-    /// `WorkspacePath.projectDirectory`.
-    static func canonicalizingProjectDirectory(in text: String) -> String {
-        text.replacing(projectDirectoryPattern, with: WorkspacePath.projectDirectory)
-    }
 
     /// An absolute path for `path`, which may be relative to the file's folder
     /// or start with `~`. A `${{ env.… }}` reference is left as it is.
@@ -338,11 +325,10 @@ extension CreateSandboxRequest {
         }
     }
 
-    /// An absolute path, or one in the project directory. Other references,
-    /// such as to the file's arguments, can't be shown.
+    /// An absolute path. A reference such as `${{ env.projectDir }}` can't
+    /// be shown, and saving would lose it.
     private static func workspacePath(_ path: String, against directory: URL) -> String? {
-        let path = EnvironmentFile.canonicalizingProjectDirectory(in: path)
-        guard !path.isEmpty else { return nil }
+        guard !path.isEmpty, !path.contains("${{") else { return nil }
         let resolved = EnvironmentFile.resolve(path, against: directory)
         return WorkspacePath.problem(with: resolved, inEnvironmentFile: true) == nil ? resolved : nil
     }

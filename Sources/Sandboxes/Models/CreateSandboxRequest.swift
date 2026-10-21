@@ -23,26 +23,13 @@ enum WorkspaceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Folder paths as typed or chosen in the New Sandbox window. In an
-/// environment file a path can start with `${{ env.projectDir }}`, the folder
-/// chosen when a sandbox is created from the file.
+/// Folder paths as typed or chosen in the New Sandbox window.
 enum WorkspacePath {
-    static let projectDirectory = "${{ env.projectDir }}"
-
     /// The path with `~` expanded, or nil when nothing's entered.
     static func normalized(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return trimmed.hasPrefix("~") ? (trimmed as NSString).expandingTildeInPath : trimmed
-    }
-
-    static func usesProjectDirectory(_ path: String) -> Bool {
-        path.hasPrefix(projectDirectory)
-    }
-
-    /// `path` with the project directory filled in.
-    static func resolving(_ path: String, projectDirectory directory: String) -> String {
-        usesProjectDirectory(path) ? directory + path.dropFirst(projectDirectory.count) : path
     }
 
     /// Why `text` can't be mounted, if it can't. A sandbox needs a folder
@@ -51,14 +38,7 @@ enum WorkspacePath {
     static func problem(with text: String, inEnvironmentFile: Bool) -> String? {
         guard let path = normalized(text) else { return nil }
         if path.contains("${{") {
-            guard inEnvironmentFile else {
-                return "Only environment files can use the project directory. Choose a folder instead of “\(path)”."
-            }
-            let rest = path.dropFirst(projectDirectory.count)
-            guard usesProjectDirectory(path), rest.isEmpty || rest.hasPrefix("/"), !rest.contains("${{") else {
-                return "Start “\(path)” with \(projectDirectory), followed by nothing or a subfolder such as /src."
-            }
-            return nil
+            return "Enter a folder's full path rather than “\(path)”."
         }
         guard path.hasPrefix("/") else {
             return "Enter the full path of “\(path)”, starting with / or ~."

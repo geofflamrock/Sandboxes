@@ -173,17 +173,6 @@ private struct EnvironmentRow: View {
     let sandboxes: [Sandbox]
     let perform: (Action) -> Void
 
-    /// Run in Terminal uses the file's folder as the project directory,
-    /// which for a file in the environment files folder isn't a project.
-    private var canRunInTerminal: Bool {
-        file.problem == nil && !(file.usesProjectDirectory && file.isInLibrary)
-    }
-
-    private var runInTerminalHelp: String {
-        canRunInTerminal || file.problem != nil
-            ? "Create the sandbox if needed, and run its agent in Terminal"
-            : "This file uses a project directory. Choose it with Create Sandbox… instead."
-    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -231,8 +220,7 @@ private struct EnvironmentRow: View {
                 Button("Create Sandbox…") { perform(.create) }
                     .disabled(file.problem != nil)
                 Button("Run in Terminal") { perform(.runInTerminal) }
-                    .disabled(!canRunInTerminal)
-                    .help(runInTerminalHelp)
+                    .disabled(file.problem != nil)
                 showSandboxButtons
                 Divider()
                 Button("Rename…") { perform(.rename) }
@@ -255,7 +243,7 @@ private struct EnvironmentRow: View {
             Button("Create Sandbox…") { perform(.create) }
                 .disabled(file.problem != nil)
             Button("Run in Terminal") { perform(.runInTerminal) }
-                .disabled(!canRunInTerminal)
+                .disabled(file.problem != nil)
             showSandboxButtons
             Divider()
             Button("Rename…") { perform(.rename) }
@@ -343,7 +331,6 @@ struct EnvironmentRunSheet: View {
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 520)
         .interactiveDismissDisabled(run.phase == .planning || run.phase == .creating)
-        .onDisappear { run.finish() }
     }
 
     private var reviewNotice: some View {
@@ -449,8 +436,8 @@ struct EnvironmentRunSheet: View {
     }
 }
 
-/// What to create from the file: the sandbox's name, the folder the file's
-/// `${{ env.projectDir }}` stands for, clone mode, and the file's arguments.
+/// What to create from the file: the sandbox's name, clone mode, and the
+/// file's arguments.
 private struct EnvironmentRunOptions: View {
     let run: EnvironmentRun
 
@@ -459,7 +446,7 @@ private struct EnvironmentRunOptions: View {
 
         Form {
             Section {
-                TextField("Name", text: $run.name, prompt: Text(run.file.sandboxName(projectDirectory: WorkspacePath.normalized(run.projectDirectory)) ?? "Automatic"))
+                TextField("Name", text: $run.name, prompt: Text(run.file.sandboxName ?? "Automatic"))
             } footer: {
                 Text(run.file.name?.isEmpty == false
                     ? "Starts as the name in the file. Enter another name to create another sandbox from it."
@@ -470,21 +457,18 @@ private struct EnvironmentRunOptions: View {
             if run.file.usesProjectDirectory {
                 Section {
                     LabeledContent("Folder") {
-                        HStack {
-                            TextField("Folder", text: $run.projectDirectory, prompt: Text("~/src/project"))
-                                .labelsHidden()
-                                .font(.body.monospaced())
-                            Button("Choose…") {
-                                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the project directory for “\(run.file.displayName)”.").first {
-                                    run.projectDirectory = url.path
-                                }
-                            }
-                        }
+                        Text((run.file.projectDirectory.path as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help(run.file.projectDirectory.path)
                     }
                 } header: {
                     Text("Project Directory")
                 } footer: {
-                    Text("The file uses \(WorkspacePath.projectDirectory), which is this folder, such as for the workspace it mounts.")
+                    Text(run.file.isInLibrary
+                        ? "The file uses ${{ env.projectDir }}, which sbx makes the folder the file is in. That's its folder in the environment files folder, not a project, so mount folders by their full paths instead."
+                        : "The file uses ${{ env.projectDir }}, which sbx makes the folder the file is in.")
                         .foregroundStyle(.secondary)
                 }
             }

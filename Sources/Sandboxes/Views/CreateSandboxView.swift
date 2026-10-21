@@ -407,7 +407,7 @@ private struct CreateSandboxForm: View {
             LabeledContent("Folder") {
                 WorkspacePathField(
                     path: $request.workspacePath,
-                    allowsProjectDirectory: request.target == .environment,
+                    prompt: "None",
                     panelMessage: "Choose the folder the agent works in."
                 ) { url in
                     request.additionalWorkspaces.removeAll { $0.normalizedPath == url.path }
@@ -428,14 +428,10 @@ private struct CreateSandboxForm: View {
 
     private var workspaceFooter: String {
         guard request.workspace != nil else {
-            return request.target == .environment
-                ? "Without a workspace the agent works in the sandbox's own filesystem. \(Self.projectDirectoryHint)"
-                : "Without a workspace the agent works in the sandbox's own filesystem."
+            return "Without a workspace the agent works in the sandbox's own filesystem."
         }
         return request.mode.explanation
     }
-
-    private static let projectDirectoryHint = "Use \(WorkspacePath.projectDirectory) for the project directory chosen when a sandbox is created from the file, or a folder in it such as \(WorkspacePath.projectDirectory)/src."
 
     private var additionalWorkspacesSection: some View {
         Section {
@@ -443,7 +439,7 @@ private struct CreateSandboxForm: View {
                 HStack {
                     WorkspacePathField(
                         path: $folder.path,
-                        allowsProjectDirectory: request.target == .environment,
+                        prompt: "~/src/docs",
                         panelMessage: "Choose a folder to mount alongside the workspace."
                     )
                     Toggle("Read-only", isOn: $folder.isReadOnly)
@@ -466,9 +462,7 @@ private struct CreateSandboxForm: View {
         } header: {
             Text("Additional Folders")
         } footer: {
-            Text(request.target == .environment
-                ? "These folders are mounted at the same paths as on your Mac. \(Self.projectDirectoryHint)"
-                : "These folders are mounted at the same paths as on your Mac.")
+            Text("These folders are mounted at the same paths as on your Mac.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -855,40 +849,25 @@ private struct KitDraft {
     }
 }
 
-/// A folder's path, typed or chosen in an open panel. In an environment file
-/// it can also be the project directory, or a folder in it.
+/// A folder's path, typed or chosen in an open panel.
 private struct WorkspacePathField: View {
     @Binding var path: String
-    let allowsProjectDirectory: Bool
+    let prompt: String
     let panelMessage: String
     var onChoose: (URL) -> Void = { _ in }
 
     var body: some View {
         HStack {
-            TextField("Folder", text: $path, prompt: Text(allowsProjectDirectory ? "~/src/project or \(WorkspacePath.projectDirectory)" : "None"))
+            TextField("Folder", text: $path, prompt: Text(prompt))
                 .labelsHidden()
                 .font(.body.monospaced())
                 .help(path)
-            if allowsProjectDirectory {
-                Button("Use Project Directory", systemImage: "folder.badge.gearshape", action: useProjectDirectory)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help("Use the project directory chosen when a sandbox is created from the file. Type a subfolder after it, such as /src.")
-            }
             Button("Choose…") {
                 if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: panelMessage).first {
                     path = url.path
                     onChoose(url)
                 }
             }
-        }
-    }
-
-    /// Sets the path to the project directory, unless it's already in it.
-    private func useProjectDirectory() {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !WorkspacePath.usesProjectDirectory(trimmed) {
-            path = WorkspacePath.projectDirectory
         }
     }
 }
