@@ -113,6 +113,9 @@ struct CreateSandboxRequest {
     var memoryGiB = 0
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
+    /// How the agent sees sbx's shared skills store. Nil leaves it to sbx's
+    /// default, which is read only unless the skills.defaultMode setting says otherwise.
+    var skillsMode: SkillsMode?
     /// MCP servers to load when the sandbox starts. Choosing any makes the
     /// set fixed: the agent can't find and load other servers itself.
     var staticMCPServers: [String] = []
@@ -158,6 +161,9 @@ struct CreateSandboxRequest {
         }
         for file in environmentFiles {
             arguments += ["--env-file", file.path]
+        }
+        if let skillsMode {
+            arguments += ["--skills", skillsMode.rawValue]
         }
         for kit in kits {
             arguments += ["--kit", kit]

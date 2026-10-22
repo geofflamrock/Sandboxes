@@ -257,6 +257,7 @@ private struct CreateSandboxForm: View {
             case .runtime:
                 resourcesSection
                 environmentSection
+                skillsSection
             case .network:
                 deniedHostsSection
             case .mcp:
@@ -830,6 +831,26 @@ private struct CreateSandboxForm: View {
             Text("Blocked Hosts")
         } footer: {
             Text("Blocked for this sandbox only, even where another rule allows them. You can change or remove these later in the sandbox's Policies tab.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Skills
+
+    private var skillsSection: some View {
+        Section {
+            Picker("Shared Skills", selection: $request.skillsMode) {
+                Text("Default").tag(SkillsMode?.none)
+                Divider()
+                ForEach(SkillsMode.allCases) { mode in
+                    Text(mode.title).tag(SkillsMode?.some(mode))
+                }
+            }
+        } header: {
+            Text("Skills")
+        } footer: {
+            Text(request.skillsMode?.explanation
+                ?? "Uses sbx's default, which is Read Only unless the skills.defaultMode setting changes it. Add skills to the store in Management › Skills.")
                 .foregroundStyle(.secondary)
         }
     }
