@@ -178,19 +178,6 @@ final class EnvironmentStore {
         run = EnvironmentRun(file: file)
     }
 
-    /// Runs `sbx env run` in the default terminal, where sbx asks to approve
-    /// the plan and then attaches to the agent. Like the create sheet, it adds
-    /// the user's defaults when they can be.
-    func runInTerminal(_ file: EnvironmentFile) {
-        let run = EnvironmentRun(file: file)
-        do {
-            try TerminalLauncher.open(sbxArguments: run.arguments("run"), in: run.directory)
-            recordLink(run.sandboxName, to: file, includingDefaults: run.usesDefaults)
-        } catch {
-            actionError = .init(title: "Couldn't Open Terminal", message: error.localizedDescription)
-        }
-    }
-
     func openInEditor(_ file: EnvironmentFile) {
         NSWorkspace.shared.open(file.url)
     }

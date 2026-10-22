@@ -5,15 +5,11 @@ import AppKit
 /// executables: Terminal by default, or a terminal set as the default (e.g.
 /// Ghostty). This also means the app doesn't need Automation permission.
 enum TerminalLauncher {
-    /// Runs `sbx` with `sbxArguments`, in `directory` when it's given.
-    static func open(sbxArguments: [String], in directory: URL? = nil) throws {
+    static func open(sbxArguments: [String]) throws {
         guard let executable = SbxCLI.executableURL() else {
             throw SbxError.executableNotFound
         }
-        var command = ([executable.path] + sbxArguments).map(shellQuote).joined(separator: " ")
-        if let directory {
-            command = "cd \(shellQuote(directory.path)) && \(command)"
-        }
+        let command = ([executable.path] + sbxArguments).map(shellQuote).joined(separator: " ")
         let script = """
             #!/bin/zsh -l
             rm -f "$0"

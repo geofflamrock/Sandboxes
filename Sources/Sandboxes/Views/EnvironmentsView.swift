@@ -124,7 +124,6 @@ struct EnvironmentsView: View {
     private func perform(_ action: EnvironmentRow.Action, on file: EnvironmentFile) {
         switch action {
         case .create: environments.startCreating(from: file)
-        case .runInTerminal: environments.runInTerminal(file)
         case let .showSandbox(id):
             store.selection = .sandbox(id)
         case .rename:
@@ -163,7 +162,6 @@ struct EnvironmentsView: View {
 private struct EnvironmentRow: View {
     enum Action {
         case create
-        case runInTerminal
         case showSandbox(Sandbox.ID)
         case rename
         case edit
@@ -222,8 +220,6 @@ private struct EnvironmentRow: View {
             Menu {
                 Button("Create Sandbox…") { perform(.create) }
                     .disabled(file.problem != nil)
-                Button("Run in Terminal") { perform(.runInTerminal) }
-                    .disabled(file.problem != nil)
                 showSandboxButtons
                 Divider()
                 Button("Rename…") { perform(.rename) }
@@ -244,8 +240,6 @@ private struct EnvironmentRow: View {
         }
         .contextMenu {
             Button("Create Sandbox…") { perform(.create) }
-                .disabled(file.problem != nil)
-            Button("Run in Terminal") { perform(.runInTerminal) }
                 .disabled(file.problem != nil)
             showSandboxButtons
             Divider()
