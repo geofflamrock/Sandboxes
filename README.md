@@ -12,7 +12,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
-- Add, edit and remove global and sandbox specific network rules.
+- Add, edit and remove global and sandbox specific network rules, in Management or on a sandbox's page.
 - Manage MCP servers and configure sandboxes to use them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.

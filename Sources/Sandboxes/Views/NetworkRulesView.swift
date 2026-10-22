@@ -16,7 +16,7 @@ struct NetworkRulesView: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(networkRules.globalRules) { rule in
-                    ManagedNetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+                    NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
                 }
             } header: {
                 Text("All Sandboxes")
@@ -34,7 +34,7 @@ struct NetworkRulesView: View {
                 let sandbox = store.sandboxes.first { $0.name == group.sandbox }
                 Section {
                     ForEach(group.rules) { rule in
-                        ManagedNetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+                        NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
                     }
                 } header: {
                     HStack(spacing: 5) {
@@ -59,29 +59,50 @@ struct NetworkRulesView: View {
                 .help("Back to Home")
             }
             ToolbarItem {
-                Button("Add Rule", systemImage: "plus") {
+                Button("Add Network Rule", systemImage: "plus") {
                     editor = NetworkRuleDraft()
                 }
                 .help("Allow or deny network access to hosts, for every sandbox or one")
             }
         }
-        .sheet(item: $editor) { draft in
-            NetworkRuleEditor(draft: draft, sandboxNames: store.sandboxes.map(\.name))
-        }
-        .confirmationDialog(
-            "Remove the rule for “\(removal?.resources.joined(separator: ", ") ?? "")”?",
-            isPresented: Binding(
-                get: { removal != nil },
-                set: { if !$0 { removal = nil } }
-            ),
-            presenting: removal
-        ) { rule in
-            Button("Remove", role: .destructive) {
-                Task { await networkRules.remove(rule) }
+        .networkRuleEditing(editor: $editor, removal: $removal)
+    }
+}
+
+extension View {
+    /// The sheet for adding or editing a network rule, and the confirmation
+    /// for removing one. Failures to remove show through the network rule
+    /// store's `actionError`, in the main window.
+    func networkRuleEditing(editor: Binding<NetworkRuleDraft?>, removal: Binding<NetworkRule?>) -> some View {
+        modifier(NetworkRuleEditing(editor: editor, removal: removal))
+    }
+}
+
+private struct NetworkRuleEditing: ViewModifier {
+    @Binding var editor: NetworkRuleDraft?
+    @Binding var removal: NetworkRule?
+    @Environment(SandboxStore.self) private var store
+    @Environment(NetworkRuleStore.self) private var networkRules
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $editor) { draft in
+                NetworkRuleEditor(draft: draft, sandboxNames: store.sandboxes.map(\.name))
             }
-        } message: { rule in
-            Text(removalMessage(for: rule))
-        }
+            .confirmationDialog(
+                "Remove the rule for “\(removal?.resources.joined(separator: ", ") ?? "")”?",
+                isPresented: Binding(
+                    get: { removal != nil },
+                    set: { if !$0 { removal = nil } }
+                ),
+                presenting: removal
+            ) { rule in
+                Button("Remove", role: .destructive) {
+                    Task { await networkRules.remove(rule) }
+                }
+            } message: { rule in
+                Text(removalMessage(for: rule))
+            }
     }
 
     private func removalMessage(for rule: NetworkRule) -> String {
@@ -92,12 +113,16 @@ struct NetworkRulesView: View {
     }
 }
 
-/// A network rule with buttons to edit and remove it, or where it comes
-/// from when it's managed by a kit or an organization.
-private struct ManagedNetworkRuleRow: View {
+/// A network rule with buttons to edit and remove it, or a label saying
+/// where it's managed when it can't be changed here, such as a kit's or an
+/// organization's rule.
+struct NetworkRuleRow: View {
     let rule: NetworkRule
     @Binding var editor: NetworkRuleDraft?
     @Binding var removal: NetworkRule?
+    /// Shown in place of the buttons, such as "Global" for a rule for all
+    /// sandboxes listed on a sandbox's page.
+    var readOnlyLabel: String?
     @Environment(NetworkRuleStore.self) private var networkRules
 
     var body: some View {
@@ -117,32 +142,44 @@ private struct ManagedNetworkRuleRow: View {
                 }
             }
             Spacer()
-            if !rule.isLocal {
-                Text(sourceLabel)
+            if let label = rule.isLocal ? readOnlyLabel : sourceLabel {
+                Text(label)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(.quaternary, in: .capsule)
-                    .help("Set by \(sourceLabel == "Organization" ? "your organization" : "a kit"), so it can't be changed here.")
+                    .help(readOnlyHelp)
             } else if networkRules.isRemoving(rule) {
                 ProgressView()
                     .controlSize(.small)
             } else {
                 if rule.canEdit {
-                    Button("Edit…") { editor = NetworkRuleDraft(editing: rule) }
+                    Button("Edit…") { edit() }
                 }
-                Button("Remove…", role: .destructive) { removal = rule }
+                Button("Remove…", role: .destructive) { remove() }
             }
         }
         .contextMenu {
-            if rule.canEdit {
-                Button("Edit…") { editor = NetworkRuleDraft(editing: rule) }
+            if isManagedHere, rule.canEdit {
+                Button("Edit…") { edit() }
             }
-            if rule.isLocal {
-                Button("Remove…", role: .destructive) { removal = rule }
+            if isManagedHere {
+                Button("Remove…", role: .destructive) { remove() }
             }
         }
+    }
+
+    private var isManagedHere: Bool {
+        rule.isLocal && readOnlyLabel == nil
+    }
+
+    private func edit() {
+        editor = NetworkRuleDraft(editing: rule)
+    }
+
+    private func remove() {
+        removal = rule
     }
 
     private var sourceLabel: String {
@@ -151,6 +188,13 @@ private struct ManagedNetworkRuleRow: View {
         case let source?: source.capitalized
         case nil: "Local"
         }
+    }
+
+    private var readOnlyHelp: String {
+        if rule.isLocal {
+            return "A rule for all sandboxes. Change it in Management › Network Rules."
+        }
+        return "Set by \(rule.source?.lowercased() == "org" ? "your organization" : "a kit"), so it can't be changed here."
     }
 
     /// The protocols, and any HTTP method and path, such as "TCP · GET /repos/**".
