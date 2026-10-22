@@ -244,6 +244,15 @@ struct SandboxDetailView: View {
             }
         } header: {
             SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingPolicies)
+        } footer: {
+            HStack(spacing: 4) {
+                Text("Rules for this sandbox and for all sandboxes.")
+                    .foregroundStyle(.secondary)
+                Button("Manage Network Rules") {
+                    store.selection = .networkRules
+                }
+                .buttonStyle(.link)
+            }
         }
     }
 
@@ -659,7 +668,7 @@ private struct NetworkLogRow: View {
     }
 }
 
-private struct DecisionLabel: View {
+struct DecisionLabel: View {
     enum Style {
         /// "Allow" or "Deny"
         case policy

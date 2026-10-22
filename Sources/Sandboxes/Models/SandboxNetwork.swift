@@ -19,15 +19,57 @@ enum PolicyDecision: Hashable {
 
 /// A network rule that applies to a sandbox, from `sbx policy ls`.
 struct NetworkRule: Identifiable, Hashable {
+    enum NetworkProtocol: String, CaseIterable, Hashable {
+        case tcp
+        case udp
+    }
+
     let id: String
+    /// The ID `sbx policy rm network --id` takes, when `sbx` reports one.
+    var ruleID: String?
     let decision: PolicyDecision
     let resources: [String]
     /// Where the rule came from: `local`, `kit` or `org`.
     let source: String?
     /// `all` for a global rule, or `sandbox:NAME` for one scoped to a sandbox.
-    let appliesTo: String?
+    var appliesTo: String?
     let method: String?
     let path: String?
+    /// Empty when `sbx` doesn't say.
+    var protocols: Set<NetworkProtocol> = []
+
+    /// The sandbox a rule is scoped to, or nil for a global rule.
+    var sandboxName: String? {
+        guard let appliesTo, appliesTo.lowercased().hasPrefix("sandbox:") else { return nil }
+        let name = appliesTo.dropFirst("sandbox:".count)
+        return name.isEmpty ? nil : String(name)
+    }
+
+    /// Only rules added locally can be removed; kits and organizations
+    /// manage their own.
+    var isLocal: Bool {
+        source.map { $0.isEmpty || $0.lowercased() == "local" } ?? true
+    }
+
+    /// `sbx policy allow` and `deny` (as of v0.49.1) can't add HTTP method
+    /// and path rules, so those can be removed but not changed.
+    var canEdit: Bool {
+        isLocal && method == nil && path == nil
+    }
+
+    var removeArguments: [String]? {
+        guard isLocal else { return nil }
+        var arguments = ["policy", "rm", "network"]
+        if let sandboxName {
+            arguments += ["--sandbox", sandboxName]
+        }
+        if let ruleID {
+            arguments += ["--id", ruleID]
+        } else {
+            arguments += ["--resource", resources.joined(separator: ",")]
+        }
+        return arguments + ["--force"]
+    }
 }
 
 /// Requests from a sandbox to one host with the same outcome, from `sbx policy log`.
@@ -184,15 +226,30 @@ enum PolicyParser {
         let path = JSON.string(JSON.value(in: object, for: ["path"])).flatMap { $0.isEmpty || $0 == "-" ? nil : $0 }
         let appliesTo = scope(JSON.value(in: context, for: ["applies_to", "scope"]))
         let fallbackID = ([decision == .allow ? "allow" : "deny", appliesTo ?? "", method ?? "", path ?? ""] + resources).joined(separator: "|")
+        let ruleID = JSON.string(JSON.value(in: object, for: ["rule_id", "ruleId", "id"])).flatMap { $0.isEmpty ? nil : $0 }
         return NetworkRule(
-            id: JSON.string(JSON.value(in: object, for: ["rule_id", "id"])) ?? fallbackID,
+            id: ruleID ?? fallbackID,
+            ruleID: ruleID,
             decision: decision,
             resources: resources,
             source: JSON.string(JSON.value(in: context, for: ["source"])),
             appliesTo: appliesTo,
             method: method,
-            path: path
+            path: path,
+            protocols: protocols(JSON.value(in: object, for: ["protocols", "protocol", "transports", "transport"]))
         )
+    }
+
+    /// Reads protocols such as `["tcp", "udp"]`, `"tcp,udp"` or `PROTOCOL_TCP`.
+    private static func protocols(_ value: Any?) -> Set<NetworkRule.NetworkProtocol> {
+        let items = value as? [Any] ?? value.map { [$0] } ?? []
+        var protocols = Set<NetworkRule.NetworkProtocol>()
+        for item in items {
+            guard let text = JSON.string(item)?.lowercased() else { continue }
+            if text.contains("tcp") { protocols.insert(.tcp) }
+            if text.contains("udp") { protocols.insert(.udp) }
+        }
+        return protocols
     }
 
     /// Reads a decision from a string such as `"allow"`, or an action object

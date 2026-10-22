@@ -19,6 +19,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.sbxStatus)
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
+                .environment(appDelegate.networkRules)
                 .environment(appDelegate.sbxSettings)
                 .environment(appDelegate.environments)
                 .frame(minWidth: 720, minHeight: 440)
@@ -124,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sbxStatus = SbxStatus()
     let secrets: SecretStore
     let mcpServers: MCPServerStore
+    let networkRules = NetworkRuleStore()
     let sbxSettings = SbxSettingStore()
     let environments = EnvironmentStore()
     private var refreshTask: Task<Void, Never>?

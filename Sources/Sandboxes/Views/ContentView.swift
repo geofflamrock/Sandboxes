@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(NetworkRuleStore.self) private var networkRules
     @Environment(SbxSettingStore.self) private var sbxSettings
     @Environment(\.openWindow) private var openWindow
 
@@ -11,6 +12,7 @@ struct ContentView: View {
         @Bindable var store = store
         @Bindable var mcp = mcp
         @Bindable var secrets = secrets
+        @Bindable var networkRules = networkRules
         @Bindable var sbxSettings = sbxSettings
 
         NavigationSplitView {
@@ -24,6 +26,8 @@ struct ContentView: View {
                     SecretsView()
                 } else if store.selection == .mcpServers {
                     MCPServersView()
+                } else if store.selection == .networkRules {
+                    NetworkRulesView()
                 } else if store.selection == .sbxSettings {
                     SbxSettingsListView()
                 } else if let sandbox = store.selectedSandbox {
@@ -67,6 +71,7 @@ struct ContentView: View {
         .actionErrorAlert(error: $store.actionError)
         .actionErrorAlert(error: $mcp.actionError)
         .actionErrorAlert(error: $secrets.actionError)
+        .actionErrorAlert(error: $networkRules.actionError)
         .actionErrorAlert(error: $sbxSettings.actionError)
         .modifier(EnvironmentPresentations())
         .background(WindowReader(kind: .main))
@@ -123,6 +128,7 @@ struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(NetworkRuleStore.self) private var networkRules
     @Environment(EnvironmentStore.self) private var environments
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
@@ -164,15 +170,21 @@ struct SandboxSidebar: View {
                     .badge(mcp.servers.count)
                     .tag(SidebarItem.mcpServers)
                     .help("MCP servers registered with sbx, which sandboxes reach through its MCP gateway")
+                Label("Network Rules", systemImage: "network")
+                    .badge(networkRules.rules.count)
+                    .tag(SidebarItem.networkRules)
+                    .help("Hosts sandboxes are allowed or denied, for every sandbox or one")
                 Label("Settings", systemImage: "slider.horizontal.3")
                     .tag(SidebarItem.sbxSettings)
                     .help("Settings of Docker Sandboxes, such as proxies and kit policy, from sbx settings")
             }
         }
-        // Removing a sandbox also removes its secrets, so keep the count right.
+        // Removing a sandbox also removes its secrets and rules, so keep
+        // the counts right.
         .task(id: store.sandboxes.map(\.name)) {
             await secrets.refresh()
             await mcp.refresh()
+            await networkRules.refresh(sandboxes: store.sandboxes.map(\.name))
         }
         .onAppear {
             environments.refresh()
