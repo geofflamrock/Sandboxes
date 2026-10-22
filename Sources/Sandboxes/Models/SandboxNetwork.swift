@@ -39,6 +39,10 @@ struct NetworkRule: Identifiable, Hashable {
     var protocols: Set<NetworkProtocol> = []
     /// Whether `sbx` says the rule can be removed, when it says.
     var isEditable: Bool?
+    /// Such as `kit:NAME` for a rule an agent or kit added.
+    var name: String?
+    /// How the rule was made: `default`, `added`, `provisioned` or `approval`.
+    var createdVia: String?
 
     /// The sandbox a rule is scoped to, or nil for a global rule.
     var sandboxName: String? {
@@ -242,8 +246,18 @@ enum PolicyParser {
             method: method,
             path: path,
             protocols: protocols(JSON.value(in: object, for: ["protocols", "protocol", "transports", "transport", "actions"])),
-            isEditable: editable
+            isEditable: editable,
+            name: JSON.string(JSON.value(in: object, for: ["name", "rule_name"])).flatMap { $0.isEmpty ? nil : $0 },
+            createdVia: createdVia(object)
         )
+    }
+
+    /// Reads `provenance.created_via`, or `created_via` on the rule itself.
+    private static func createdVia(_ object: [String: Any]) -> String? {
+        let provenance = JSON.value(in: object, for: ["provenance"]) as? [String: Any] ?? [:]
+        let value = JSON.string(JSON.value(in: provenance, for: ["created_via", "createdVia"]))
+            ?? JSON.string(JSON.value(in: object, for: ["created_via", "createdVia"]))
+        return value.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// Reads protocols such as `["tcp", "udp"]`, `"tcp,udp"`, `PROTOCOL_TCP`

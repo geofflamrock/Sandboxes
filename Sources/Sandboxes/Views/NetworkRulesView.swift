@@ -142,14 +142,14 @@ struct NetworkRuleRow: View {
                 }
             }
             Spacer()
-            if let label = rule.isLocal ? readOnlyLabel : sourceLabel {
-                Text(label)
+            if let badge {
+                Text(badge.label)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(.quaternary, in: .capsule)
-                    .help(readOnlyHelp)
+                    .help(badge.help)
             } else if networkRules.isRemoving(rule) {
                 ProgressView()
                     .controlSize(.small)
@@ -182,19 +182,23 @@ struct NetworkRuleRow: View {
         removal = rule
     }
 
-    private var sourceLabel: String {
-        switch rule.source?.lowercased() {
-        case "org": "Organization"
-        case let source?: source.capitalized
-        case nil: "Local"
-        }
-    }
-
-    private var readOnlyHelp: String {
+    /// Shown in place of the buttons when the rule can't be changed here:
+    /// where it comes from, or where it's managed.
+    private var badge: (label: String, help: String)? {
         if rule.isLocal {
-            return "A rule for all sandboxes. Change it in Management › Network Rules."
+            return readOnlyLabel.map { (label: $0, help: "A rule for all sandboxes. Change it in Management › Network Rules.") }
         }
-        return "Set by \(rule.source?.lowercased() == "org" ? "your organization" : "a kit"), so it can't be changed here."
+        if rule.source?.lowercased() == "org" {
+            return (label: "Organization", help: "Set by your organization, so it can't be changed here.")
+        }
+        if rule.source?.lowercased() == "kit" || rule.name?.lowercased().hasPrefix("kit:") == true {
+            return (label: "Kit", help: "Added for the sandbox's agent or kits when the sandbox was created. sbx doesn't allow changing it.")
+        }
+        return switch rule.createdVia?.lowercased() {
+        case "default": (label: "Default", help: "Part of the default network policy. sbx doesn't allow changing it on its own.")
+        case "provisioned": (label: "Provisioned", help: "Added by sbx when the sandbox was created. sbx doesn't allow changing it.")
+        default: (label: "Read Only", help: "sbx doesn't allow changing this rule.")
+        }
     }
 
     /// The protocols, and any HTTP method and path, such as "TCP · GET /repos/**".
