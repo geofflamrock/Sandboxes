@@ -185,9 +185,26 @@ private struct NetworkRuleEditor: View {
                 }
                 .pickerStyle(.segmented)
 
+                // A text field's Return saves the sheet, so hosts go in an
+                // editor, one per line.
+                Section("Hosts") {
+                    TextEditor(text: $draft.resources)
+                        .font(.body.monospaced())
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 88)
+                        .overlay(alignment: .topLeading) {
+                            if draft.resources.isEmpty {
+                                Text("api.example.com\n*.example.com")
+                                    .font(.body.monospaced())
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .accessibilityLabel("Hosts")
+                }
+
                 Section {
-                    TextField("Hosts", text: $draft.resources, prompt: Text("api.example.com, *.example.com"), axis: .vertical)
-                        .lineLimit(1...4)
                     Picker("For", selection: $draft.sandbox) {
                         Text("All sandboxes").tag(String?.none)
                         if !scopeNames.isEmpty {
@@ -237,7 +254,7 @@ private struct NetworkRuleEditor: View {
             }
             .padding(20)
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 340, idealHeight: 360)
+        .frame(minWidth: 460, idealWidth: 500, minHeight: 460, idealHeight: 500)
         .navigationTitle(draft.isEditing ? "Edit Network Rule" : "Add Network Rule")
     }
 
@@ -249,7 +266,7 @@ private struct NetworkRuleEditor: View {
     }
 
     private var footer: String {
-        var text = "Separate hosts with commas. Use *.example.com for subdomains, **.example.com for subdomains at any depth, an IP address or CIDR prefix, an optional port such as example.com:443, or ** for every host."
+        var text = "Put each host on its own line. Use *.example.com for subdomains, **.example.com for subdomains at any depth, an IP address or CIDR prefix, an optional port such as example.com:443, or ** for every host."
         if draft.protocols == .automatic {
             text += " By default, allow rules apply to TCP and deny rules to TCP and UDP."
         }

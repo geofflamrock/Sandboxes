@@ -42,8 +42,8 @@ struct NetworkRuleDraft: Identifiable {
 
     let id = UUID()
     var decision = PolicyDecision.allow
-    /// Hosts, domains, IP addresses or CIDR prefixes, separated by commas,
-    /// spaces or new lines.
+    /// Hosts, domains, IP addresses or CIDR prefixes, one per line. Commas
+    /// and spaces separate them too, for a pasted list.
     var resources = ""
     /// The sandbox the rule is for, or nil for every sandbox.
     var sandbox: String?
@@ -57,7 +57,7 @@ struct NetworkRuleDraft: Identifiable {
 
     init(editing rule: NetworkRule) {
         decision = rule.decision
-        resources = rule.resources.joined(separator: ", ")
+        resources = rule.resources.joined(separator: "\n")
         sandbox = rule.sandboxName
         protocols = Protocols(rule.protocols)
         original = rule
