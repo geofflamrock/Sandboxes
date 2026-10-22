@@ -54,17 +54,14 @@ struct EnvironmentsView: View {
                 .help("Back to Home")
             }
             ToolbarItem {
-                Button("Open Environment File", systemImage: "arrow.up.right.square") {
+                Button("Open Environment File", systemImage: "square.and.arrow.down") {
                     EnvironmentFilePanel.open(into: environments)
                 }
                 .help("Add an environment file from anywhere on your Mac to the list")
             }
             ToolbarItem {
-                Button {
+                Button("New Environment File", systemImage: "plus") {
                     store.presentNewEnvironment()
-                } label: {
-                    // The environment files stack with a plus badge, a custom symbol in the asset catalog.
-                    Label("New Environment File", image: "custom.square.stack.3d.up.badge.plus")
                 }
                 .help("Save a sandbox's options as an environment file")
             }

@@ -34,17 +34,15 @@ struct SandboxesApp: App {
                 }
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Sandbox…", systemImage: "plus") {
+                Button("New Sandbox…") {
                     store.presentCreate()
                 }
                 .keyboardShortcut("n")
-                Button {
+                Button("New Environment File…") {
                     store.presentNewEnvironment()
-                } label: {
-                    Label("New Environment File…", image: "custom.square.stack.3d.up.badge.plus")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Open Environment File…", systemImage: "arrow.up.right.square") {
+                Button("Open Environment File…") {
                     if EnvironmentFilePanel.open(into: appDelegate.environments) != nil {
                         store.selection = .environments
                         AppWindows.showMain()
