@@ -193,6 +193,10 @@ private struct CreateSandboxForm: View {
                     actionBar
                 }
                 .padding()
+                // Switching between a sandbox and an environment file in place
+                // could leave the Command heading drawn upside down, so the bar
+                // is built afresh for each.
+                .id(request.target)
             }
         }
         .onChange(of: request.target) {
