@@ -172,6 +172,8 @@ private struct CreateSandboxForm: View {
                         case .runtime:
                             resourcesSection
                             environmentSection
+                        case .network:
+                            deniedHostsSection
                         case .mcp:
                             mcpSection
                         }
@@ -221,9 +223,12 @@ private struct CreateSandboxForm: View {
     }
 
     /// The tabs for what's being made. An environment file doesn't pick MCP
-    /// servers the way `sbx create` does: it registers servers itself.
+    /// servers the way `sbx create` does: it registers servers itself. It has
+    /// no network rules either.
     private var visibleTabs: [CreateSheetTab] {
-        request.target == .environment ? CreateSheetTab.allCases.filter { $0 != .mcp } : CreateSheetTab.allCases
+        request.target == .environment
+            ? CreateSheetTab.allCases.filter { $0 != .mcp && $0 != .network }
+            : CreateSheetTab.allCases
     }
 
     // MARK: Footer
@@ -725,6 +730,34 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Network
+
+    // A text field's Return creates the sandbox, so hosts go in an editor,
+    // one per line.
+    private var deniedHostsSection: some View {
+        Section {
+            TextEditor(text: $request.deniedHosts)
+                .font(.body.monospaced())
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 88)
+                .overlay(alignment: .topLeading) {
+                    if request.deniedHosts.isEmpty {
+                        Text("api.example.com\n*.example.com")
+                            .font(.body.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .accessibilityLabel("Blocked Hosts")
+        } header: {
+            Text("Blocked Hosts")
+        } footer: {
+            Text("Blocked for this sandbox only, even where another rule allows them. You can change or remove these later in the sandbox's Policies tab.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: MCP
 
     private var mcpSection: some View {
@@ -794,6 +827,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
     case workspace
     case kits
     case runtime
+    case network
     case mcp
 
     var id: Self { self }
@@ -804,6 +838,7 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
         case .workspace: "Workspace"
         case .kits: "Kits"
         case .runtime: "Runtime"
+        case .network: "Network"
         case .mcp: "MCP"
         }
     }

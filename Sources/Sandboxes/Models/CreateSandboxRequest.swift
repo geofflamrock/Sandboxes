@@ -116,6 +116,9 @@ struct CreateSandboxRequest {
     /// MCP servers to load when the sandbox starts. Choosing any makes the
     /// set fixed: the agent can't find and load other servers itself.
     var staticMCPServers: [String] = []
+    /// Hosts the sandbox is denied from the start, one per line. Commas and
+    /// spaces separate them too, for a pasted list.
+    var deniedHosts = ""
     /// The arguments each kit declares, by kit reference, once `sbx kit inspect` has read them.
     var declaredKitArguments: [String: [KitArgument]] = [:]
     /// Values entered for kits' arguments, by kit reference and then argument
@@ -129,6 +132,11 @@ struct CreateSandboxRequest {
     /// The extra folders that have a path. They're only mounted with a main workspace.
     var enteredAdditionalWorkspaces: [AdditionalWorkspace] {
         workspace == nil ? [] : additionalWorkspaces.filter { $0.normalizedPath != nil }
+    }
+    var deniedHostList: [String] {
+        deniedHosts
+            .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+            .map(String.init)
     }
 
     var arguments: [String] {
@@ -157,6 +165,9 @@ struct CreateSandboxRequest {
         arguments += kitArgumentFlags
         for server in staticMCPServers {
             arguments += ["--static-mcp", server]
+        }
+        for host in deniedHostList {
+            arguments += ["--deny-network", host]
         }
         arguments.append(trimmedWorkload)
         // Extra folders are positional too, so they only follow a main workspace.
