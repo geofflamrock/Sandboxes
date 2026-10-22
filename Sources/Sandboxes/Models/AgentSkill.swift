@@ -18,6 +18,10 @@ struct AgentSkill: Identifiable, Hashable {
     /// From the `description` in the skill's SKILL.md.
     var description: String?
     var source: Source
+    /// The commit it was added or last updated from, for a skill from a repository.
+    var commit: String?
+    /// The skill's folder in the store, when sbx reports where the store is.
+    var folder: URL?
 
     var id: String { name }
 
@@ -51,16 +55,17 @@ struct AgentSkill: Identifiable, Hashable {
         let output = try await SbxCLI.runChecked(listArguments)
         let list = try SkillListParser.parse(output)
         let store = list.store.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
-        let repositories = store.flatMap(SkillSources.repositories(forStore:))
+        let records = store.flatMap(SkillSources.records(forStore:))
         return list.names.map { name in
             let source: Source
-            if let repositories {
-                source = repositories[name].map(Source.repository) ?? .imported
+            if let records {
+                source = records[name].map { .repository($0.repository) } ?? .imported
             } else {
                 source = .unknown
             }
-            let description = store.flatMap { SkillFile.description(at: $0.appendingPathComponent(name).appendingPathComponent("SKILL.md")) }
-            return AgentSkill(name: name, description: description, source: source)
+            let folder = store?.appendingPathComponent(name, isDirectory: true)
+            let description = folder.flatMap { SkillFile.description(at: $0.appendingPathComponent("SKILL.md")) }
+            return AgentSkill(name: name, description: description, source: source, commit: records?[name]?.commit, folder: folder)
         }
     }
 }
@@ -199,8 +204,13 @@ enum SkillListParser {
 /// documented, so anything unexpected is treated as unknown rather than
 /// as a skill that can't be updated.
 private enum SkillSources {
-    /// Skill name to repository, or nil when the record can't be read.
-    static func repositories(forStore store: URL) -> [String: String]? {
+    struct Record {
+        var repository: String
+        var commit: String?
+    }
+
+    /// Records by skill name, or nil when sbx's record can't be read.
+    static func records(forStore store: URL) -> [String: Record]? {
         let metadata = store.deletingLastPathComponent().appendingPathComponent(store.lastPathComponent + "-metadata")
         guard let data = try? Data(contentsOf: metadata.appendingPathComponent("sources.json")) else {
             // sbx starts the record when it first adds a skill from a repository.
@@ -210,19 +220,29 @@ private enum SkillSources {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let skills = object["skills"] as? [String: Any]
         else { return nil }
-        var repositories: [String: String] = [:]
+        var records: [String: Record] = [:]
         for (name, value) in skills {
             if let record = value as? [String: Any],
                let repository = SandboxListParser.string(SandboxListParser.value(in: record, for: ["repository", "repo", "url", "source"])) {
-                repositories[name] = repository
+                let commit = SandboxListParser.string(SandboxListParser.value(in: record, for: ["commit", "sha", "revision", "ref"]))
+                records[name] = Record(repository: repository, commit: commit)
             }
         }
-        return repositories
+        return records
     }
 }
 
-/// Reads a SKILL.md's front matter.
+/// Reads a SKILL.md: its front matter, and the instructions after it.
 enum SkillFile {
+    /// The text after the front matter, or all of it when there's none.
+    static func instructions(in text: String) -> String {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) == "---",
+              let end = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "---" })
+        else { return text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return lines[(end + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// The `description` between the opening `---` lines, including a
     /// folded or literal block (`>` or `|`) on the lines after it.
     static func description(at url: URL) -> String? {
@@ -247,5 +267,49 @@ enum SkillFile {
             return value.isEmpty ? nil : value
         }
         return nil
+    }
+}
+
+/// What's in a skill's folder, for the Inspect sheet.
+struct SkillContents {
+    struct File: Identifiable, Hashable {
+        /// Relative to the skill's folder, such as `scripts/fill.py`.
+        let path: String
+        let size: Int64
+
+        var id: String { path }
+    }
+
+    /// The most files listed, so a skill that bundles a large tree doesn't stall the sheet.
+    static let fileLimit = 500
+
+    var files: [File]
+    /// Whether there were more than `fileLimit`.
+    var isTruncated: Bool
+    /// SKILL.md after its front matter, or nil when it can't be read.
+    var instructions: String?
+
+    /// Reads the folder. It's called from an async context so it runs off the main actor.
+    static func load(from folder: URL) async -> SkillContents {
+        var files: [File] = []
+        var isTruncated = false
+        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+        let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])
+        let base = folder.standardizedFileURL.path
+        while let url = enumerator?.nextObject() as? URL {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+            if files.count == fileLimit {
+                isTruncated = true
+                break
+            }
+            var path = url.standardizedFileURL.path
+            if path.hasPrefix(base + "/") {
+                path.removeFirst(base.count + 1)
+            }
+            files.append(File(path: path, size: Int64(values.fileSize ?? 0)))
+        }
+        files.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        let text = try? String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)
+        return SkillContents(files: files, isTruncated: isTruncated, instructions: text.map(SkillFile.instructions(in:)))
     }
 }

@@ -7,6 +7,7 @@ struct SkillsView: View {
     @Environment(SkillStore.self) private var skills
     @State private var isAdding = false
     @State private var isImporting = false
+    @State private var inspected: AgentSkill?
     @State private var removal: AgentSkill?
 
     var body: some View {
@@ -17,7 +18,12 @@ struct SkillsView: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(skills.skills) { skill in
-                    SkillRow(skill: skill) { removal = skill }
+                    SkillRow(skill: skill) { action in
+                        switch action {
+                        case .inspect: inspected = skill
+                        case .remove: removal = skill
+                        }
+                    }
                 }
             } header: {
                 Text("Skills")
@@ -60,6 +66,9 @@ struct SkillsView: View {
         .sheet(isPresented: $isImporting) {
             ImportSkillsSheet()
         }
+        .sheet(item: $inspected) { skill in
+            SkillInspector(skill: skill)
+        }
         .confirmationDialog(
             "Remove “\(removal?.name ?? "")”?",
             isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }),
@@ -88,8 +97,13 @@ struct SkillsView: View {
 
 /// A skill, with its description, where it came from and a menu of actions.
 private struct SkillRow: View {
+    enum Action {
+        case inspect
+        case remove
+    }
+
     let skill: AgentSkill
-    let onRemove: () -> Void
+    let perform: (Action) -> Void
     @Environment(SkillStore.self) private var skills
 
     var body: some View {
@@ -140,13 +154,15 @@ private struct SkillRow: View {
 
     @ViewBuilder
     private var actions: some View {
+        Button("Inspect…") { perform(.inspect) }
+        Divider()
         if skill.canUpdate {
             Button("Update") {
                 Task { await skills.update(skill) }
             }
             Divider()
         }
-        Button("Remove…", role: .destructive, action: onRemove)
+        Button("Remove…", role: .destructive) { perform(.remove) }
     }
 
     private var source: String? {
@@ -155,6 +171,142 @@ private struct SkillRow: View {
         case .imported: "Imported from this Mac"
         case .unknown: nil
         }
+    }
+}
+
+/// A skill's details, its files and its instructions, read from its folder
+/// in the store. It only reads: sbx owns the store, and changes made there
+/// reach every sandbox and are lost when the skill is updated.
+private struct SkillInspector: View {
+    let skill: AgentSkill
+    @Environment(\.dismiss) private var dismiss
+    @State private var contents: SkillContents?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    if let description = skill.description {
+                        LabeledContent("Description") {
+                            Text(description)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    switch skill.source {
+                    case let .repository(repository):
+                        LabeledContent("Repository") {
+                            Text(repository)
+                                .textSelection(.enabled)
+                        }
+                        if let commit = skill.commit {
+                            LabeledContent("Commit") {
+                                Text(commit)
+                                    .font(.callout.monospaced())
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    case .imported:
+                        LabeledContent("Source", value: "Imported from this Mac")
+                    case .unknown:
+                        EmptyView()
+                    }
+                    if let folder = skill.folder {
+                        LabeledContent("Location") {
+                            Text((folder.path as NSString).abbreviatingWithTildeInPath)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                                .help(folder.path)
+                        }
+                    }
+                }
+
+                if skill.folder == nil {
+                    Section {
+                        Text("sbx didn't say where its skills store is, so the skill's files can't be shown.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let contents {
+                    filesSection(contents)
+                    instructionsSection(contents)
+                } else {
+                    Section {
+                        Text("Loading…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            // Sheets separate their buttons from the content with a line.
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(20)
+        }
+        .frame(minWidth: 520, idealWidth: 620, minHeight: 480, idealHeight: 640)
+        .navigationTitle(skill.name)
+        .task {
+            guard let folder = skill.folder else { return }
+            contents = await SkillContents.load(from: folder)
+        }
+    }
+
+    private func filesSection(_ contents: SkillContents) -> some View {
+        Section {
+            if contents.files.isEmpty {
+                Text("No files.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(contents.files) { file in
+                LabeledContent {
+                    Text(file.size.formatted(.byteCount(style: .file)))
+                        .monospacedDigit()
+                } label: {
+                    Label(file.path, systemImage: file.path.hasSuffix(".md") ? "doc.text" : "doc")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(file.path)
+                }
+            }
+        } header: {
+            Text("Files")
+        } footer: {
+            Text(contents.isTruncated
+                ? "Showing the first \(SkillContents.fileLimit) files. Sandboxes get every file in the skill's folder, including any scripts the agent may run."
+                : "Sandboxes get every file in the skill's folder, including any scripts the agent may run.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func instructionsSection(_ contents: SkillContents) -> some View {
+        Section {
+            if let instructions = contents.instructions, !instructions.isEmpty {
+                Text(Self.styled(instructions))
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(contents.instructions == nil ? "The skill has no SKILL.md, or it couldn't be read." : "SKILL.md has no instructions after its front matter.")
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Instructions")
+        } footer: {
+            Text("From SKILL.md, which tells the agent when and how to use the skill.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Bold, italics, code and links styled, with headings and lists left as
+    /// written, since only inline Markdown is interpreted.
+    private static func styled(_ markdown: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
     }
 }
 
