@@ -450,33 +450,17 @@ private struct CreateSandboxForm: View {
                     }
                 }
             }
-            HStack {
-                Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
-                Button("Add Path", systemImage: "text.cursor") {
-                    request.additionalWorkspaces.append(AdditionalWorkspace())
-                }
-                .help("Type the path of a folder to mount")
-                Spacer()
+            // A new row is empty: type its path or choose the folder.
+            Button("Add", systemImage: "plus") {
+                request.additionalWorkspaces.append(AdditionalWorkspace())
             }
             .buttonStyle(.borderless)
+            .help("Add a folder to mount")
         } header: {
             Text("Additional Folders")
         } footer: {
             Text("These folders are mounted at the same paths as on your Mac.")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    private func addAdditionalWorkspaces() {
-        let urls = OpenPanel.choose(
-            directories: true,
-            multiple: true,
-            prompt: "Add",
-            message: "Choose folders to mount alongside the workspace, such as docs or a related repository."
-        )
-        let existing = Set(request.additionalWorkspaces.compactMap(\.normalizedPath) + [request.workspace].compactMap { $0 })
-        for url in urls where !existing.contains(url.path) {
-            request.additionalWorkspaces.append(AdditionalWorkspace(path: url.path))
         }
     }
 
