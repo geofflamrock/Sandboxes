@@ -4,9 +4,15 @@ struct ContentView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(SbxSettingStore.self) private var sbxSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        @Bindable var store = store
+        @Bindable var mcp = mcp
+        @Bindable var secrets = secrets
+        @Bindable var sbxSettings = sbxSettings
+
         NavigationSplitView {
             SandboxSidebar()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
@@ -16,6 +22,8 @@ struct ContentView: View {
                     SecretsView()
                 } else if store.selection == .mcpServers {
                     MCPServersView()
+                } else if store.selection == .sbxSettings {
+                    SbxSettingsListView()
                 } else if let sandbox = store.selectedSandbox {
                     SandboxDetailView(sandbox: sandbox)
                 } else {
@@ -40,18 +48,6 @@ struct ContentView: View {
         } message: { _ in
             Text("This stops the sandbox and deletes its containers, state and scoped secrets. This can't be undone.")
         }
-        .alert(
-            store.actionError?.title ?? "",
-            isPresented: Binding(
-                get: { store.actionError != nil },
-                set: { if !$0 { store.actionError = nil } }
-            ),
-            presenting: store.actionError
-        ) { _ in
-            Button("OK") {}
-        } message: { error in
-            Text(error.message)
-        }
         .confirmationDialog(
             "Unload “\(mcp.unloadCandidate?.server.name ?? "")” from “\(mcp.unloadCandidate?.sandbox.name ?? "")”?",
             isPresented: Binding(
@@ -66,30 +62,10 @@ struct ContentView: View {
         } message: { _ in
             Text("The agent loses the server's tools straight away. The server stays registered, and an agent that finds servers itself can load it again.")
         }
-        .alert(
-            mcp.actionError?.title ?? "",
-            isPresented: Binding(
-                get: { mcp.actionError != nil },
-                set: { if !$0 { mcp.actionError = nil } }
-            ),
-            presenting: mcp.actionError
-        ) { _ in
-            Button("OK") {}
-        } message: { error in
-            Text(error.message)
-        }
-        .alert(
-            secrets.actionError?.title ?? "",
-            isPresented: Binding(
-                get: { secrets.actionError != nil },
-                set: { if !$0 { secrets.actionError = nil } }
-            ),
-            presenting: secrets.actionError
-        ) { _ in
-            Button("OK") {}
-        } message: { error in
-            Text(error.message)
-        }
+        .actionErrorAlert(error: $store.actionError)
+        .actionErrorAlert(error: $mcp.actionError)
+        .actionErrorAlert(error: $secrets.actionError)
+        .actionErrorAlert(error: $sbxSettings.actionError)
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
@@ -98,6 +74,24 @@ struct ContentView: View {
         }
         .onDisappear {
             store.windowDidClose()
+        }
+    }
+}
+
+extension View {
+    /// An alert for a store's failed action, such as “Couldn't Stop “name””.
+    func actionErrorAlert(error: Binding<SandboxStore.ActionError?>) -> some View {
+        alert(
+            error.wrappedValue?.title ?? "",
+            isPresented: Binding(
+                get: { error.wrappedValue != nil },
+                set: { if !$0 { error.wrappedValue = nil } }
+            ),
+            presenting: error.wrappedValue
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error.message)
         }
     }
 }
@@ -142,6 +136,9 @@ struct SandboxSidebar: View {
                     .badge(mcp.servers.count)
                     .tag(SidebarItem.mcpServers)
                     .help("MCP servers registered with sbx, which sandboxes reach through its MCP gateway")
+                Label("Settings", systemImage: "slider.horizontal.3")
+                    .tag(SidebarItem.sbxSettings)
+                    .help("Settings of Docker Sandboxes, such as proxies and kit policy, from sbx settings")
             }
         }
         // Removing a sandbox also removes its secrets, so keep the count right.

@@ -2,8 +2,9 @@ import Foundation
 import Observation
 
 /// One run of a command that fixes the setup, such as installing sbx with
-/// Homebrew, starting the daemon or signing in, or that authorises an MCP
-/// server, with its streamed output for the command sheet.
+/// Homebrew, starting the daemon or signing in, that authorises an MCP
+/// server, or that restarts the daemon after a settings change, with its
+/// streamed output for the command sheet.
 @MainActor
 @Observable
 final class SbxCommandRun: Identifiable {
@@ -12,6 +13,8 @@ final class SbxCommandRun: Identifiable {
         /// Upgrades the Homebrew cask that installed sbx, such as `sbx` or `sbx@rc`.
         case upgrade(cask: String)
         case startDaemon
+        /// After changing a setting that only applies once the daemon restarts.
+        case restartDaemon
         case signIn
         /// `sbx mcp auth`, which opens the server's authorisation page in the
         /// browser and waits until it's approved or refused.
@@ -21,7 +24,7 @@ final class SbxCommandRun: Identifiable {
         var usesHomebrew: Bool {
             switch self {
             case .install, .upgrade: true
-            case .startDaemon, .signIn, .authoriseMCP: false
+            case .startDaemon, .restartDaemon, .signIn, .authoriseMCP: false
             }
         }
 
@@ -30,6 +33,7 @@ final class SbxCommandRun: Identifiable {
             case .install: ["install", "docker/tap/sbx"]
             case let .upgrade(cask): ["upgrade", "docker/tap/\(cask)"]
             case .startDaemon: ["daemon", "start", "--detach"]
+            case .restartDaemon: ["daemon", "restart"]
             case .signIn: ["login"]
             case let .authoriseMCP(server): ["mcp", "auth", server]
             }
