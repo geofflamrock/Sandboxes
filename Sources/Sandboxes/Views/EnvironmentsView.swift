@@ -227,10 +227,11 @@ private struct EnvironmentRow: View {
                 Divider()
                 Button(file.isInLibrary ? "Delete…" : "Remove from List…", role: .destructive) { perform(.delete) }
             } label: {
-                Label("More", systemImage: "ellipsis")
+                Label("More", systemImage: "ellipsis.circle")
                     .labelStyle(.iconOnly)
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
             .menuIndicator(.hidden)
             .fixedSize()
             .help("More actions")
