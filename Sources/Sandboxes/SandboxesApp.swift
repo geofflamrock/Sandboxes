@@ -38,8 +38,10 @@ struct SandboxesApp: App {
                     store.presentCreate()
                 }
                 .keyboardShortcut("n")
-                Button("New Environment File…") {
+                Button {
                     store.presentNewEnvironment()
+                } label: {
+                    Label("New Environment File…", image: "custom.square.stack.3d.up.badge.plus")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Open Environment File…") {
