@@ -6,7 +6,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
-- Save a sandbox's options as an [environment file](https://docs.docker.com/ai/sandboxes/configuration/environment-files/), then edit and rename environment files and create as many sandboxes as you like from them, with your defaults from `~/.sbxenv.yaml`, after reviewing what they change on your Mac.
+- Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
 - Start, stop and remove sandboxes.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
@@ -23,7 +23,6 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
 - `sbx` v0.48.0 or later to unload MCP servers from a sandbox.
-- An `sbx` with the experimental `sbx env` commands, for environment files. Tested with v0.49.1.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
