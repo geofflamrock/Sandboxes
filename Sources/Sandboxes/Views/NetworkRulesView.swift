@@ -7,6 +7,7 @@ struct NetworkRulesView: View {
     @Environment(NetworkRuleStore.self) private var networkRules
     @State private var editor: NetworkRuleDraft?
     @State private var removal: NetworkRule?
+    @State private var isCheckingHost = false
 
     var body: some View {
         Form {
@@ -58,7 +59,11 @@ struct NetworkRulesView: View {
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")
             }
-            ToolbarItem {
+            ToolbarItemGroup {
+                Button("Check Host", systemImage: "checkmark.shield") {
+                    isCheckingHost = true
+                }
+                .help("Check whether sandboxes may reach a host")
                 Button("Add Network Rule", systemImage: "plus") {
                     editor = NetworkRuleDraft()
                 }
@@ -66,6 +71,9 @@ struct NetworkRulesView: View {
             }
         }
         .networkRuleEditing(editor: $editor, removal: $removal)
+        .sheet(isPresented: $isCheckingHost) {
+            NetworkCheckSheet()
+        }
     }
 }
 

@@ -12,7 +12,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
-- Add, edit and remove global and sandbox specific network rules, in Management or on a sandbox's page.
+- Add, edit and remove global and sandbox specific network rules, in Management or on a sandbox's page, and check whether sandboxes may reach a host.
 - Manage MCP servers and configure sandboxes to use them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
@@ -132,6 +132,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Add a network rule | `sbx policy allow network [--sandbox NAME] [--protocol tcp\|udp\|tcp,udp] HOSTS` or `sbx policy deny network …` with the same arguments |
 | Edit a network rule | Removes the rule, then adds it again as above. If adding fails, the old rule is added back |
 | Remove a network rule | `sbx policy rm network [--sandbox NAME] --id RULE_ID --force`, or `--resource HOSTS` when sbx doesn't report the rule's ID (after confirming in the app). Rules sbx doesn't mark as editable, such as an organization's or a kit's, can't be changed |
+| Check a host (Management › Network Rules and a sandbox's Policies tab) | `sbx policy check network --sandbox NAME [--protocol tcp\|udp] --json TARGET` for each sandbox chosen, or without `--sandbox` when there are no sandboxes |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
 | Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option dismiss` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |

@@ -39,6 +39,7 @@ struct SandboxDetailView: View {
     @Environment(NetworkRuleStore.self) private var networkRules
     @State private var ruleEditor: NetworkRuleDraft?
     @State private var ruleRemoval: NetworkRule?
+    @State private var isCheckingHost = false
 
     // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
@@ -86,6 +87,9 @@ struct SandboxDetailView: View {
         .approvalResponseDialog($approvalResponse)
         .secretEditing(editor: $secretEditor, removal: $secretRemoval)
         .networkRuleEditing(editor: $ruleEditor, removal: $ruleRemoval)
+        .sheet(isPresented: $isCheckingHost) {
+            NetworkCheckSheet(sandbox: sandbox.name)
+        }
         // Show a rule added, changed or removed here or in Management
         // straight away, rather than at the next poll.
         .onChange(of: networkRules.rules) {
@@ -123,7 +127,11 @@ struct SandboxDetailView: View {
                 ToolbarSpacer(.fixed)
             }
             if tab == .policies {
-                ToolbarItem {
+                ToolbarItemGroup {
+                    Button("Check Host", systemImage: "checkmark.shield") {
+                        isCheckingHost = true
+                    }
+                    .help("Check whether this sandbox may reach a host")
                     Button("Add Network Rule", systemImage: "plus") {
                         ruleEditor = NetworkRuleDraft(sandbox: sandbox.name)
                     }
