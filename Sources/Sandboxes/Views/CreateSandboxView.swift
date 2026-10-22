@@ -39,7 +39,7 @@ struct CreateSandboxView: View {
             }
         }
         .navigationTitle(title)
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
+        .frame(minWidth: 560, idealWidth: 760, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
         .background(WindowReader(kind: .create))
         .onAppear(perform: applyPreset)
