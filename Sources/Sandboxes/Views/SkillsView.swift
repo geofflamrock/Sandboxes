@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Management › Skills: the skills in sbx's shared store, with ways to add
 /// them from a repository, import them from this Mac, update and remove them.
@@ -155,6 +156,9 @@ private struct SkillRow: View {
     @ViewBuilder
     private var actions: some View {
         Button("Inspect…") { perform(.inspect) }
+        if let folder = skill.folder {
+            Button("Open in Finder") { NSWorkspace.shared.open(folder) }
+        }
         Divider()
         if skill.canUpdate {
             Button("Update") {
@@ -174,13 +178,14 @@ private struct SkillRow: View {
     }
 }
 
-/// A skill's details, its files and its instructions, read from its folder
-/// in the store. It only reads: sbx owns the store, and changes made there
-/// reach every sandbox and are lost when the skill is updated.
+/// A skill's details and instructions, read from its folder in the store.
+/// It only reads: sbx owns the store, and changes made there reach every
+/// sandbox and are lost when the skill is updated.
 private struct SkillInspector: View {
     let skill: AgentSkill
     @Environment(\.dismiss) private var dismiss
-    @State private var contents: SkillContents?
+    @State private var instructions: String?
+    @State private var hasLoaded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -223,12 +228,11 @@ private struct SkillInspector: View {
 
                 if skill.folder == nil {
                     Section {
-                        Text("sbx didn't say where its skills store is, so the skill's files can't be shown.")
+                        Text("sbx didn't say where its skills store is, so the skill's instructions can't be shown.")
                             .foregroundStyle(.secondary)
                     }
-                } else if let contents {
-                    filesSection(contents)
-                    instructionsSection(contents)
+                } else if hasLoaded {
+                    instructionsSection
                 } else {
                     Section {
                         Text("Loading…")
@@ -242,62 +246,40 @@ private struct SkillInspector: View {
             Divider()
 
             HStack {
+                if let folder = skill.folder {
+                    Button("Open in Finder") { NSWorkspace.shared.open(folder) }
+                        .help("See the skill's files, including any scripts the agent may run")
+                }
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
             .padding(20)
         }
-        .frame(minWidth: 520, idealWidth: 620, minHeight: 480, idealHeight: 640)
+        .frame(minWidth: 520, idealWidth: 620, minHeight: 420, idealHeight: 600)
         .navigationTitle(skill.name)
         .task {
             guard let folder = skill.folder else { return }
-            contents = await SkillContents.load(from: folder)
+            instructions = await SkillFile.instructions(inSkillAt: folder)
+            hasLoaded = true
         }
     }
 
-    private func filesSection(_ contents: SkillContents) -> some View {
+    private var instructionsSection: some View {
         Section {
-            if contents.files.isEmpty {
-                Text("No files.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(contents.files) { file in
-                LabeledContent {
-                    Text(file.size.formatted(.byteCount(style: .file)))
-                        .monospacedDigit()
-                } label: {
-                    Label(file.path, systemImage: file.path.hasSuffix(".md") ? "doc.text" : "doc")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(file.path)
-                }
-            }
-        } header: {
-            Text("Files")
-        } footer: {
-            Text(contents.isTruncated
-                ? "Showing the first \(SkillContents.fileLimit) files. Sandboxes get every file in the skill's folder, including any scripts the agent may run."
-                : "Sandboxes get every file in the skill's folder, including any scripts the agent may run.")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func instructionsSection(_ contents: SkillContents) -> some View {
-        Section {
-            if let instructions = contents.instructions, !instructions.isEmpty {
+            if let instructions, !instructions.isEmpty {
                 Text(Self.styled(instructions))
                     .font(.callout)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(contents.instructions == nil ? "The skill has no SKILL.md, or it couldn't be read." : "SKILL.md has no instructions after its front matter.")
+                Text(instructions == nil ? "The skill has no SKILL.md, or it couldn't be read." : "SKILL.md has no instructions after its front matter.")
                     .foregroundStyle(.secondary)
             }
         } header: {
             Text("Instructions")
         } footer: {
-            Text("From SKILL.md, which tells the agent when and how to use the skill.")
+            Text("From SKILL.md, which tells the agent when and how to use the skill. Sandboxes get every file in the skill's folder.")
                 .foregroundStyle(.secondary)
         }
     }

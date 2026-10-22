@@ -243,6 +243,13 @@ enum SkillFile {
         return lines[(end + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The instructions in the SKILL.md in `folder`, or nil when it can't be
+    /// read. Being async, it reads the file off the main actor.
+    static func instructions(inSkillAt folder: URL) async -> String? {
+        let text = try? String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)
+        return text.map(instructions(in:))
+    }
+
     /// The `description` between the opening `---` lines, including a
     /// folded or literal block (`>` or `|`) on the lines after it.
     static func description(at url: URL) -> String? {
@@ -270,46 +277,3 @@ enum SkillFile {
     }
 }
 
-/// What's in a skill's folder, for the Inspect sheet.
-struct SkillContents {
-    struct File: Identifiable, Hashable {
-        /// Relative to the skill's folder, such as `scripts/fill.py`.
-        let path: String
-        let size: Int64
-
-        var id: String { path }
-    }
-
-    /// The most files listed, so a skill that bundles a large tree doesn't stall the sheet.
-    static let fileLimit = 500
-
-    var files: [File]
-    /// Whether there were more than `fileLimit`.
-    var isTruncated: Bool
-    /// SKILL.md after its front matter, or nil when it can't be read.
-    var instructions: String?
-
-    /// Reads the folder. It's called from an async context so it runs off the main actor.
-    static func load(from folder: URL) async -> SkillContents {
-        var files: [File] = []
-        var isTruncated = false
-        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
-        let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])
-        let base = folder.standardizedFileURL.path
-        while let url = enumerator?.nextObject() as? URL {
-            guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
-            if files.count == fileLimit {
-                isTruncated = true
-                break
-            }
-            var path = url.standardizedFileURL.path
-            if path.hasPrefix(base + "/") {
-                path.removeFirst(base.count + 1)
-            }
-            files.append(File(path: path, size: Int64(values.fileSize ?? 0)))
-        }
-        files.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
-        let text = try? String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)
-        return SkillContents(files: files, isTruncated: isTruncated, instructions: text.map(SkillFile.instructions(in:)))
-    }
-}

@@ -14,7 +14,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Manage global and sandbox specific secrets.
 - Manage global and sandbox specific network rules.
 - Manage MCP servers and configure sandboxes to use them.
-- Manage agent skills: add them from a Git repository, import them from your agents on this Mac, inspect their files and instructions, update and remove them, and choose how each new sandbox shares them.
+- Manage agent skills: add them from a Git repository, import them from your agents on this Mac, inspect their instructions and open their folder in Finder, update and remove them, and choose how each new sandbox shares them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
@@ -154,7 +154,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Remove an MCP server | `sbx mcp rm NAME --force`, and when you choose **Remove Server and Secrets**, `sbx secret rm mcp:NAME:… --force` for each of its secrets and the records sbx keeps with them (after confirming in the app) |
 | Load an MCP server into a running sandbox | `sbx mcp load NAME --sandbox SANDBOX` |
 | Unload an MCP server from a running sandbox | `sbx mcp unload NAME --sandbox SANDBOX` (after confirming in the app) |
-| List skills (sidebar and Management › Skills) | `sbx skills ls --json`. Each skill's description comes from the `SKILL.md` in the store folder sbx reports, and whether it was added from a repository, and from which commit, from the `sources.json` sbx keeps beside the store. **Inspect…** lists the files in the skill's folder and shows its `SKILL.md`, without running sbx |
+| List skills (sidebar and Management › Skills) | `sbx skills ls --json`. Each skill's description comes from the `SKILL.md` in the store folder sbx reports, and whether it was added from a repository, and from which commit, from the `sources.json` sbx keeps beside the store. **Inspect…** shows its `SKILL.md`, and **Open in Finder** opens its folder, without running sbx |
 | Add skills from a repository | `sbx skills add REPOSITORY [--skill NAME]...`, then with `--force` if sbx says a skill is already installed and you choose to replace it |
 | Import skills from your agents on this Mac | `sbx skills import --dry-run` to show what would be imported or replaced, then `sbx skills import --force` when you click **Import** |
 | Update a skill added from a repository | `sbx skills update NAME`, or `sbx skills update` for **Update All** |
