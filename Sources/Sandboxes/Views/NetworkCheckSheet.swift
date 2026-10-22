@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// Checks whether sandboxes may reach a host with `sbx policy check`, for
-/// every sandbox or chosen ones. Opened from Management › Network Rules,
-/// checking all sandboxes, and from a sandbox's page, checking that one.
+/// Checks whether a host is allowed with `sbx policy check`, by the global
+/// policy or for one sandbox. Opened from Management › Network Rules, where
+/// it starts with the global policy, and from a sandbox's page, where it
+/// starts with that sandbox.
 struct NetworkCheckSheet: View {
-    /// The sandbox to check to begin with, or nil to check all of them.
-    var sandbox: String?
+    /// The sandbox to check, or nil for the global policy.
+    @State var sandbox: String? = nil
     @Environment(SandboxStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var target = ""
     @State private var protocols = NetworkRuleDraft.Protocols.automatic
-    @State private var checksAll = true
-    @State private var chosen: Set<String> = []
+    /// Most recent first, so checking several hosts in a row compares them.
     @State private var results: [NetworkCheckResult] = []
     @State private var isChecking = false
 
@@ -21,35 +21,23 @@ struct NetworkCheckSheet: View {
                 Section {
                     TextField("Host", text: $target, prompt: Text("api.example.com, host:port or a URL"))
                         .onSubmit { Task { await check() } }
+                    Picker("For", selection: $sandbox) {
+                        Text("All sandboxes").tag(String?.none)
+                        if !scopeNames.isEmpty {
+                            Divider()
+                        }
+                        ForEach(scopeNames, id: \.self) { name in
+                            Text(name).tag(String?.some(name))
+                        }
+                    }
                     Picker("Protocol", selection: $protocols) {
                         ForEach([NetworkRuleDraft.Protocols.automatic, .tcp, .udp]) { protocols in
                             Text(protocols.title).tag(protocols)
                         }
                     }
                 } footer: {
-                    Text("Hosts without a port are checked on port 443. A URL's path isn't checked.")
+                    Text("All sandboxes checks the global policy, without rules for a single sandbox. Hosts without a port are checked on port 443, and a URL's path isn't checked.")
                         .foregroundStyle(.secondary)
-                }
-
-                if !sandboxNames.isEmpty {
-                    Section("Sandboxes") {
-                        Picker("Check", selection: $checksAll) {
-                            Text("All Sandboxes").tag(true)
-                            Text("Chosen Sandboxes").tag(false)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        if !checksAll {
-                            ForEach(sandboxNames, id: \.self) { name in
-                                Toggle(name, isOn: Binding(
-                                    get: { chosen.contains(name) },
-                                    set: { isOn in
-                                        if isOn { chosen.insert(name) } else { chosen.remove(name) }
-                                    }
-                                ))
-                            }
-                        }
-                    }
                 }
 
                 if !results.isEmpty {
@@ -78,24 +66,18 @@ struct NetworkCheckSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.glassProminent)
-                .disabled(isChecking || missing != nil)
-                .help(missing ?? "")
+                .disabled(isChecking || trimmedTarget.isEmpty)
+                .help(trimmedTarget.isEmpty ? "Enter a host." : "")
             }
             .padding(20)
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 420, idealHeight: 520)
+        .frame(minWidth: 460, idealWidth: 500, minHeight: 380, idealHeight: 460)
         .navigationTitle("Check Host")
-        .onAppear {
-            if let sandbox {
-                checksAll = false
-                chosen = [sandbox]
-            }
-        }
     }
 
-    /// The sandboxes to choose from, keeping the one the sheet was opened
-    /// for even if it's no longer listed.
-    private var sandboxNames: [String] {
+    /// The sandboxes to choose from, keeping the one chosen even if it's no
+    /// longer listed.
+    private var scopeNames: [String] {
         let names = store.sandboxes.map(\.name)
         guard let sandbox, !names.contains(sandbox) else { return names }
         return [sandbox] + names
@@ -105,36 +87,11 @@ struct NetworkCheckSheet: View {
         target.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Why it can't check yet, or nil when it can.
-    private var missing: String? {
-        if trimmedTarget.isEmpty {
-            return "Enter a host."
-        }
-        if !sandboxNames.isEmpty && !checksAll && chosen.isEmpty {
-            return "Choose at least one sandbox."
-        }
-        return nil
-    }
-
-    /// Checks each sandbox at once. With no sandboxes, checks the global
-    /// policy instead.
     private func check() async {
-        guard missing == nil, !isChecking else { return }
-        let target = trimmedTarget
-        let protocols = protocols
-        let sandboxes: [String?] = sandboxNames.isEmpty
-            ? [nil]
-            : sandboxNames.filter { checksAll || chosen.contains($0) }
+        guard !trimmedTarget.isEmpty, !isChecking else { return }
         isChecking = true
-        let checked = await withTaskGroup(of: NetworkCheckResult.self) { group in
-            for sandbox in sandboxes {
-                group.addTask {
-                    await NetworkCheckResult.check(target, sandbox: sandbox, protocols: protocols)
-                }
-            }
-            return await group.reduce(into: [NetworkCheckResult]()) { $0.append($1) }
-        }
-        results = checked.sorted { ($0.sandbox ?? "").localizedStandardCompare($1.sandbox ?? "") == .orderedAscending }
+        let result = await NetworkCheckResult.check(trimmedTarget, sandbox: sandbox, protocols: protocols)
+        results.insert(result, at: 0)
         isChecking = false
     }
 }
@@ -147,14 +104,15 @@ private struct NetworkCheckRow: View {
             outcome
                 .frame(width: 100, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.sandbox ?? "Global policy")
-                if let detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
-                }
+                Text(result.target)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                Text(details)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
             }
             Spacer()
         }
@@ -167,23 +125,27 @@ private struct NetworkCheckRow: View {
             DecisionLabel(decision: .allow, style: .traffic)
         case .denied:
             DecisionLabel(decision: .deny, style: .traffic)
-        case let .other(text):
-            HStack(spacing: 6) {
-                StatusDot(color: .orange)
-                Text(text)
-                    .lineLimit(1)
-            }
-            .help(text)
         case .failed:
             Label("Couldn't Check", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
         }
     }
 
-    private var detail: String? {
-        if case let .failed(message) = result.outcome {
-            return message
+    /// Where it was checked, the protocol and why, such as
+    /// "All sandboxes · TCP · No matching allow rule (default deny)".
+    private var details: String {
+        var parts = [result.sandbox ?? "All sandboxes"]
+        if let protocolName = result.protocolName {
+            parts.append(protocolName)
         }
-        return result.detail
+        switch result.outcome {
+        case let .failed(message):
+            parts.append(message)
+        case .allowed, .denied:
+            if let reason = result.reason {
+                parts.append(reason)
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 }

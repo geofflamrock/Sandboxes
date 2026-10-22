@@ -1,24 +1,26 @@
 import Foundation
 
-/// Whether the network policy lets a sandbox reach a host, from
+/// Whether the network policy lets sandboxes reach a host, from
 /// `sbx policy check network`.
 struct NetworkCheckResult: Identifiable, Hashable {
     enum Outcome: Hashable {
         case allowed
         case denied
-        /// A decision this app doesn't know, such as asking for approval.
-        case other(String)
-        /// sbx couldn't check, with what it printed.
+        /// sbx couldn't check, or printed something this app can't read.
         case failed(String)
     }
 
+    let id = UUID()
+    /// What was checked, such as `api.example.com:443`: sbx's form of the
+    /// host entered, with the port it assumed.
+    let target: String
     /// The sandbox checked, or nil for the global policy.
     let sandbox: String?
     let outcome: Outcome
-    /// The rule that decided it, or why, when sbx says.
-    let detail: String?
-
-    var id: String { sandbox ?? "" }
+    /// Such as "TCP", from sbx's action `net:connect:tcp`.
+    var protocolName: String?
+    /// Why, such as "No matching allow rule (default deny)", when sbx says.
+    var reason: String?
 
     /// Checks `target`, a host, `host:port`, IP address or URL, for
     /// `sandbox`, or against the global policy when it's nil.
@@ -38,80 +40,53 @@ struct NetworkCheckResult: Identifiable, Hashable {
         arguments += ["--json", target]
         do {
             let result = try await SbxCLI.run(arguments)
-            return NetworkCheckParser.result(from: result, sandbox: sandbox)
+            return NetworkCheckParser.result(from: result, target: target, sandbox: sandbox)
         } catch {
-            return NetworkCheckResult(sandbox: sandbox, outcome: .failed(error.localizedDescription), detail: nil)
+            return NetworkCheckResult(target: target, sandbox: sandbox, outcome: .failed(error.localizedDescription))
         }
     }
 }
 
-/// Parses `sbx policy check network --json`. Its output isn't documented, so
-/// this looks for a decision and the rule or reason behind it under several
-/// key spellings, one level deep, and shows the output as it is otherwise.
+/// Parses `sbx policy check network --json`, which as of v0.49.1 prints:
+///
+///     {"action": "net:connect:tcp", "allowed": false, "context": "global",
+///      "reason": "No matching allow rule (default deny)",
+///      "target": "api.example.com:443", …}
+///
+/// `reason` is left out when the host is allowed.
 enum NetworkCheckParser {
     typealias JSON = SandboxListParser
 
-    static func result(from result: CommandResult, sandbox: String?) -> NetworkCheckResult {
+    static func result(from result: CommandResult, target: String, sandbox: String?) -> NetworkCheckResult {
         let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A denial may exit with an error, so read the JSON whatever the status.
-        if let json = try? PolicyParser.document(output),
-           let object = (json as? [String: Any]) ?? (json as? [Any])?.first as? [String: Any],
-           let outcome = outcome(in: object) {
-            return NetworkCheckResult(sandbox: sandbox, outcome: outcome, detail: detail(in: object))
+        // Read the JSON whatever the exit status, in case a denial exits with
+        // an error.
+        guard let json = try? PolicyParser.document(output),
+              let object = json as? [String: Any],
+              let outcome = outcome(in: object)
+        else {
+            let message = output.isEmpty ? "sbx exited with code \(result.exitCode)." : output
+            return NetworkCheckResult(target: target, sandbox: sandbox, outcome: .failed(message))
         }
-        if !result.succeeded {
-            return NetworkCheckResult(sandbox: sandbox, outcome: .failed(output.isEmpty ? "sbx exited with code \(result.exitCode)." : output), detail: nil)
-        }
-        return NetworkCheckResult(sandbox: sandbox, outcome: .other("Unknown"), detail: output.isEmpty ? nil : output)
-    }
-
-    /// The object and the objects directly inside it, such as a `result`.
-    private static func candidates(_ object: [String: Any]) -> [[String: Any]] {
-        [object] + object.values.compactMap { $0 as? [String: Any] }
+        let checked = JSON.string(JSON.value(in: object, for: ["target", "resource_value"])).flatMap { $0.isEmpty ? nil : $0 }
+        let action = JSON.string(JSON.value(in: object, for: ["action"]))?.lowercased() ?? ""
+        let reason = JSON.string(JSON.value(in: object, for: ["reason", "message"])).flatMap { $0.isEmpty ? nil : $0 }
+        return NetworkCheckResult(
+            target: checked ?? target,
+            sandbox: sandbox,
+            outcome: outcome,
+            protocolName: action.hasSuffix("udp") ? "UDP" : action.hasSuffix("tcp") ? "TCP" : nil,
+            reason: reason
+        )
     }
 
     private static func outcome(in object: [String: Any]) -> NetworkCheckResult.Outcome? {
-        for candidate in candidates(object) {
-            // `string` reads booleans as "Yes" or "No".
-            if let allowed = JSON.string(JSON.value(in: candidate, for: ["allowed", "allow", "authorized", "permitted"])),
-               allowed == "Yes" || allowed == "No" {
-                return allowed == "Yes" ? .allowed : .denied
-            }
-            if let text = JSON.string(JSON.value(in: candidate, for: ["decision", "verdict", "outcome", "result", "effect", "action"])),
-               !text.isEmpty {
-                switch PolicyDecision(text) {
-                case .allow: return .allowed
-                case .deny: return .denied
-                case nil: return .other(text.replacingOccurrences(of: "_", with: " ").capitalized)
-                }
-            }
+        // `string` reads booleans as "Yes" or "No".
+        if let allowed = JSON.string(JSON.value(in: object, for: ["allowed"])), allowed == "Yes" || allowed == "No" {
+            return allowed == "Yes" ? .allowed : .denied
         }
-        return nil
-    }
-
-    /// The matching rule's hosts or name, and the reason, such as
-    /// "api.example.com · Matched local allow rule".
-    private static func detail(in object: [String: Any]) -> String? {
-        var parts: [String] = []
-        for candidate in candidates(object) {
-            if parts.isEmpty, let rule = JSON.value(in: candidate, for: ["matched_rule", "matchedRule", "rule", "matched_by", "matched_rules", "rules"]) {
-                let rules = rule as? [Any] ?? [rule]
-                let names = rules.compactMap { item -> String? in
-                    guard let rule = item as? [String: Any] else { return JSON.string(item) }
-                    if let resources = JSON.value(in: rule, for: ["resources", "resource"]) {
-                        return JSON.string(resources)
-                    }
-                    return JSON.string(JSON.value(in: rule, for: ["name", "id", "rule_id"]))
-                }
-                if !names.isEmpty {
-                    parts.append(names.joined(separator: ", "))
-                }
-            }
-            if let reason = JSON.string(JSON.value(in: candidate, for: ["reason", "message", "explanation", "detail", "details"])),
-               !reason.isEmpty, !parts.contains(reason) {
-                parts.append(reason)
-            }
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return JSON.string(JSON.value(in: object, for: ["decision", "result"]))
+            .flatMap { PolicyDecision($0) }
+            .map { $0 == .allow ? .allowed : .denied }
     }
 }
