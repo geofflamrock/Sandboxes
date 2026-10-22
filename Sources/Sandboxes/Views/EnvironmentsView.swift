@@ -54,7 +54,7 @@ struct EnvironmentsView: View {
                 .help("Back to Home")
             }
             ToolbarItem {
-                Button("Open Environment File", systemImage: "folder") {
+                Button("Open Environment File", systemImage: "arrow.up.right.square") {
                     EnvironmentFilePanel.open(into: environments)
                 }
                 .help("Add an environment file from anywhere on your Mac to the list")

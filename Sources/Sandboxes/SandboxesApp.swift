@@ -44,7 +44,7 @@ struct SandboxesApp: App {
                     Label("New Environment File…", image: "custom.square.stack.3d.up.badge.plus")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Open Environment File…") {
+                Button("Open Environment File…", systemImage: "arrow.up.right.square") {
                     if EnvironmentFilePanel.open(into: appDelegate.environments) != nil {
                         store.selection = .environments
                         AppWindows.showMain()
