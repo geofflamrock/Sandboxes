@@ -34,7 +34,7 @@ struct SandboxesApp: App {
                 }
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Sandbox…") {
+                Button("New Sandbox…", systemImage: "plus") {
                     store.presentCreate()
                 }
                 .keyboardShortcut("n")
