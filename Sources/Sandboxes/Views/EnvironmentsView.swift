@@ -329,7 +329,7 @@ struct EnvironmentRunSheet: View {
             buttons
                 .padding(20)
         }
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 520)
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 480, idealHeight: 640)
         .interactiveDismissDisabled(run.phase == .planning || run.phase == .creating)
     }
 
@@ -438,8 +438,9 @@ struct EnvironmentRunSheet: View {
     }
 }
 
-/// What to create from the file: the sandbox's name, whether to add the
-/// user's defaults, clone mode, and the file's arguments.
+/// What to create from the file: which file it is, then the options to
+/// change (name, clone mode, the file's arguments), then the defaults and
+/// project directory, which are mostly there to check.
 private struct EnvironmentRunOptions: View {
     let run: EnvironmentRun
     @AppStorage("environmentRunFileExpanded") private var isFileExpanded = false
@@ -468,6 +469,35 @@ private struct EnvironmentRunOptions: View {
                     ? "Starts as the name in the file. Enter another name to create another sandbox from it."
                     : "Leave empty to let sbx choose a name. Enter a name to create more than one sandbox from the file.")
                     .foregroundStyle(.secondary)
+            }
+
+            if run.offersClone {
+                Section {
+                    Picker("Mode", selection: $run.mode) {
+                        ForEach(WorkspaceMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Workspace")
+                } footer: {
+                    Text(run.mode.explanation)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !run.file.arguments.isEmpty {
+                Section {
+                    ForEach(run.file.arguments) { argument in
+                        KitArgumentRow(argument: argument, isFixed: false, values: $run.argumentValues)
+                    }
+                } header: {
+                    Text("Arguments")
+                } footer: {
+                    Text("The environment file declares these. Leave one empty to use its default.")
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if run.defaults != nil {
@@ -513,35 +543,6 @@ private struct EnvironmentRunOptions: View {
                     Text(run.file.isInLibrary
                         ? "The file uses ${{ env.projectDir }}, which sbx makes the folder the file is in. That's its folder in the environment files folder, not a project, so mount folders by their full paths instead."
                         : "${{ env.projectDir }} is the folder the file is in.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if run.offersClone {
-                Section {
-                    Picker("Mode", selection: $run.mode) {
-                        ForEach(WorkspaceMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Workspace")
-                } footer: {
-                    Text(run.mode.explanation)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if !run.file.arguments.isEmpty {
-                Section {
-                    ForEach(run.file.arguments) { argument in
-                        KitArgumentRow(argument: argument, isFixed: false, values: $run.argumentValues)
-                    }
-                } header: {
-                    Text("Arguments")
-                } footer: {
-                    Text("The environment file declares these. Leave one empty to use its default.")
                         .foregroundStyle(.secondary)
                 }
             }
