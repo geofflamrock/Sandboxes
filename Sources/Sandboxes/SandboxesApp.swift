@@ -87,8 +87,7 @@ struct SandboxesApp: App {
             }
         }
 
-        // A window rather than a sheet, so its tab view's tabs sit in a title bar.
-        // It opens wide enough for all of them: narrower, they fold into a menu.
+        // A window rather than a sheet, so its sidebar and form get a title bar.
         Window("New Sandbox", id: AppWindows.createID) {
             CreateSandboxView()
                 .environment(store)
@@ -96,7 +95,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.mcpServers)
                 .environment(appDelegate.environments)
         }
-        .defaultSize(width: 760, height: 700)
+        .defaultSize(width: 820, height: 700)
         .windowResizability(.contentMinSize)
         .defaultPosition(.center)
 

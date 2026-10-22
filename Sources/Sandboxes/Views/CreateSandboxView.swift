@@ -39,7 +39,7 @@ struct CreateSandboxView: View {
             }
         }
         .navigationTitle(title)
-        .frame(minWidth: 560, idealWidth: 760, minHeight: 560, idealHeight: 700)
+        .frame(minWidth: 740, idealWidth: 820, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
         .background(WindowReader(kind: .create))
         .onAppear(perform: applyPreset)
@@ -134,60 +134,76 @@ private struct CreateSandboxForm: View {
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
-    @State private var tab = CreateSheetTab.general
+    @State private var section: CreateSandboxSection? = .general
     @AppStorage("environmentFilePreviewExpanded") private var isFilePreviewExpanded = false
 
     private var isEditing: Bool { editingURL != nil }
 
-    // In a window, the tab bar only style puts the tabs in the title bar
-    // rather than drawing a bordered box around the content.
     var body: some View {
-        TabView(selection: $tab) {
-            ForEach(visibleTabs) { tab in
-                Tab(value: tab) {
-                    Form {
-                        switch tab {
-                        case .general:
-                            nameSection
-                            agentSection
-                            if KitArgument.isInspectable(workload: request.trimmedWorkload) {
-                                kitArgumentsSection(for: request.trimmedWorkload)
-                            }
-                        case .workspace:
-                            workspaceSection
-                            if request.workspace != nil {
-                                additionalWorkspacesSection
-                            }
-                        case .kits:
-                            kitsSection
-                            if !availableRecentKits.isEmpty {
-                                recentKitsSection
-                            }
-                            ForEach(request.kits, id: \.self) { kit in
-                                kitArgumentsSection(for: kit) {
-                                    request.kits.removeAll { $0 == kit }
-                                    request.kitArgumentValues[kit] = nil
-                                }
-                            }
-                        case .runtime:
-                            resourcesSection
-                            environmentSection
-                        case .network:
-                            deniedHostsSection
-                        case .mcp:
-                            mcpSection
-                        }
-                    }
-                    .formStyle(.grouped)
-                } label: {
-                    Text(tab.title)
+        NavigationSplitView {
+            List(selection: $section) {
+                ForEach(visibleSections) { section in
+                    Label(section.title, systemImage: section.systemImage)
+                        .badge(badge(for: section))
+                        .tag(section)
                 }
             }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            Form {
+                switch section ?? .general {
+                case .general:
+                    nameSection
+                    agentSection
+                    if KitArgument.isInspectable(workload: request.trimmedWorkload) {
+                        kitArgumentsSection(for: request.trimmedWorkload)
+                    }
+                case .workspace:
+                    workspaceSection
+                    if request.workspace != nil {
+                        additionalWorkspacesSection
+                    }
+                case .kits:
+                    kitsSection
+                    if !availableRecentKits.isEmpty {
+                        recentKitsSection
+                    }
+                    ForEach(request.kits, id: \.self) { kit in
+                        kitArgumentsSection(for: kit) {
+                            request.kits.removeAll { $0 == kit }
+                            request.kitArgumentValues[kit] = nil
+                        }
+                    }
+                case .runtime:
+                    resourcesSection
+                    environmentSection
+                case .network:
+                    deniedHostsSection
+                case .mcp:
+                    mcpSection
+                }
+            }
+            .formStyle(.grouped)
+            // The command and the buttons reflect every section, so they stay in view whichever is open.
+            // As a bar, the form fades as it scrolls under them, as windows do.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                VStack(alignment: .leading, spacing: 12) {
+                    commandSection
+                    actionBar
+                }
+                .padding()
+            }
         }
-        .tabViewStyle(.tabBarOnly)
         .onChange(of: request.target) {
-            if !visibleTabs.contains(tab) {
-                tab = .general
+            if let section, !visibleSections.contains(section) {
+                self.section = .general
+            }
+        }
+        // Clicking below the rows would clear the selection and leave no section showing.
+        .onChange(of: section) { previous, section in
+            if section == nil {
+                self.section = previous
             }
         }
         .task {
@@ -211,24 +227,26 @@ private struct CreateSandboxForm: View {
         }
         .onChange(of: request.argumentKits, initial: true, syncDeclaredArguments)
         .onChange(of: inspector.results, syncDeclaredArguments)
-        // The command and the buttons reflect every tab, so they stay in view whichever is open.
-        // As a bar, the form fades as it scrolls under them, as windows do.
-        .safeAreaBar(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                commandSection
-                actionBar
-            }
-            .padding()
-        }
     }
 
-    /// The tabs for what's being made. An environment file doesn't pick MCP
+    /// The sections for what's being made. An environment file doesn't pick MCP
     /// servers the way `sbx create` does: it registers servers itself. It has
     /// no network rules either.
-    private var visibleTabs: [CreateSheetTab] {
+    private var visibleSections: [CreateSandboxSection] {
         request.target == .environment
-            ? CreateSheetTab.allCases.filter { $0 != .mcp && $0 != .network }
-            : CreateSheetTab.allCases
+            ? CreateSandboxSection.allCases.filter { $0 != .mcp && $0 != .network }
+            : CreateSandboxSection.allCases
+    }
+
+    /// How many things are added in a section, so what's set elsewhere shows
+    /// without opening it. A zero badge isn't shown.
+    private func badge(for section: CreateSandboxSection) -> Int {
+        switch section {
+        case .kits: request.kits.count
+        case .network: request.deniedHostList.count
+        case .mcp: request.staticMCPServers.count
+        case .general, .workspace, .runtime: 0
+        }
     }
 
     // MARK: Footer
@@ -822,7 +840,7 @@ private struct CreateSandboxForm: View {
     }
 }
 
-private enum CreateSheetTab: CaseIterable, Identifiable {
+private enum CreateSandboxSection: CaseIterable, Identifiable {
     case general
     case workspace
     case kits
@@ -840,6 +858,17 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
         case .runtime: "Runtime"
         case .network: "Network"
         case .mcp: "MCP"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape"
+        case .workspace: "folder"
+        case .kits: "shippingbox"
+        case .runtime: "cpu"
+        case .network: "network"
+        case .mcp: "puzzlepiece.extension"
         }
     }
 }
