@@ -128,10 +128,10 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | File system rules (selected sandbox) | `sbx policy ls NAME --type filesystem --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
-| List network rules (sidebar and Management › Network Rules) | `sbx policy ls --type network --json`, and `sbx policy ls NAME --type network --json` for each sandbox to find rules scoped to it |
+| List network rules (sidebar and Management › Network Rules) | `sbx policy ls --type network --json` |
 | Add a network rule | `sbx policy allow network [--sandbox NAME] [--protocol tcp\|udp\|tcp,udp] HOSTS` or `sbx policy deny network …` with the same arguments |
 | Edit a network rule | Removes the rule, then adds it again as above. If adding fails, the old rule is added back |
-| Remove a network rule | `sbx policy rm network [--sandbox NAME] --id RULE_ID --force`, or `--resource HOSTS` when sbx doesn't report the rule's ID (after confirming in the app) |
+| Remove a network rule | `sbx policy rm network [--sandbox NAME] --id RULE_ID --force`, or `--resource HOSTS` when sbx doesn't report the rule's ID (after confirming in the app). Rules sbx doesn't mark as editable, such as an organization's or a kit's, can't be changed |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
 | Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option dismiss` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |

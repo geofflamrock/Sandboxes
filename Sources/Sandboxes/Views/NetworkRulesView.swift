@@ -47,8 +47,8 @@ struct NetworkRulesView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Network Rules")
-        .task(id: store.sandboxes.map(\.name)) {
-            await networkRules.refresh(sandboxes: store.sandboxes.map(\.name))
+        .task {
+            await networkRules.refresh()
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {

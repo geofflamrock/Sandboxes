@@ -107,9 +107,6 @@ final class NetworkRuleStore {
     private(set) var removingIDs: Set<NetworkRule.ID> = []
     var actionError: SandboxStore.ActionError?
 
-    /// The sandboxes last asked about, so a refresh after a change finds
-    /// their rules too.
-    @ObservationIgnored private var sandboxNames: [String] = []
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
 
@@ -124,13 +121,9 @@ final class NetworkRuleStore {
             .map { SandboxRules(sandbox: $0.key, rules: $0.value) }
     }
 
-    /// Reloads the rules, including those scoped to `sandboxes` when given.
-    /// Calls made while a reload is in flight queue one more reload, so a
-    /// change just made always shows.
-    func refresh(sandboxes: [String]? = nil) async {
-        if let sandboxes {
-            sandboxNames = sandboxes
-        }
+    /// Reloads the rules. Calls made while a reload is in flight queue one
+    /// more reload, so a change just made always shows.
+    func refresh() async {
         if isRefreshing {
             refreshAgain = true
             return
@@ -145,7 +138,7 @@ final class NetworkRuleStore {
 
     private func load() async {
         do {
-            let latest = try await Self.fetch(sandboxes: sandboxNames)
+            let latest = try await Self.fetch()
             if latest != rules {
                 rules = latest
             }
@@ -156,35 +149,11 @@ final class NetworkRuleStore {
         hasLoaded = true
     }
 
-    /// Every policy's rules, then each sandbox's, since the listing without
-    /// a sandbox may leave out rules scoped to one. A rule only listed for a
-    /// sandbox that doesn't say where it applies is taken to be scoped to it.
-    nonisolated private static func fetch(sandboxes: [String]) async throws -> [NetworkRule] {
-        let all = PolicyParser.rules(in: try PolicyParser.document(
+    /// Every policy's rules, including those scoped to a sandbox.
+    nonisolated private static func fetch() async throws -> [NetworkRule] {
+        PolicyParser.rules(in: try PolicyParser.document(
             try await SbxCLI.runChecked(["policy", "ls", "--type", "network", "--json"])
         ))
-        let scoped = await withTaskGroup(of: [NetworkRule].self) { group in
-            for sandbox in sandboxes {
-                group.addTask {
-                    let output = try? await SbxCLI.runChecked(["policy", "ls", sandbox, "--type", "network", "--json"])
-                    guard let output, let json = try? PolicyParser.document(output) else { return [] }
-                    return PolicyParser.rules(in: json).map { rule in
-                        var rule = rule
-                        if rule.appliesTo == nil {
-                            rule.appliesTo = "sandbox:\(sandbox)"
-                        }
-                        return rule
-                    }
-                }
-            }
-            return await group.reduce(into: []) { $0 += $1 }
-        }
-        var seen = Set(all.map(\.id))
-        let extra = scoped.filter { $0.sandboxName != nil && seen.insert($0.id).inserted }
-        return all + extra.sorted { lhs, rhs in
-            if lhs.decision != rhs.decision { return lhs.decision == .deny }
-            return (lhs.resources.first ?? "").localizedStandardCompare(rhs.resources.first ?? "") == .orderedAscending
-        }
     }
 
     /// Adds the rule. sbx can't change a rule, so editing one removes it and

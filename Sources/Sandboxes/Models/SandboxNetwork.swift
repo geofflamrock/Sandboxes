@@ -32,11 +32,13 @@ struct NetworkRule: Identifiable, Hashable {
     /// Where the rule came from: `local`, `kit` or `org`.
     let source: String?
     /// `all` for a global rule, or `sandbox:NAME` for one scoped to a sandbox.
-    var appliesTo: String?
+    let appliesTo: String?
     let method: String?
     let path: String?
     /// Empty when `sbx` doesn't say.
     var protocols: Set<NetworkProtocol> = []
+    /// Whether `sbx` says the rule can be removed, when it says.
+    var isEditable: Bool?
 
     /// The sandbox a rule is scoped to, or nil for a global rule.
     var sandboxName: String? {
@@ -48,7 +50,7 @@ struct NetworkRule: Identifiable, Hashable {
     /// Only rules added locally can be removed; kits and organizations
     /// manage their own.
     var isLocal: Bool {
-        source.map { $0.isEmpty || $0.lowercased() == "local" } ?? true
+        isEditable ?? source.map { $0.isEmpty || $0.lowercased() == "local" } ?? true
     }
 
     /// `sbx policy allow` and `deny` (as of v0.49.1) can't add HTTP method
@@ -186,7 +188,7 @@ enum PolicyParser {
     }
 
     /// Keys a policy passes down to the rules it contains.
-    private static let inheritedKeys = ["source", "applies_to", "scope", "status", "type", "resource_type"]
+    private static let inheritedKeys = ["source", "layer", "applies_to", "scope", "status", "type", "resource_type"]
 
     /// Walks the document, passing each object and the policy keys it inherits
     /// to `take`, which returns whether the object was a rule. Rules aren't
@@ -227,20 +229,25 @@ enum PolicyParser {
         let appliesTo = scope(JSON.value(in: context, for: ["applies_to", "scope"]))
         let fallbackID = ([decision == .allow ? "allow" : "deny", appliesTo ?? "", method ?? "", path ?? ""] + resources).joined(separator: "|")
         let ruleID = JSON.string(JSON.value(in: object, for: ["rule_id", "ruleId", "id"])).flatMap { $0.isEmpty ? nil : $0 }
+        // `string` reads booleans as "Yes" or "No".
+        let editable = JSON.string(JSON.value(in: object, for: ["editable"])).map { $0 == "Yes" || $0.lowercased() == "true" }
         return NetworkRule(
             id: ruleID ?? fallbackID,
             ruleID: ruleID,
             decision: decision,
             resources: resources,
-            source: JSON.string(JSON.value(in: context, for: ["source"])),
+            // v0.49.1 calls it `layer`.
+            source: JSON.string(JSON.value(in: context, for: ["source", "layer"])),
             appliesTo: appliesTo,
             method: method,
             path: path,
-            protocols: protocols(JSON.value(in: object, for: ["protocols", "protocol", "transports", "transport"]))
+            protocols: protocols(JSON.value(in: object, for: ["protocols", "protocol", "transports", "transport", "actions"])),
+            isEditable: editable
         )
     }
 
-    /// Reads protocols such as `["tcp", "udp"]`, `"tcp,udp"` or `PROTOCOL_TCP`.
+    /// Reads protocols such as `["tcp", "udp"]`, `"tcp,udp"`, `PROTOCOL_TCP`
+    /// or v0.49.1's actions, such as `net:connect:tcp`.
     private static func protocols(_ value: Any?) -> Set<NetworkRule.NetworkProtocol> {
         let items = value as? [Any] ?? value.map { [$0] } ?? []
         var protocols = Set<NetworkRule.NetworkProtocol>()

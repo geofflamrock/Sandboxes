@@ -184,7 +184,7 @@ struct SandboxSidebar: View {
         .task(id: store.sandboxes.map(\.name)) {
             await secrets.refresh()
             await mcp.refresh()
-            await networkRules.refresh(sandboxes: store.sandboxes.map(\.name))
+            await networkRules.refresh()
         }
         .onAppear {
             environments.refresh()
