@@ -23,14 +23,50 @@ enum WorkspaceMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Folder paths as typed or chosen in the New Sandbox window.
+enum WorkspacePath {
+    /// The path with `~` expanded, or nil when nothing's entered.
+    static func normalized(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.hasPrefix("~") ? (trimmed as NSString).expandingTildeInPath : trimmed
+    }
+
+    /// Why `text` can't be mounted, if it can't. A sandbox needs a folder
+    /// that exists; an environment file may be used on another Mac, so only
+    /// the form of its paths is checked.
+    static func problem(with text: String, inEnvironmentFile: Bool) -> String? {
+        guard let path = normalized(text) else { return nil }
+        if path.contains("${{") {
+            return "Enter a folder's full path rather than “\(path)”."
+        }
+        guard path.hasPrefix("/") else {
+            return "Enter the full path of “\(path)”, starting with / or ~."
+        }
+        if !inEnvironmentFile {
+            var isDirectory: ObjCBool = false
+            if !FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) || !isDirectory.boolValue {
+                return "There's no folder at “\((path as NSString).abbreviatingWithTildeInPath)”."
+            }
+        }
+        return nil
+    }
+}
+
 /// An extra folder mounted alongside the main workspace.
 struct AdditionalWorkspace: Identifiable, Hashable {
     let id = UUID()
-    var url: URL
+    /// As typed or chosen. An empty one is left out.
+    var path = ""
     var isReadOnly = true
 
+    var normalizedPath: String? { WorkspacePath.normalized(path) }
+
     /// sbx mounts a path ending in `:ro` read-only.
-    var argument: String { isReadOnly ? url.path + ":ro" : url.path }
+    var argument: String {
+        let path = normalizedPath ?? ""
+        return isReadOnly ? path + ":ro" : path
+    }
 }
 
 struct EnvironmentVariable: Identifiable, Hashable {
@@ -56,9 +92,18 @@ enum HostResources {
 }
 
 struct CreateSandboxRequest {
+    /// What the New Sandbox window makes: a sandbox, or an environment file
+    /// with the same options. It's set by how the window was opened.
+    enum Target {
+        case sandbox
+        case environment
+    }
+
+    var target: Target = .sandbox
     var workload = ""
     var kits: [String] = []
-    var workspace: URL?
+    /// The main workspace as typed or chosen. Empty for none.
+    var workspacePath = ""
     var mode: WorkspaceMode = .direct
     var additionalWorkspaces: [AdditionalWorkspace] = []
     var name = ""
@@ -79,6 +124,12 @@ struct CreateSandboxRequest {
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// The main workspace with `~` expanded, or nil for none.
+    var workspace: String? { WorkspacePath.normalized(workspacePath) }
+    /// The extra folders that have a path. They're only mounted with a main workspace.
+    var enteredAdditionalWorkspaces: [AdditionalWorkspace] {
+        workspace == nil ? [] : additionalWorkspaces.filter { $0.normalizedPath != nil }
+    }
 
     var arguments: [String] {
         var arguments = ["create"]
@@ -110,8 +161,8 @@ struct CreateSandboxRequest {
         arguments.append(trimmedWorkload)
         // Extra folders are positional too, so they only follow a main workspace.
         if let workspace {
-            arguments.append(workspace.path)
-            arguments += additionalWorkspaces.map(\.argument)
+            arguments.append(workspace)
+            arguments += enteredAdditionalWorkspaces.map(\.argument)
         }
         return arguments
     }
@@ -137,12 +188,20 @@ struct CreateSandboxRequest {
         if trimmedWorkload.isEmpty {
             return "Choose an agent or enter an image."
         }
-        if !trimmedName.isEmpty {
-            if trimmedName == "default" {
-                return "The name “default” is reserved."
-            }
-            if trimmedName.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
-                return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
+        // The name is the environment file's folder, and the sandbox it creates.
+        if target == .environment && trimmedName.isEmpty {
+            return "Enter a name for the environment file."
+        }
+        if !trimmedName.isEmpty, let problem = Self.nameProblem(trimmedName) {
+            return problem
+        }
+        let inEnvironmentFile = target == .environment
+        if let problem = WorkspacePath.problem(with: workspacePath, inEnvironmentFile: inEnvironmentFile) {
+            return problem
+        }
+        for folder in enteredAdditionalWorkspaces {
+            if let problem = WorkspacePath.problem(with: folder.path, inEnvironmentFile: inEnvironmentFile) {
+                return problem
             }
         }
         for variable in environment where !variable.isBlank {
@@ -159,6 +218,17 @@ struct CreateSandboxRequest {
                     return problem
                 }
             }
+        }
+        return nil
+    }
+
+    /// Why sbx won't accept `name` for a sandbox, if it won't.
+    static func nameProblem(_ name: String) -> String? {
+        if name == "default" {
+            return "The name “default” is reserved."
+        }
+        if name.wholeMatch(of: #/[A-Za-z0-9][A-Za-z0-9.\-]+/#) == nil {
+            return "Names need at least two characters, start with a letter or number, and contain only letters, numbers, hyphens and periods."
         }
         return nil
     }
@@ -198,7 +268,7 @@ struct CreateSandboxRequest {
         return flags
     }
 
-    private static func quoteIfNeeded(_ value: String) -> String {
+    static func quoteIfNeeded(_ value: String) -> String {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:@=+,~"))
         if !value.isEmpty && value.unicodeScalars.allSatisfy(safe.contains) {
             return value

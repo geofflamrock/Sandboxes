@@ -68,15 +68,17 @@ enum SbxCLI {
     }
 
     /// Runs the command, passing combined stdout and stderr to `onOutput` as it
-    /// arrives. Cancelling the calling task terminates the process.
+    /// arrives. Cancelling the calling task terminates the process. Run in
+    /// `directory`, `sbx env` reads the environment file there.
     static func stream(
         _ arguments: [String],
+        in directory: URL? = nil,
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws -> Int32 {
         guard let executable = executableURL() else {
             throw SbxError.executableNotFound
         }
-        return try await stream(executable: executable, arguments: arguments, onOutput: onOutput)
+        return try await stream(executable: executable, arguments: arguments, in: directory, onOutput: onOutput)
     }
 
     /// Runs another executable the same way, such as Homebrew to install sbx.
@@ -86,11 +88,15 @@ enum SbxCLI {
         executable: URL,
         arguments: [String],
         input: String? = nil,
+        in directory: URL? = nil,
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws -> Int32 {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
+        if let directory {
+            process.currentDirectoryURL = directory
+        }
         process.environment = ShellEnvironment.environment
         let inputPipe = input.map { _ in Pipe() }
         process.standardInput = inputPipe ?? FileHandle.nullDevice

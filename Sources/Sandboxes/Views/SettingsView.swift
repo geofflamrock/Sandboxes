@@ -27,7 +27,9 @@ struct SettingsView: View {
 private struct GeneralSettingsView: View {
     @AppStorage(ApprovalNotifier.enabledKey) private var notifiesAboutApprovals = true
     @AppStorage(UpdateChecker.enabledKey) private var checksForUpdates = true
+    @AppStorage(EnvironmentStore.directoryKey) private var environmentsDirectory = ""
     @Environment(UpdateChecker.self) private var updates
+    @Environment(EnvironmentStore.self) private var environments
     @State private var loginItemStatus = SMAppService.mainApp.status
     @State private var loginItemError: String?
 
@@ -58,6 +60,30 @@ private struct GeneralSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
+            Section {
+                LabeledContent("Folder") {
+                    HStack {
+                        Text((EnvironmentStore.directory.path as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(EnvironmentStore.directory.path)
+                        Button("Choose…") {
+                            if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder new environment files are saved in.").first {
+                                environmentsDirectory = url.path
+                            }
+                        }
+                        if !environmentsDirectory.isEmpty {
+                            Button("Use Default") { environmentsDirectory = "" }
+                        }
+                    }
+                }
+            } header: {
+                Text("Environment Files")
+            } footer: {
+                Text("Environment files are saved here, one folder each. Keep it outside the folders sandboxes mount, so an agent can't change the commands an environment file runs on your Mac.")
+                    .foregroundStyle(.secondary)
+            }
+
             if UpdateChecker.isSupported {
                 Section {
                     Toggle("Check for updates", isOn: $checksForUpdates)
@@ -79,6 +105,9 @@ private struct GeneralSettingsView: View {
         }
         .onChange(of: checksForUpdates) {
             Task { await updates.check() }
+        }
+        .onChange(of: environmentsDirectory) {
+            environments.refresh()
         }
         .onAppear {
             // It can change in System Settings while Settings is closed.

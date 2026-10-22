@@ -18,7 +18,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
             Group {
-                if store.selection == .secrets {
+                if store.selection == .environments {
+                    EnvironmentsView()
+                } else if store.selection == .secrets {
                     SecretsView()
                 } else if store.selection == .mcpServers {
                     MCPServersView()
@@ -66,6 +68,7 @@ struct ContentView: View {
         .actionErrorAlert(error: $mcp.actionError)
         .actionErrorAlert(error: $secrets.actionError)
         .actionErrorAlert(error: $sbxSettings.actionError)
+        .modifier(EnvironmentPresentations())
         .background(WindowReader(kind: .main))
         .onAppear {
             AppWindows.openMain = { openWindow(id: AppWindows.mainID) }
@@ -75,6 +78,26 @@ struct ContentView: View {
         .onDisappear {
             store.windowDidClose()
         }
+    }
+}
+
+/// Creating a sandbox from an environment file, and the environments' errors,
+/// over the main window. Separate so the window's modifiers type-check in time.
+private struct EnvironmentPresentations: ViewModifier {
+    @Environment(SandboxStore.self) private var store
+    @Environment(EnvironmentStore.self) private var environments
+
+    func body(content: Content) -> some View {
+        @Bindable var environments = environments
+
+        content
+            .sheet(item: $environments.run) { run in
+                EnvironmentRunSheet(run: run) {
+                    environments.recordLink(run.sandboxName, to: run.file, includingDefaults: run.usesDefaults)
+                    Task { await store.refresh() }
+                }
+            }
+            .actionErrorAlert(error: $environments.actionError)
     }
 }
 
@@ -100,6 +123,7 @@ struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(EnvironmentStore.self) private var environments
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
     @AppStorage("sidebarSandboxesExpanded") private var sandboxesExpanded = true
@@ -128,6 +152,10 @@ struct SandboxSidebar: View {
             }
             // Search only filters sandboxes, so these stay put.
             Section("Management", isExpanded: $managementExpanded) {
+                Label("Environment Files", systemImage: "square.stack.3d.up")
+                    .badge(environments.environments.count)
+                    .tag(SidebarItem.environments)
+                    .help("Files that describe a sandbox, to create sandboxes from")
                 Label("Secrets", systemImage: "key")
                     .badge(secrets.secrets.count)
                     .tag(SidebarItem.secrets)
@@ -145,6 +173,9 @@ struct SandboxSidebar: View {
         .task(id: store.sandboxes.map(\.name)) {
             await secrets.refresh()
             await mcp.refresh()
+        }
+        .onAppear {
+            environments.refresh()
         }
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let sandbox = sandbox(for: items) {

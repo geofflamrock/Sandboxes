@@ -5,11 +5,15 @@ import UniformTypeIdentifiers
 struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
+    @Environment(EnvironmentStore.self) private var environments
     @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
+    /// The environment file being edited, which Save writes back to.
+    @State private var editingURL: URL?
+    @State private var saveError: String?
     /// Kits already inspected stay known while the window is open, so going
     /// back to edit options doesn't read them again.
     @State private var inspector = KitInspector()
@@ -26,30 +30,76 @@ struct CreateSandboxView: View {
                 CreateSandboxForm(
                     request: $request,
                     inspector: inspector,
+                    editingURL: editingURL,
+                    saveError: saveError,
                     onCancel: close,
-                    onCreate: start
+                    onCreate: start,
+                    onSave: save
                 )
             }
         }
+        .navigationTitle(title)
         .frame(minWidth: 560, idealWidth: 640, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
         .background(WindowReader(kind: .create))
-        .onAppear {
-            if request.workload.isEmpty {
-                request.workload = store.createWorkload ?? recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
+        .onAppear(perform: applyPreset)
+        // Asked again while the window is open, such as from an agent on the
+        // home page: switch to what was asked for unless a sandbox is being created.
+        .onChange(of: store.createRequests) {
+            if run == nil {
+                applyPreset()
             }
         }
-        // Asked again while the window is open, such as from an agent on the
-        // home page: switch to that agent unless a sandbox is being created.
-        .onChange(of: store.createRequests) {
-            if run == nil, let workload = store.createWorkload {
-                request.workload = workload
-            }
+        .onChange(of: request.name) {
+            saveError = nil
         }
         // Start afresh the next time the window opens.
         .onDisappear {
             request = CreateSandboxRequest()
             run = nil
+            editingURL = nil
+            saveError = nil
+        }
+    }
+
+    private var title: String {
+        if let editingURL {
+            return "Edit “\(EnvironmentFile.fallbackName(for: editingURL))”"
+        }
+        return request.target == .environment ? "New Environment File" : "New Sandbox"
+    }
+
+    /// Starts with what the window was opened for: an environment file to
+    /// edit, or a new sandbox or environment file with the workload asked for.
+    private func applyPreset() {
+        saveError = nil
+        if let edit = store.environmentEdit {
+            request = edit.request
+            editingURL = edit.url
+            return
+        }
+        if editingURL != nil {
+            request = CreateSandboxRequest()
+            editingURL = nil
+        }
+        request.target = store.createTarget
+        if let workload = store.createWorkload {
+            request.workload = workload
+        } else if request.workload.isEmpty {
+            request.workload = recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
+        }
+    }
+
+    /// Writes the environment file, then shows it in Management › Environment Files.
+    private func save() {
+        do {
+            try environments.save(request, to: editingURL)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            store.selection = .environments
+            close()
+            AppWindows.showMain()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 
@@ -73,20 +123,27 @@ struct CreateSandboxView: View {
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
     let inspector: KitInspector
+    /// The environment file being edited, which can't turn into a sandbox.
+    let editingURL: URL?
+    let saveError: String?
     let onCancel: () -> Void
     let onCreate: () -> Void
+    let onSave: () -> Void
 
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
     @State private var tab = CreateSheetTab.general
+    @AppStorage("environmentFilePreviewExpanded") private var isFilePreviewExpanded = false
+
+    private var isEditing: Bool { editingURL != nil }
 
     // In a window, the tab bar only style puts the tabs in the title bar
     // rather than drawing a bordered box around the content.
     var body: some View {
         TabView(selection: $tab) {
-            ForEach(CreateSheetTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 Tab(value: tab) {
                     Form {
                         switch tab {
@@ -126,6 +183,11 @@ private struct CreateSandboxForm: View {
             }
         }
         .tabViewStyle(.tabBarOnly)
+        .onChange(of: request.target) {
+            if !visibleTabs.contains(tab) {
+                tab = .general
+            }
+        }
         .task {
             await mcp.refresh()
         }
@@ -158,33 +220,101 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    /// The tabs for what's being made. An environment file doesn't pick MCP
+    /// servers the way `sbx create` does: it registers servers itself.
+    private var visibleTabs: [CreateSheetTab] {
+        request.target == .environment ? CreateSheetTab.allCases.filter { $0 != .mcp } : CreateSheetTab.allCases
+    }
+
     // MARK: Footer
 
+    @ViewBuilder
     private var commandSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Command")
-                .font(.headline)
-            Text(commandPreview)
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-                .background(.background.secondary, in: .rect(cornerRadius: 6))
+        switch request.target {
+        case .sandbox:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Command")
+                    .font(.headline)
+                Text(previewRequest.commandLine)
+                    .font(.callout.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(.background.secondary, in: .rect(cornerRadius: 6))
+            }
+        case .environment:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    // Collapsed, the window shows more of the form; the file is only a preview.
+                    Button {
+                        withAnimation(.snappy) { isFilePreviewExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isFilePreviewExpanded ? 90 : 0))
+                            Text("Environment File")
+                                .font(.headline)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isFilePreviewExpanded ? "Hide the file" : "Show the file")
+                    Spacer()
+                    if let filePath {
+                        Text(filePath)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .textSelection(.enabled)
+                            .help(filePath)
+                    }
+                }
+                if isFilePreviewExpanded {
+                    ScrollView {
+                        Text(previewRequest.environmentFileText)
+                            .font(.callout.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                    .frame(height: 140)
+                    .background(.background.secondary, in: .rect(cornerRadius: 6))
+                }
+            }
         }
+    }
+
+    /// The file being edited, or where Save puts a new environment once it has a name.
+    private var filePath: String? {
+        let url: URL
+        if let editingURL {
+            url = editingURL
+        } else if !request.trimmedName.isEmpty {
+            url = EnvironmentStore.directory
+                .appendingPathComponent(request.trimmedName, isDirectory: true)
+                .appendingPathComponent(EnvironmentStore.fileName)
+        } else {
+            return nil
+        }
+        return (url.path as NSString).abbreviatingWithTildeInPath
     }
 
     private var actionBar: some View {
         HStack {
-            if let message = request.validationMessage, !request.workload.isEmpty || !request.name.isEmpty {
+            if let message = saveError ?? request.validationMessage, saveError != nil || !request.workload.isEmpty || !request.name.isEmpty {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .textSelection(.enabled)
             }
             Spacer()
             Button("Cancel", role: .cancel, action: onCancel)
                 .keyboardShortcut(.cancelAction)
-            Button("Create", action: create)
+            Button(request.target == .environment ? "Save" : "Create", action: create)
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.glassProminent)
                 .disabled(request.validationMessage != nil)
@@ -255,10 +385,18 @@ private struct CreateSandboxForm: View {
 
     private var nameSection: some View {
         Section {
-            TextField("Name", text: $request.name, prompt: Text("Automatic"))
+            TextField("Name", text: $request.name, prompt: Text(request.target == .environment ? "Required" : "Automatic"))
+                .disabled(isEditing)
         } footer: {
-            Text("Leave empty to let sbx choose a name.")
+            Text(isEditing ? "Rename the environment file from Management › Environment Files." : nameFooter)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var nameFooter: String {
+        switch request.target {
+        case .sandbox: "Leave empty to let sbx choose a name."
+        case .environment: "Names the environment file, and the sandboxes created from it unless they're given another name."
         }
     }
 
@@ -267,21 +405,12 @@ private struct CreateSandboxForm: View {
     private var workspaceSection: some View {
         Section {
             LabeledContent("Folder") {
-                HStack {
-                    if let workspace = request.workspace {
-                        Label((workspace.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(workspace.path)
-                        RemoveButton(help: "Don't mount a workspace") {
-                            request.workspace = nil
-                            request.additionalWorkspaces = []
-                        }
-                    } else {
-                        Text("None")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Choose…", action: chooseWorkspace)
+                WorkspacePathField(
+                    path: $request.workspacePath,
+                    prompt: "None",
+                    panelMessage: "Choose the folder the agent works in."
+                ) { url in
+                    request.additionalWorkspaces.removeAll { $0.normalizedPath == url.path }
                 }
             }
             Picker("Mode", selection: $request.mode) {
@@ -308,11 +437,11 @@ private struct CreateSandboxForm: View {
         Section {
             ForEach($request.additionalWorkspaces) { $folder in
                 HStack {
-                    Label((folder.url.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder.badge.plus")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(folder.url.path)
-                    Spacer()
+                    WorkspacePathField(
+                        path: $folder.path,
+                        prompt: "~/src/docs",
+                        panelMessage: "Choose a folder to mount alongside the workspace."
+                    )
                     Toggle("Read-only", isOn: $folder.isReadOnly)
                         .toggleStyle(.checkbox)
                         .help("Stop the agent changing anything in this folder")
@@ -321,33 +450,17 @@ private struct CreateSandboxForm: View {
                     }
                 }
             }
-            Button("Add Folder…", systemImage: "plus", action: addAdditionalWorkspaces)
-                .buttonStyle(.borderless)
+            // A new row is empty: type its path or choose the folder.
+            Button("Add", systemImage: "plus") {
+                request.additionalWorkspaces.append(AdditionalWorkspace())
+            }
+            .buttonStyle(.borderless)
+            .help("Add a folder to mount")
         } header: {
             Text("Additional Folders")
         } footer: {
             Text("These folders are mounted at the same paths as on your Mac.")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    private func chooseWorkspace() {
-        if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: "Choose the folder the agent works in.").first {
-            request.workspace = url
-            request.additionalWorkspaces.removeAll { $0.url == url }
-        }
-    }
-
-    private func addAdditionalWorkspaces() {
-        let urls = OpenPanel.choose(
-            directories: true,
-            multiple: true,
-            prompt: "Add",
-            message: "Choose folders to mount alongside the workspace, such as docs or a related repository."
-        )
-        let existing = Set(request.additionalWorkspaces.map(\.url) + [request.workspace].compactMap { $0 })
-        for url in urls where !existing.contains(url) {
-            request.additionalWorkspaces.append(AdditionalWorkspace(url: url))
         }
     }
 
@@ -566,7 +679,7 @@ private struct CreateSandboxForm: View {
                 }
                 .font(.body.monospaced())
             }
-            ForEach(request.environmentFiles, id: \.self) { file in
+            ForEach(request.target == .sandbox ? request.environmentFiles : [], id: \.self) { file in
                 HStack {
                     Label((file.path as NSString).abbreviatingWithTildeInPath, systemImage: "doc.text")
                         .lineLimit(1)
@@ -582,14 +695,19 @@ private struct CreateSandboxForm: View {
                 Button("Add Variable", systemImage: "plus") {
                     request.environment.append(EnvironmentVariable())
                 }
-                Button("Add File…", systemImage: "doc.badge.plus", action: addEnvironmentFiles)
+                // An environment file can't read variables from other files.
+                if request.target == .sandbox {
+                    Button("Add File…", systemImage: "doc.badge.plus", action: addEnvironmentFiles)
+                }
                 Spacer()
             }
             .buttonStyle(.borderless)
         } header: {
             Text("Environment")
         } footer: {
-            Text("Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files.")
+            Text(request.target == .sandbox
+                ? "Set in the sandbox and saved with it, so store credentials as secrets instead. Variables entered here win over ones from files."
+                : "Set in the sandbox and saved in the environment file, so store credentials as secrets instead.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -652,18 +770,22 @@ private struct CreateSandboxForm: View {
 
     // MARK: Command
 
-    /// The command as it will run, including a kit that's entered but not yet added.
-    private var commandPreview: String {
+    /// The request as it will run or be saved, including a kit that's
+    /// entered but not yet added.
+    private var previewRequest: CreateSandboxRequest {
         var preview = request
         if let pending = kitDraft.reference, !preview.kits.contains(pending) {
             preview.kits.append(pending)
         }
-        return preview.commandLine
+        return preview
     }
 
     private func create() {
         addDraftKit()
-        onCreate()
+        switch request.target {
+        case .sandbox: onCreate()
+        case .environment: onSave()
+        }
     }
 }
 
@@ -708,6 +830,29 @@ private struct KitDraft {
     mutating func clearFields() {
         image = ""
         git = GitKitDraft()
+    }
+}
+
+/// A folder's path, typed or chosen in an open panel.
+private struct WorkspacePathField: View {
+    @Binding var path: String
+    let prompt: String
+    let panelMessage: String
+    var onChoose: (URL) -> Void = { _ in }
+
+    var body: some View {
+        HStack {
+            TextField("Folder", text: $path, prompt: Text(prompt))
+                .labelsHidden()
+                .font(.body.monospaced())
+                .help(path)
+            Button("Choose…") {
+                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: panelMessage).first {
+                    path = url.path
+                    onChoose(url)
+                }
+            }
+        }
     }
 }
 
