@@ -519,7 +519,7 @@ private struct EnvironmentCard: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(file.map { "Create a sandbox from “\($0.displayName)” after reviewing its plan" } ?? "Open an environment file, such as sbxenv.yaml")
+        .help(file.map { "Create a sandbox from “\($0.displayName)” after reviewing its plan" } ?? "Open an existing environment file to manage and create sandboxes from")
     }
 }
 

@@ -57,7 +57,7 @@ struct EnvironmentsView: View {
                 Button("Open Environment File", systemImage: "square.and.arrow.down") {
                     EnvironmentFilePanel.open(into: environments)
                 }
-                .help("Add an environment file from anywhere on your Mac to the list")
+                .help("Open an existing environment file to manage and create sandboxes from")
             }
             ToolbarItem {
                 Button("New Environment File", systemImage: "plus") {
