@@ -246,6 +246,16 @@ extension CreateSandboxRequest {
                 YAMLEntry(key: $0.trimmedKey, value: .scalar($0.value))
             })))
         }
+        let ports = enteredPorts
+        if !ports.isEmpty {
+            entries.append(YAMLEntry(key: "ports", value: .list(ports.map { port in
+                var fields = [YAMLEntry(key: "sandbox", value: .plain(port.trimmedSandboxPort))]
+                if !port.trimmedHostPort.isEmpty {
+                    fields.append(YAMLEntry(key: "host", value: .plain(port.trimmedHostPort)))
+                }
+                return YAMLValue.map(fields)
+            })))
+        }
         var options: [YAMLEntry] = []
         if cpus > 0 {
             options.append(YAMLEntry(key: "cpus", value: .plain(String(cpus))))
@@ -349,6 +359,22 @@ extension CreateSandboxRequest {
                         continue
                     }
                     environment.append(EnvironmentVariable(key: variable.key, value: text))
+                }
+            case "ports":
+                // The window only sets the two ports, so a protocol or host
+                // address would be lost when the file is saved again.
+                guard let items = value.list else { unsupported.append("ports"); continue }
+                for item in items {
+                    guard let fields = item.map else { unsupported.append("ports"); continue }
+                    let others = fields.map(\.key).filter { !["sandbox", "host"].contains($0) }
+                    let sandboxPort = item["sandbox"]?.string ?? ""
+                    let hostPort = item["host"]?.string ?? ""
+                    guard others.isEmpty, PortMapping.number(sandboxPort) != nil,
+                          hostPort.isEmpty || PortMapping.number(hostPort) != nil else {
+                        unsupported += others.isEmpty ? ["ports"] : others.map { "ports.\($0)" }
+                        continue
+                    }
+                    self.ports.append(PortMapping(hostPort: hostPort, sandboxPort: sandboxPort))
                 }
             case "sandboxOptions":
                 for option in value.map ?? [] {

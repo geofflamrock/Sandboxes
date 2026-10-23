@@ -5,7 +5,7 @@ import SwiftUI
 enum SandboxDetailTab: String, CaseIterable, Identifiable {
     case overview
     case policies
-    case traffic
+    case network
     case secrets
 
     static let selectionKey = "sandboxDetailTab"
@@ -16,7 +16,7 @@ enum SandboxDetailTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "Overview"
         case .policies: "Policies"
-        case .traffic: "Traffic"
+        case .network: "Network"
         case .secrets: "Secrets"
         }
     }
@@ -40,8 +40,14 @@ struct SandboxDetailView: View {
     @State private var ruleEditor: NetworkRuleDraft?
     @State private var ruleRemoval: NetworkRule?
     @State private var isCheckingHost = false
+    @State private var ports: [PublishedPort]?
+    @State private var portsError: String?
+    @State private var isLoadingPorts = false
+    @State private var isPublishingPort = false
+    @State private var portRemoval: PublishedPort?
+    @State private var unpublishingPorts: Set<PublishedPort.ID> = []
 
-    // The policies are polled here rather than in the Policies and Traffic
+    // The policies are polled here rather than in the Policies and Network
     // tabs so both share one refresh and the approvals row on Overview stays
     // current.
     var body: some View {
@@ -60,7 +66,8 @@ struct SandboxDetailView: View {
                             policySection
                             rulesSection
                             filesystemRulesSection
-                        case .traffic:
+                        case .network:
+                            portsSection
                             trafficSection
                         case .secrets:
                             secretsSection
@@ -84,11 +91,44 @@ struct SandboxDetailView: View {
         .task(id: sandbox.name) {
             await secrets.refresh()
         }
+        .onChange(of: sandbox.name) {
+            ports = nil
+            portsError = nil
+        }
+        // Ports are only read while they're shown.
+        .task(id: "\(sandbox.name) \(tab == .network)") {
+            guard tab == .network else { return }
+            while !Task.isCancelled {
+                await reloadPorts()
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
         .approvalResponseDialog($approvalResponse)
         .secretEditing(editor: $secretEditor, removal: $secretRemoval)
         .networkRuleEditing(editor: $ruleEditor, removal: $ruleRemoval)
         .sheet(isPresented: $isCheckingHost) {
             NetworkCheckSheet(sandbox: sandbox.name)
+        }
+        .sheet(isPresented: $isPublishingPort) {
+            PublishPortSheet(sandbox: sandbox) {
+                await reloadPorts()
+            }
+        }
+        .confirmationDialog(
+            "Unpublish Port \(portRemoval?.sandboxPort ?? 0)?",
+            isPresented: Binding(
+                get: { portRemoval != nil },
+                set: { if !$0 { portRemoval = nil } }
+            ),
+            presenting: portRemoval
+        ) { port in
+            Button("Unpublish", role: .destructive) {
+                Task { await unpublish(port) }
+            }
+        } message: { port in
+            Text(port.isGitDaemon
+                ? "This is the port sbx publishes for the sandbox-\(sandbox.name) Git remote. Fetching the sandbox's commits will stop working."
+                : "Apps on your Mac will no longer reach port \(port.sandboxPort) in “\(sandbox.name)” at \(port.hostAddress ?? "this address").")
         }
         // Show a rule added, changed or removed here or in Management
         // straight away, rather than at the next poll.
@@ -124,6 +164,15 @@ struct SandboxDetailView: View {
                     .help("Store a secret for this sandbox")
                 }
                 // Without it, the button shares the Stop and Open Shell glass.
+                ToolbarSpacer(.fixed)
+            }
+            if tab == .network {
+                ToolbarItem {
+                    Button("Publish Port…", systemImage: "plus") {
+                        isPublishingPort = true
+                    }
+                    .help("Make a port in this sandbox reachable on your Mac")
+                }
                 ToolbarSpacer(.fixed)
             }
             if tab == .policies {
@@ -197,9 +246,6 @@ struct SandboxDetailView: View {
             }
             LabeledContent(sandbox.workspaces.count > 1 ? "Workspaces" : "Workspace") {
                 lines(sandbox.workspaces.map { ($0 as NSString).abbreviatingWithTildeInPath })
-            }
-            LabeledContent("Ports") {
-                lines(sandbox.ports)
             }
         }
     }
@@ -317,7 +363,40 @@ struct SandboxDetailView: View {
         }
     }
 
-    // MARK: - Traffic
+    // MARK: - Network
+
+    private var portsSection: some View {
+        Section {
+            if let ports {
+                if ports.isEmpty {
+                    Text("No ports are published.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(ports) { port in
+                    PublishedPortRow(
+                        port: port,
+                        sandboxName: sandbox.name,
+                        isUnpublishing: unpublishingPorts.contains(port.id)
+                    ) {
+                        portRemoval = port
+                    }
+                }
+            } else {
+                Text(portsError == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            SectionHeader(title: "Published Ports", count: ports?.count, isLoading: isLoadingPorts)
+        } footer: {
+            if let portsError {
+                Text("Couldn't read the published ports: \(portsError)")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Apps on your Mac reach servers in the sandbox at these addresses.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
 
     private var trafficSection: some View {
         Section {
@@ -446,6 +525,36 @@ struct SandboxDetailView: View {
         guard let latest = try? await SandboxNetwork.fetch(for: sandbox), latest != network else { return }
         network = latest
         networkError = nil
+    }
+
+    private func reloadPorts() async {
+        isLoadingPorts = true
+        defer { isLoadingPorts = false }
+        do {
+            let latest = try await PublishedPort.fetch(for: sandbox)
+            guard !Task.isCancelled else { return }
+            if latest != ports {
+                ports = latest
+            }
+            portsError = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            portsError = error.localizedDescription
+        }
+    }
+
+    private func unpublish(_ port: PublishedPort) async {
+        unpublishingPorts.insert(port.id)
+        defer { unpublishingPorts.remove(port.id) }
+        do {
+            try await port.unpublish(from: sandbox)
+        } catch {
+            store.actionError = SandboxStore.ActionError(
+                title: "Couldn't Unpublish Port \(port.sandboxPort) of “\(sandbox.name)”",
+                message: error.localizedDescription
+            )
+        }
+        await reloadPorts()
     }
 
     @ViewBuilder
@@ -645,6 +754,145 @@ private func ruleOrigin(source: String?, appliesTo: String?) -> String {
         }
     }
     return parts.joined(separator: " · ")
+}
+
+/// A published port, with a button to open it in a browser and one to
+/// unpublish it.
+private struct PublishedPortRow: View {
+    let port: PublishedPort
+    let sandboxName: String
+    let isUnpublishing: Bool
+    let unpublish: () -> Void
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(port.hostAddress ?? "Not published") → \(port.target)")
+                    .monospacedDigit()
+                    .textSelection(.enabled)
+                if port.isGitDaemon {
+                    Text("Used by the sandbox-\(sandboxName) Git remote")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if isUnpublishing {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                if let url = webURL {
+                    Button("Open") { openURL(url) }
+                        .help("Open \(url.absoluteString) in your browser")
+                }
+                if port.unpublishSpec != nil {
+                    Button("Unpublish…", role: .destructive, action: unpublish)
+                }
+            }
+        }
+        .contextMenu {
+            if let url = webURL {
+                Button("Open in Browser") { openURL(url) }
+            }
+            if let address = port.hostAddress {
+                Button("Copy Address") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(address, forType: .string)
+                }
+            }
+            if port.unpublishSpec != nil, !isUnpublishing {
+                Divider()
+                Button("Unpublish…", role: .destructive, action: unpublish)
+            }
+        }
+    }
+
+    /// The Git daemon isn't a web page, so it isn't offered.
+    private var webURL: URL? {
+        port.isGitDaemon ? nil : port.browserURL
+    }
+}
+
+/// Publishes a port of an existing sandbox. It stays open with the error if
+/// sbx refuses, such as when the host port is in use.
+private struct PublishPortSheet: View {
+    let sandbox: Sandbox
+    let onPublished: () async -> Void
+    @Environment(SandboxStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var port = PortMapping()
+    @State private var isPublishing = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    TextField("Sandbox Port", text: $port.sandboxPort, prompt: Text("8080"))
+                    TextField("Host Port", text: $port.hostPort, prompt: Text("Automatic"))
+                } footer: {
+                    if let error {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                    } else {
+                        Text(footer)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .monospacedDigit()
+            .disabled(isPublishing)
+
+            // Sheets separate their buttons from the content with a line.
+            Divider()
+
+            HStack {
+                if isPublishing {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Publish") {
+                    Task { await publish() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.glassProminent)
+                .disabled(isPublishing || port.problem != nil)
+                .help(port.problem ?? "")
+            }
+            .padding(20)
+        }
+        .frame(minWidth: 420, idealWidth: 460, minHeight: 260, idealHeight: 280)
+        .navigationTitle("Publish Port")
+    }
+
+    private var footer: String {
+        var text = "The sandbox port is reachable on localhost at the host port. Leave the host port empty to use a free one."
+        if sandbox.state != .running {
+            text += " Publishing starts “\(sandbox.name)”."
+        }
+        return text
+    }
+
+    private func publish() async {
+        isPublishing = true
+        error = nil
+        do {
+            try await PublishedPort.publish(port, in: sandbox)
+            // Publishing may have started the sandbox.
+            await store.refresh()
+            await onPublished()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isPublishing = false
+    }
 }
 
 private struct NetworkLogRow: View {

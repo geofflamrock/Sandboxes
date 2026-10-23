@@ -44,8 +44,6 @@ struct Sandbox: Identifiable, Hashable {
     let agent: String?
     let workspaces: [String]
     let createdAt: Date?
-    /// Published ports, formatted for display, e.g. `127.0.0.1:54321 → 8080/tcp`.
-    let ports: [String]
     /// The CPU limit recorded for the sandbox, if `sbx ls` reports one.
     let cpus: Double?
     /// The memory limit recorded for the sandbox in bytes, if `sbx ls` reports one.
@@ -116,7 +114,6 @@ enum SandboxListParser {
             agent: string(value(in: record, for: ["agent", "kit", "workload", "image", "template"])),
             workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"])),
             createdAt: date(value(in: record, for: ["created_at", "created", "creation_time", "created_time"])),
-            ports: ports(value(in: record, for: ["ports", "published_ports", "port_mappings", "publish"])),
             cpus: number(resource(in: record, for: ["cpus", "cpu", "cpu_count", "cpu_limit", "vcpus", "num_cpus"])),
             memoryBytes: memoryBytes(in: record)
         )
@@ -178,29 +175,6 @@ enum SandboxListParser {
             trimmed.removeSubrange(dot..<fractionEnd)
         }
         return ISO8601DateFormatter().date(from: trimmed)
-    }
-
-    private static func ports(_ value: Any?) -> [String] {
-        let items = value as? [Any] ?? value.map { [$0] } ?? []
-        return items.compactMap { item -> String? in
-            guard let mapping = item as? [String: Any] else {
-                return string(item)
-            }
-            guard let sandboxPort = string(Self.value(in: mapping, for: ["sandbox_port", "container_port", "private_port", "target", "port"])) else {
-                return string(mapping)
-            }
-            var target = sandboxPort
-            if let proto = string(Self.value(in: mapping, for: ["protocol", "proto", "type"])), !target.contains("/") {
-                target += "/\(proto)"
-            }
-            guard let hostPort = string(Self.value(in: mapping, for: ["host_port", "published_port", "public_port", "published"])) else {
-                return target
-            }
-            let hostIP = string(Self.value(in: mapping, for: ["host_ip", "host_address", "ip", "address"])) ?? ""
-            let host = hostIP.isEmpty ? hostPort : hostIP.contains(":") ? "[\(hostIP)]:\(hostPort)" : "\(hostIP):\(hostPort)"
-            return "\(host) → \(target)"
-        }
-        .filter { !$0.isEmpty }
     }
 
     static func number(_ value: Any?) -> Double? {

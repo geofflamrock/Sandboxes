@@ -259,7 +259,11 @@ private struct CreateSandboxForm: View {
                 environmentSection
                 skillsSection
             case .network:
-                deniedHostsSection
+                portsSection
+                // An environment file can't block hosts.
+                if request.target == .sandbox {
+                    deniedHostsSection
+                }
             case .mcp:
                 mcpSection
             }
@@ -289,11 +293,10 @@ private struct CreateSandboxForm: View {
     }
 
     /// The sections for what's being made. An environment file doesn't pick MCP
-    /// servers the way `sbx create` does: it registers servers itself. It has
-    /// no network rules either.
+    /// servers the way `sbx create` does: it registers servers itself.
     private var visibleSections: [CreateSandboxSection] {
         request.target == .environment
-            ? CreateSandboxSection.allCases.filter { $0 != .mcp && $0 != .network }
+            ? CreateSandboxSection.allCases.filter { $0 != .mcp }
             : CreateSandboxSection.allCases
     }
 
@@ -302,7 +305,7 @@ private struct CreateSandboxForm: View {
     private func badge(for section: CreateSandboxSection) -> Int {
         switch section {
         case .kits: request.kits.count
-        case .network: request.deniedHostList.count
+        case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
         case .mcp: request.staticMCPServers.count
         case .general, .workspace, .runtime: 0
         }
@@ -809,6 +812,31 @@ private struct CreateSandboxForm: View {
 
     // MARK: Network
 
+    private var portsSection: some View {
+        Section {
+            ForEach($request.ports) { $port in
+                HStack {
+                    PortFields(port: $port)
+                    RemoveButton(help: "Remove port") {
+                        request.ports.removeAll { $0.id == port.id }
+                    }
+                }
+            }
+            HStack {
+                Button("Add Port", systemImage: "plus") {
+                    request.ports.append(PortMapping())
+                }
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        } header: {
+            Text("Published Ports")
+        } footer: {
+            Text("Published on localhost, so apps on your Mac can reach servers in the sandbox. Leave the host port empty to use a free one.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // A text field's Return creates the sandbox, so hosts go in an editor,
     // one per line.
     private var deniedHostsSection: some View {
@@ -996,6 +1024,28 @@ private struct WorkspacePathField: View {
                 }
             }
         }
+    }
+}
+
+/// A port mapping on one line: the host port, which can be left to sbx, then
+/// the sandbox port it reaches.
+private struct PortFields: View {
+    @Binding var port: PortMapping
+
+    var body: some View {
+        HStack {
+            TextField("Host Port", text: $port.hostPort, prompt: Text("Automatic"))
+                .labelsHidden()
+                .frame(maxWidth: 110)
+                .help("The port on your Mac. Leave it empty to use a free one.")
+            Image(systemName: "arrow.right")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Sandbox Port", text: $port.sandboxPort, prompt: Text("Sandbox port"))
+                .labelsHidden()
+                .help("The port a server in the sandbox listens on.")
+        }
+        .monospacedDigit()
     }
 }
 
