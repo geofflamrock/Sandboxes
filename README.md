@@ -12,6 +12,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
+- Manage global and sandbox specific network rules.
 - Manage MCP servers and configure sandboxes to use them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
@@ -116,7 +117,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--deny-network HOST]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
 | Review an environment file's plan | `sbx env plan [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE]`, with the name entered (the file's `name:` to start with), and `--clone` when you choose Clone for a workspace that doesn't set `workspace.clone`. With **Include My Defaults**, it runs in the file's folder without FILE, so sbx adds `~/.sbxenv.yaml`. That's offered when the defaults file exists and the file is called `sbxenv.yaml`, and not for a file in the environment files folder whose defaults would mount the project directory, which would be the file's own folder |
 | Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
@@ -127,6 +128,11 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | File system rules (selected sandbox) | `sbx policy ls NAME --type filesystem --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
+| List network rules (sidebar and Management › Network Rules) | `sbx policy ls --type network --json` |
+| Add a network rule | `sbx policy allow network [--sandbox NAME] [--protocol tcp\|udp\|tcp,udp] HOSTS` or `sbx policy deny network …` with the same arguments |
+| Edit a network rule | Removes the rule, then adds it again as above. If adding fails, the old rule is added back |
+| Remove a network rule | `sbx policy rm network [--sandbox NAME] --id RULE_ID --force`, or `--resource HOSTS` when sbx doesn't report the rule's ID (after confirming in the app). Rules sbx doesn't mark as editable, such as an organization's or a kit's, can't be changed |
+| Check a host (Management › Network Rules and a sandbox's Policies tab) | `sbx policy check network [--sandbox NAME] [--protocol tcp\|udp] --json TARGET`, without `--sandbox` to check the global policy for all sandboxes |
 | Pending approvals | `sbx policy approval ls --json` (or the table output if `--json` isn't supported) |
 | Approve a request | `sbx policy approval respond ID --option allow` for this sandbox, or `sbx policy allow network HOST` (with `--method` and `--path` for an HTTP request) followed by `sbx policy approval respond ID --option dismiss` for the request and other sandboxes' requests to the same host when approving for all sandboxes (after confirming in the app) |
 | Deny a request | `sbx policy deny network [--sandbox NAME] HOST` (with `--method` and `--path` for an HTTP request), then `sbx policy approval respond ID --option dismiss` for the request, and for other sandboxes' requests to the same host when denying for all sandboxes (after confirming in the app) |

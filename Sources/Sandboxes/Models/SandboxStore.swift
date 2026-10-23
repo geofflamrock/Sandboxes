@@ -7,6 +7,7 @@ enum SidebarItem: Hashable {
     case environments
     case secrets
     case mcpServers
+    case networkRules
     /// The settings of sbx itself, not this app's.
     case sbxSettings
 }

@@ -36,6 +36,10 @@ struct SandboxDetailView: View {
     @Environment(MCPServerStore.self) private var mcp
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
+    @Environment(NetworkRuleStore.self) private var networkRules
+    @State private var ruleEditor: NetworkRuleDraft?
+    @State private var ruleRemoval: NetworkRule?
+    @State private var isCheckingHost = false
 
     // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
@@ -82,6 +86,15 @@ struct SandboxDetailView: View {
         }
         .approvalResponseDialog($approvalResponse)
         .secretEditing(editor: $secretEditor, removal: $secretRemoval)
+        .networkRuleEditing(editor: $ruleEditor, removal: $ruleRemoval)
+        .sheet(isPresented: $isCheckingHost) {
+            NetworkCheckSheet(sandbox: sandbox.name)
+        }
+        // Show a rule added, changed or removed here or in Management
+        // straight away, rather than at the next poll.
+        .onChange(of: networkRules.rules) {
+            Task { await reloadNetwork() }
+        }
         .navigationTitle(sandbox.name)
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -111,6 +124,19 @@ struct SandboxDetailView: View {
                     .help("Store a secret for this sandbox")
                 }
                 // Without it, the button shares the Stop and Open Shell glass.
+                ToolbarSpacer(.fixed)
+            }
+            if tab == .policies {
+                ToolbarItemGroup {
+                    Button("Check Host", systemImage: "checkmark.shield") {
+                        isCheckingHost = true
+                    }
+                    .help("Check whether this sandbox may reach a host")
+                    Button("Add Network Rule", systemImage: "plus") {
+                        ruleEditor = NetworkRuleDraft(sandbox: sandbox.name)
+                    }
+                    .help("Allow or deny network access to hosts for this sandbox")
+                }
                 ToolbarSpacer(.fixed)
             }
             ToolbarItemGroup {
@@ -228,22 +254,39 @@ struct SandboxDetailView: View {
         }
     }
 
+    /// Rules scoped to this sandbox, which can be changed here, then the
+    /// others that apply to it, which are changed in Management › Network
+    /// Rules or set by a kit or organization.
     private var rulesSection: some View {
         Section {
             if network == nil {
                 networkPlaceholder
             }
             if let network {
+                let scoped = network.rules.filter { $0.sandboxName == sandbox.name }
+                let others = network.rules.filter { $0.sandboxName != sandbox.name }
                 if network.rules.isEmpty {
                     Text("No rules apply to this sandbox.")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(network.rules) { rule in
-                    NetworkRuleRow(rule: rule)
+                ForEach(scoped) { rule in
+                    NetworkRuleRow(rule: rule, editor: $ruleEditor, removal: $ruleRemoval)
+                }
+                ForEach(others) { rule in
+                    NetworkRuleRow(rule: rule, editor: .constant(nil), removal: .constant(nil), readOnlyLabel: "Global")
                 }
             }
         } header: {
             SectionHeader(title: "Network Rules", count: network?.rules.count, isLoading: isLoadingPolicies)
+        } footer: {
+            HStack(spacing: 4) {
+                Text("Rules for this sandbox apply alongside rules for all sandboxes, and deny rules take precedence.")
+                    .foregroundStyle(.secondary)
+                Button("Manage Network Rules") {
+                    store.selection = .networkRules
+                }
+                .buttonStyle(.link)
+            }
         }
     }
 
@@ -397,6 +440,14 @@ struct SandboxDetailView: View {
         }
     }
 
+    /// Reads the network policy, rules and traffic once, such as after a
+    /// rule changes.
+    private func reloadNetwork() async {
+        guard let latest = try? await SandboxNetwork.fetch(for: sandbox), latest != network else { return }
+        network = latest
+        networkError = nil
+    }
+
     @ViewBuilder
     private func lines(_ values: [String]) -> some View {
         if values.isEmpty {
@@ -538,43 +589,6 @@ private struct SectionHeader: View {
     }
 }
 
-private struct NetworkRuleRow: View {
-    let rule: NetworkRule
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            DecisionLabel(decision: rule.decision, style: .rule)
-                .frame(width: 80, alignment: .leading)
-            Text(target)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
-            Text(origin)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .help(details)
-    }
-
-    /// The hosts, then any HTTP method and path, e.g. "api.github.com GET /repos/**".
-    private var target: String {
-        ([rule.resources.joined(separator: ", ")] + [rule.method, rule.path].compactMap { $0 }).joined(separator: " ")
-    }
-
-    private var details: String {
-        var lines = ["\(rule.decision == .allow ? "Allow" : "Deny") \(rule.resources.joined(separator: ", "))"]
-        if let method = rule.method { lines.append("Method: \(method)") }
-        if let path = rule.path { lines.append("Path: \(path)") }
-        if !origin.isEmpty { lines.append(origin) }
-        return lines.joined(separator: "\n")
-    }
-
-    private var origin: String {
-        ruleOrigin(source: rule.source, appliesTo: rule.appliesTo)
-    }
-}
-
 private struct FilesystemRuleRow: View {
     let rule: FilesystemRule
 
@@ -659,7 +673,7 @@ private struct NetworkLogRow: View {
     }
 }
 
-private struct DecisionLabel: View {
+struct DecisionLabel: View {
     enum Style {
         /// "Allow" or "Deny"
         case policy
