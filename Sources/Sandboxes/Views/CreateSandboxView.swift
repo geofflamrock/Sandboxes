@@ -134,14 +134,24 @@ private struct CreateSandboxForm: View {
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
-    @State private var section: CreateSandboxSection? = .general
+    @State private var section = CreateSandboxSection.general
+    /// Sections visited before and after the current one, for Back and Forward.
+    @State private var backSections: [CreateSandboxSection] = []
+    @State private var forwardSections: [CreateSandboxSection] = []
     @AppStorage("environmentFilePreviewExpanded") private var isFilePreviewExpanded = false
 
     private var isEditing: Bool { editingURL != nil }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $section) {
+            // Clicking below the rows sets nil, which is ignored so a section always shows.
+            List(selection: Binding {
+                Optional(section)
+            } set: { selected in
+                if let selected {
+                    show(selected)
+                }
+            }) {
                 ForEach(visibleSections) { section in
                     Label(section.title, systemImage: section.systemImage)
                         .badge(badge(for: section))
@@ -162,20 +172,27 @@ private struct CreateSandboxForm: View {
                 }
                 .padding()
             }
-        }
-        // The sidebar toggle gives the window a toolbar, which lets the sidebar run
-        // up under the window controls, as in the main window. The sections say
-        // what the window is for, so it shows no title.
-        .toolbar(removing: .title)
-        .onChange(of: request.target) {
-            if let section, !visibleSections.contains(section) {
-                self.section = .general
+            // As in System Settings, the title is the section, after Back and Forward.
+            .navigationTitle(section.title)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.left", action: goBack)
+                        .disabled(backSections.isEmpty)
+                        .keyboardShortcut("[")
+                        .help("See the section you were on before")
+                    Button("Forward", systemImage: "chevron.right", action: goForward)
+                        .disabled(forwardSections.isEmpty)
+                        .keyboardShortcut("]")
+                        .help("See the section you went back from")
+                }
             }
         }
-        // Clicking below the rows would clear the selection and leave no section showing.
-        .onChange(of: section) { previous, section in
-            if section == nil {
-                self.section = previous
+        .onChange(of: request.target) {
+            let visible = visibleSections
+            backSections.removeAll { !visible.contains($0) }
+            forwardSections.removeAll { !visible.contains($0) }
+            if !visible.contains(section) {
+                section = .general
             }
         }
         .task {
@@ -203,7 +220,7 @@ private struct CreateSandboxForm: View {
 
     private var form: some View {
         Form {
-            switch section ?? .general {
+            switch section {
             case .general:
                 nameSection
                 agentSection
@@ -238,6 +255,25 @@ private struct CreateSandboxForm: View {
         .formStyle(.grouped)
         // The form fades where it meets the command, as it did scrolling under it.
         .scrollEdgeEffectStyle(.soft, for: .bottom)
+    }
+
+    private func show(_ next: CreateSandboxSection) {
+        guard next != section else { return }
+        backSections.append(section)
+        forwardSections.removeAll()
+        section = next
+    }
+
+    private func goBack() {
+        guard let previous = backSections.popLast() else { return }
+        forwardSections.append(section)
+        section = previous
+    }
+
+    private func goForward() {
+        guard let next = forwardSections.popLast() else { return }
+        backSections.append(section)
+        section = next
     }
 
     /// The sections for what's being made. An environment file doesn't pick MCP
