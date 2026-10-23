@@ -14,6 +14,9 @@ struct CreateSandboxView: View {
     /// The environment file being edited, which Save writes back to.
     @State private var editingURL: URL?
     @State private var saveError: String?
+    /// Counts what the window has been opened or asked for, so the form starts
+    /// on General each time. The window keeps its views while it's closed.
+    @State private var presentation = 0
     /// Kits already inspected stay known while the window is open, so going
     /// back to edit options doesn't read them again.
     @State private var inspector = KitInspector()
@@ -30,6 +33,7 @@ struct CreateSandboxView: View {
                 CreateSandboxForm(
                     request: $request,
                     inspector: inspector,
+                    presentation: presentation,
                     editingURL: editingURL,
                     saveError: saveError,
                     onCancel: close,
@@ -73,6 +77,7 @@ struct CreateSandboxView: View {
     /// edit, or a new sandbox or environment file with the workload asked for.
     private func applyPreset() {
         saveError = nil
+        presentation += 1
         if let edit = store.environmentEdit {
             request = edit.request
             editingURL = edit.url
@@ -123,6 +128,7 @@ struct CreateSandboxView: View {
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
     let inspector: KitInspector
+    let presentation: Int
     /// The environment file being edited, which can't turn into a sandbox.
     let editingURL: URL?
     let saveError: String?
@@ -186,6 +192,11 @@ private struct CreateSandboxForm: View {
                         .help("See the section you went back from")
                 }
             }
+        }
+        .onChange(of: presentation) {
+            section = .general
+            backSections.removeAll()
+            forwardSections.removeAll()
         }
         .onChange(of: request.target) {
             let visible = visibleSections
