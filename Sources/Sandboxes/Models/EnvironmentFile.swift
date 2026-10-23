@@ -253,6 +253,9 @@ extension CreateSandboxRequest {
         if memoryGiB > 0 {
             options.append(YAMLEntry(key: "memory", value: .scalar("\(memoryGiB)g")))
         }
+        if let skillsMode {
+            options.append(YAMLEntry(key: "skills", value: .scalar(skillsMode.rawValue)))
+        }
         if !options.isEmpty {
             entries.append(YAMLEntry(key: "sandboxOptions", value: .map(options)))
         }
@@ -361,6 +364,12 @@ extension CreateSandboxRequest {
                             memoryGiB = gib
                         } else {
                             unsupported.append("sandboxOptions.memory")
+                        }
+                    case "skills":
+                        if let mode = option.value.string.flatMap({ SkillsMode(rawValue: $0.lowercased()) }) {
+                            skillsMode = mode
+                        } else {
+                            unsupported.append("sandboxOptions.skills")
                         }
                     default:
                         unsupported.append("sandboxOptions.\(option.key)")

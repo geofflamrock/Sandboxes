@@ -28,6 +28,8 @@ struct ContentView: View {
                     MCPServersView()
                 } else if store.selection == .networkRules {
                     NetworkRulesView()
+                } else if store.selection == .skills {
+                    SkillsView()
                 } else if store.selection == .sbxSettings {
                     SbxSettingsListView()
                 } else if let sandbox = store.selectedSandbox {
@@ -129,6 +131,7 @@ struct SandboxSidebar: View {
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
     @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(SkillStore.self) private var skills
     @Environment(EnvironmentStore.self) private var environments
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
@@ -162,10 +165,6 @@ struct SandboxSidebar: View {
                     .badge(environments.environments.count)
                     .tag(SidebarItem.environments)
                     .help("Files that describe a sandbox, to create sandboxes from")
-                Label("Secrets", systemImage: "key")
-                    .badge(secrets.secrets.count)
-                    .tag(SidebarItem.secrets)
-                    .help("API keys, tokens and registry credentials sbx gives sandboxes")
                 Label("MCP Servers", systemImage: "puzzlepiece.extension")
                     .badge(mcp.servers.count)
                     .tag(SidebarItem.mcpServers)
@@ -174,9 +173,17 @@ struct SandboxSidebar: View {
                     .badge(networkRules.rules.count)
                     .tag(SidebarItem.networkRules)
                     .help("Hosts sandboxes are allowed or denied, for every sandbox or one")
+                Label("Secrets", systemImage: "key")
+                    .badge(secrets.secrets.count)
+                    .tag(SidebarItem.secrets)
+                    .help("API keys, tokens and registry credentials sbx gives sandboxes")
                 Label("Settings", systemImage: "slider.horizontal.3")
                     .tag(SidebarItem.sbxSettings)
                     .help("Settings of Docker Sandboxes, such as proxies and kit policy, from sbx settings")
+                Label("Skills", systemImage: "text.book.closed")
+                    .badge(skills.skills.count)
+                    .tag(SidebarItem.skills)
+                    .help("Agent skills in sbx's shared store, which sandboxes give their agent")
             }
         }
         // Removing a sandbox also removes its secrets and rules, so keep
@@ -188,6 +195,9 @@ struct SandboxSidebar: View {
         }
         .onAppear {
             environments.refresh()
+        }
+        .task {
+            await skills.refresh()
         }
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let sandbox = sandbox(for: items) {

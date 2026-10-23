@@ -20,6 +20,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
                 .environment(appDelegate.networkRules)
+                .environment(appDelegate.skills)
                 .environment(appDelegate.sbxSettings)
                 .environment(appDelegate.environments)
                 .frame(minWidth: 720, minHeight: 440)
@@ -60,17 +61,25 @@ struct SandboxesApp: App {
                     store.selection = .environments
                     AppWindows.showMain()
                 }
+                Button("MCP Servers") {
+                    store.selection = .mcpServers
+                    AppWindows.showMain()
+                }
+                Button("Network Rules") {
+                    store.selection = .networkRules
+                    AppWindows.showMain()
+                }
                 Button("Secrets") {
                     store.selection = .secrets
                     AppWindows.showMain()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-                Button("MCP Servers") {
-                    store.selection = .mcpServers
+                Button("Settings") {
+                    store.selection = .sbxSettings
                     AppWindows.showMain()
                 }
-                Button("sbx Settings") {
-                    store.selection = .sbxSettings
+                Button("Skills") {
+                    store.selection = .skills
                     AppWindows.showMain()
                 }
             }
@@ -126,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let secrets: SecretStore
     let mcpServers: MCPServerStore
     let networkRules = NetworkRuleStore()
+    let skills = SkillStore()
     let sbxSettings = SbxSettingStore()
     let environments = EnvironmentStore()
     private var refreshTask: Task<Void, Never>?

@@ -14,6 +14,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Manage global and sandbox specific secrets.
 - Manage global and sandbox specific network rules.
 - Manage MCP servers and configure sandboxes to use them.
+- Manage agent skills and choose how sandboxes share them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
@@ -24,6 +25,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
 - `sbx` v0.48.0 or later to unload MCP servers from a sandbox.
+- An `sbx` with the experimental `sbx skills` commands (checked against v0.49.1) to manage skills.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
 ### Install
@@ -117,7 +119,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--deny-network HOST]... WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
 | Review an environment file's plan | `sbx env plan [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE]`, with the name entered (the file's `name:` to start with), and `--clone` when you choose Clone for a workspace that doesn't set `workspace.clone`. With **Include My Defaults**, it runs in the file's folder without FILE, so sbx adds `~/.sbxenv.yaml`. That's offered when the defaults file exists and the file is called `sbxenv.yaml`, and not for a file in the environment files folder whose defaults would mount the project directory, which would be the file's own folder |
 | Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
@@ -152,6 +154,11 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Remove an MCP server | `sbx mcp rm NAME --force`, and when you choose **Remove Server and Secrets**, `sbx secret rm mcp:NAME:… --force` for each of its secrets and the records sbx keeps with them (after confirming in the app) |
 | Load an MCP server into a running sandbox | `sbx mcp load NAME --sandbox SANDBOX` |
 | Unload an MCP server from a running sandbox | `sbx mcp unload NAME --sandbox SANDBOX` (after confirming in the app) |
+| List skills (sidebar and Management › Skills) | `sbx skills ls --json`. Each skill's description comes from the `SKILL.md` in the store folder sbx reports, and whether it was added from a repository, and from which commit, from the `sources.json` sbx keeps beside the store. **Inspect…** shows its `SKILL.md`, and **Open in Finder** opens its folder, without running sbx |
+| Add skills from a repository | `sbx skills add REPOSITORY [--skill NAME]...`, then with `--force` if sbx says a skill is already installed and you choose to replace it |
+| Import skills from your agents on this Mac | `sbx skills import --dry-run` to show what would be imported or replaced, then `sbx skills import --force` when you click **Import** |
+| Update a skill added from a repository | `sbx skills update NAME`, or `sbx skills update` for **Update All** |
+| Remove a skill | `sbx skills rm NAME --force` (after confirming in the app) |
 | List settings (Management › Settings) | `sbx settings ls --json` |
 | Read a setting in full (when you edit one, and after changing it) | `sbx settings get KEY --json` |
 | Change a setting | `sbx settings set KEY -- VALUE`, from its switch for a boolean or from **Edit…** |

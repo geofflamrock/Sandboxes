@@ -257,6 +257,7 @@ private struct CreateSandboxForm: View {
             case .runtime:
                 resourcesSection
                 environmentSection
+                skillsSection
             case .network:
                 deniedHostsSection
             case .mcp:
@@ -834,6 +835,26 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Skills
+
+    private var skillsSection: some View {
+        Section {
+            Picker("Shared Skills", selection: $request.skillsMode) {
+                Text("Default").tag(SkillsMode?.none)
+                Divider()
+                ForEach(SkillsMode.allCases) { mode in
+                    Text(mode.title).tag(SkillsMode?.some(mode))
+                }
+            }
+        } header: {
+            Text("Skills")
+        } footer: {
+            Text(request.skillsMode?.explanation
+                ?? "Uses sbx's default, which is Read Only unless the skills.defaultMode setting changes it. Add skills to the store in Management › Skills.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: MCP
 
     private var mcpSection: some View {
@@ -915,7 +936,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .network: "Network"
-        case .mcp: "MCP"
+        case .mcp: "MCP Servers"
         }
     }
 
