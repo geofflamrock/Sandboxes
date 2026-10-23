@@ -936,7 +936,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .network: "Network"
-        case .mcp: "MCP"
+        case .mcp: "MCP Servers"
         }
     }
 

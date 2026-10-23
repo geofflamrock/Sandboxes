@@ -61,21 +61,25 @@ struct SandboxesApp: App {
                     store.selection = .environments
                     AppWindows.showMain()
                 }
+                Button("MCP Servers") {
+                    store.selection = .mcpServers
+                    AppWindows.showMain()
+                }
+                Button("Network Rules") {
+                    store.selection = .networkRules
+                    AppWindows.showMain()
+                }
                 Button("Secrets") {
                     store.selection = .secrets
                     AppWindows.showMain()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-                Button("MCP Servers") {
-                    store.selection = .mcpServers
+                Button("Settings") {
+                    store.selection = .sbxSettings
                     AppWindows.showMain()
                 }
                 Button("Skills") {
                     store.selection = .skills
-                    AppWindows.showMain()
-                }
-                Button("sbx Settings") {
-                    store.selection = .sbxSettings
                     AppWindows.showMain()
                 }
             }
