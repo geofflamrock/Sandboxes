@@ -149,56 +149,24 @@ private struct CreateSandboxForm: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
-            .toolbar(removing: .sidebarToggle)
         } detail: {
-            Form {
-                switch section ?? .general {
-                case .general:
-                    nameSection
-                    agentSection
-                    if KitArgument.isInspectable(workload: request.trimmedWorkload) {
-                        kitArgumentsSection(for: request.trimmedWorkload)
-                    }
-                case .workspace:
-                    workspaceSection
-                    if request.workspace != nil {
-                        additionalWorkspacesSection
-                    }
-                case .kits:
-                    kitsSection
-                    if !availableRecentKits.isEmpty {
-                        recentKitsSection
-                    }
-                    ForEach(request.kits, id: \.self) { kit in
-                        kitArgumentsSection(for: kit) {
-                            request.kits.removeAll { $0 == kit }
-                            request.kitArgumentValues[kit] = nil
-                        }
-                    }
-                case .runtime:
-                    resourcesSection
-                    environmentSection
-                case .network:
-                    deniedHostsSection
-                case .mcp:
-                    mcpSection
-                }
-            }
-            .formStyle(.grouped)
-            // The command and the buttons reflect every section, so they stay in view whichever is open.
-            // As a bar, the form fades as it scrolls under them, as windows do.
-            .safeAreaBar(edge: .bottom, spacing: 0) {
+            // The command and the buttons reflect every section, so they stay in view
+            // whichever is open. They sit below the form rather than in a safe area bar,
+            // which drew their text upside down after switching between a sandbox and
+            // an environment file.
+            VStack(spacing: 0) {
+                form
                 VStack(alignment: .leading, spacing: 12) {
                     commandSection
                     actionBar
                 }
                 .padding()
-                // Switching between a sandbox and an environment file in place
-                // could leave the Command heading drawn upside down, so the bar
-                // is built afresh for each.
-                .id(request.target)
             }
         }
+        // The sidebar toggle gives the window a toolbar, which lets the sidebar run
+        // up under the window controls, as in the main window. The sections say
+        // what the window is for, so it shows no title.
+        .toolbar(removing: .title)
         .onChange(of: request.target) {
             if let section, !visibleSections.contains(section) {
                 self.section = .general
@@ -231,6 +199,45 @@ private struct CreateSandboxForm: View {
         }
         .onChange(of: request.argumentKits, initial: true, syncDeclaredArguments)
         .onChange(of: inspector.results, syncDeclaredArguments)
+    }
+
+    private var form: some View {
+        Form {
+            switch section ?? .general {
+            case .general:
+                nameSection
+                agentSection
+                if KitArgument.isInspectable(workload: request.trimmedWorkload) {
+                    kitArgumentsSection(for: request.trimmedWorkload)
+                }
+            case .workspace:
+                workspaceSection
+                if request.workspace != nil {
+                    additionalWorkspacesSection
+                }
+            case .kits:
+                kitsSection
+                if !availableRecentKits.isEmpty {
+                    recentKitsSection
+                }
+                ForEach(request.kits, id: \.self) { kit in
+                    kitArgumentsSection(for: kit) {
+                        request.kits.removeAll { $0 == kit }
+                        request.kitArgumentValues[kit] = nil
+                    }
+                }
+            case .runtime:
+                resourcesSection
+                environmentSection
+            case .network:
+                deniedHostsSection
+            case .mcp:
+                mcpSection
+            }
+        }
+        .formStyle(.grouped)
+        // The form fades where it meets the command, as it did scrolling under it.
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     /// The sections for what's being made. An environment file doesn't pick MCP

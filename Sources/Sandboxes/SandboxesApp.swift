@@ -87,10 +87,7 @@ struct SandboxesApp: App {
             }
         }
 
-        // A window rather than a sheet, so it gets a sidebar and window controls.
-        // Without a toolbar, a hidden title bar is what lets the sidebar run up
-        // under the controls, as in the main window. The sections say what the
-        // window is for, so it shows no title.
+        // A window rather than a sheet, so its sidebar and form get a title bar.
         Window("New Sandbox", id: AppWindows.createID) {
             CreateSandboxView()
                 .environment(store)
@@ -98,7 +95,6 @@ struct SandboxesApp: App {
                 .environment(appDelegate.mcpServers)
                 .environment(appDelegate.environments)
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 820, height: 700)
         .windowResizability(.contentMinSize)
         .defaultPosition(.center)
