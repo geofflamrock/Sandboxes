@@ -14,7 +14,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Manage global and sandbox specific secrets.
 - Manage global and sandbox specific network rules.
 - Manage MCP servers and configure sandboxes to use them.
-- Manage agent skills: add them from a Git repository, import them from your agents on this Mac, inspect their instructions and open their folder in Finder, update and remove them, and choose how each new sandbox shares them.
+- Manage agent skills and choose how sandboxes share them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
 
