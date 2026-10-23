@@ -14,6 +14,9 @@ struct CreateSandboxView: View {
     /// The environment file being edited, which Save writes back to.
     @State private var editingURL: URL?
     @State private var saveError: String?
+    /// Counts what the window has been opened or asked for, so the form starts
+    /// on General each time. The window keeps its views while it's closed.
+    @State private var presentation = 0
     /// Kits already inspected stay known while the window is open, so going
     /// back to edit options doesn't read them again.
     @State private var inspector = KitInspector()
@@ -30,6 +33,7 @@ struct CreateSandboxView: View {
                 CreateSandboxForm(
                     request: $request,
                     inspector: inspector,
+                    presentation: presentation,
                     editingURL: editingURL,
                     saveError: saveError,
                     onCancel: close,
@@ -39,7 +43,7 @@ struct CreateSandboxView: View {
             }
         }
         .navigationTitle(title)
-        .frame(minWidth: 560, idealWidth: 760, minHeight: 560, idealHeight: 700)
+        .frame(minWidth: 740, idealWidth: 820, minHeight: 560, idealHeight: 700)
         .windowDismissBehavior(run?.phase == .running ? .disabled : .automatic)
         .background(WindowReader(kind: .create))
         .onAppear(perform: applyPreset)
@@ -73,6 +77,7 @@ struct CreateSandboxView: View {
     /// edit, or a new sandbox or environment file with the workload asked for.
     private func applyPreset() {
         saveError = nil
+        presentation += 1
         if let edit = store.environmentEdit {
             request = edit.request
             editingURL = edit.url
@@ -123,6 +128,7 @@ struct CreateSandboxView: View {
 private struct CreateSandboxForm: View {
     @Binding var request: CreateSandboxRequest
     let inspector: KitInspector
+    let presentation: Int
     /// The environment file being edited, which can't turn into a sandbox.
     let editingURL: URL?
     let saveError: String?
@@ -134,60 +140,70 @@ private struct CreateSandboxForm: View {
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
     @State private var kitDraft = KitDraft()
-    @State private var tab = CreateSheetTab.general
+    @State private var section = CreateSandboxSection.general
+    /// Sections visited before and after the current one, for Back and Forward.
+    @State private var backSections: [CreateSandboxSection] = []
+    @State private var forwardSections: [CreateSandboxSection] = []
     @AppStorage("environmentFilePreviewExpanded") private var isFilePreviewExpanded = false
 
     private var isEditing: Bool { editingURL != nil }
 
-    // In a window, the tab bar only style puts the tabs in the title bar
-    // rather than drawing a bordered box around the content.
     var body: some View {
-        TabView(selection: $tab) {
-            ForEach(visibleTabs) { tab in
-                Tab(value: tab) {
-                    Form {
-                        switch tab {
-                        case .general:
-                            nameSection
-                            agentSection
-                            if KitArgument.isInspectable(workload: request.trimmedWorkload) {
-                                kitArgumentsSection(for: request.trimmedWorkload)
-                            }
-                        case .workspace:
-                            workspaceSection
-                            if request.workspace != nil {
-                                additionalWorkspacesSection
-                            }
-                        case .kits:
-                            kitsSection
-                            if !availableRecentKits.isEmpty {
-                                recentKitsSection
-                            }
-                            ForEach(request.kits, id: \.self) { kit in
-                                kitArgumentsSection(for: kit) {
-                                    request.kits.removeAll { $0 == kit }
-                                    request.kitArgumentValues[kit] = nil
-                                }
-                            }
-                        case .runtime:
-                            resourcesSection
-                            environmentSection
-                        case .network:
-                            deniedHostsSection
-                        case .mcp:
-                            mcpSection
-                        }
-                    }
-                    .formStyle(.grouped)
-                } label: {
-                    Text(tab.title)
+        NavigationSplitView {
+            // Clicking below the rows sets nil, which is ignored so a section always shows.
+            List(selection: Binding {
+                Optional(section)
+            } set: { selected in
+                if let selected {
+                    show(selected)
+                }
+            }) {
+                ForEach(visibleSections) { section in
+                    Label(section.title, systemImage: section.systemImage)
+                        .badge(badge(for: section))
+                        .tag(section)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
+        } detail: {
+            // The command and the buttons reflect every section, so they stay in view
+            // whichever is open. They sit below the form rather than in a safe area bar,
+            // which drew their text upside down after switching between a sandbox and
+            // an environment file.
+            VStack(spacing: 0) {
+                form
+                VStack(alignment: .leading, spacing: 12) {
+                    commandSection
+                    actionBar
+                }
+                .padding()
+            }
+            // As in System Settings, the title is the section, after Back and Forward.
+            .navigationTitle(section.title)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.left", action: goBack)
+                        .disabled(backSections.isEmpty)
+                        .keyboardShortcut("[")
+                        .help("See the section you were on before")
+                    Button("Forward", systemImage: "chevron.right", action: goForward)
+                        .disabled(forwardSections.isEmpty)
+                        .keyboardShortcut("]")
+                        .help("See the section you went back from")
                 }
             }
         }
-        .tabViewStyle(.tabBarOnly)
+        .onChange(of: presentation) {
+            section = .general
+            backSections.removeAll()
+            forwardSections.removeAll()
+        }
         .onChange(of: request.target) {
-            if !visibleTabs.contains(tab) {
-                tab = .general
+            let visible = visibleSections
+            backSections.removeAll { !visible.contains($0) }
+            forwardSections.removeAll { !visible.contains($0) }
+            if !visible.contains(section) {
+                section = .general
             }
         }
         .task {
@@ -211,24 +227,84 @@ private struct CreateSandboxForm: View {
         }
         .onChange(of: request.argumentKits, initial: true, syncDeclaredArguments)
         .onChange(of: inspector.results, syncDeclaredArguments)
-        // The command and the buttons reflect every tab, so they stay in view whichever is open.
-        // As a bar, the form fades as it scrolls under them, as windows do.
-        .safeAreaBar(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                commandSection
-                actionBar
-            }
-            .padding()
-        }
     }
 
-    /// The tabs for what's being made. An environment file doesn't pick MCP
+    private var form: some View {
+        Form {
+            switch section {
+            case .general:
+                nameSection
+                agentSection
+                if KitArgument.isInspectable(workload: request.trimmedWorkload) {
+                    kitArgumentsSection(for: request.trimmedWorkload)
+                }
+            case .workspace:
+                workspaceSection
+                if request.workspace != nil {
+                    additionalWorkspacesSection
+                }
+            case .kits:
+                kitsSection
+                if !availableRecentKits.isEmpty {
+                    recentKitsSection
+                }
+                ForEach(request.kits, id: \.self) { kit in
+                    kitArgumentsSection(for: kit) {
+                        request.kits.removeAll { $0 == kit }
+                        request.kitArgumentValues[kit] = nil
+                    }
+                }
+            case .runtime:
+                resourcesSection
+                environmentSection
+            case .network:
+                deniedHostsSection
+            case .mcp:
+                mcpSection
+            }
+        }
+        .formStyle(.grouped)
+        // The form fades where it meets the command, as it did scrolling under it.
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+    }
+
+    private func show(_ next: CreateSandboxSection) {
+        guard next != section else { return }
+        backSections.append(section)
+        forwardSections.removeAll()
+        section = next
+    }
+
+    private func goBack() {
+        guard let previous = backSections.popLast() else { return }
+        forwardSections.append(section)
+        section = previous
+    }
+
+    private func goForward() {
+        guard let next = forwardSections.popLast() else { return }
+        backSections.append(section)
+        section = next
+    }
+
+    /// The sections for what's being made. An environment file doesn't pick MCP
     /// servers the way `sbx create` does: it registers servers itself. It has
     /// no network rules either.
-    private var visibleTabs: [CreateSheetTab] {
+    private var visibleSections: [CreateSandboxSection] {
         request.target == .environment
-            ? CreateSheetTab.allCases.filter { $0 != .mcp && $0 != .network }
-            : CreateSheetTab.allCases
+            ? CreateSandboxSection.allCases.filter { $0 != .mcp && $0 != .network }
+            : CreateSandboxSection.allCases
+    }
+
+    /// How many things are added in a section, so what's set elsewhere shows
+    /// without opening it. A zero badge isn't shown.
+    private func badge(for section: CreateSandboxSection) -> Int {
+        switch section {
+        case .kits: request.kits.count
+        case .network: request.deniedHostList.count
+        case .mcp: request.staticMCPServers.count
+        case .general, .workspace, .runtime: 0
+        }
     }
 
     // MARK: Footer
@@ -822,7 +898,7 @@ private struct CreateSandboxForm: View {
     }
 }
 
-private enum CreateSheetTab: CaseIterable, Identifiable {
+private enum CreateSandboxSection: CaseIterable, Identifiable {
     case general
     case workspace
     case kits
@@ -840,6 +916,17 @@ private enum CreateSheetTab: CaseIterable, Identifiable {
         case .runtime: "Runtime"
         case .network: "Network"
         case .mcp: "MCP"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape"
+        case .workspace: "folder"
+        case .kits: "shippingbox"
+        case .runtime: "cpu"
+        case .network: "network"
+        case .mcp: "puzzlepiece.extension"
         }
     }
 }
