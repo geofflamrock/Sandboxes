@@ -1,80 +1,50 @@
 import SwiftUI
 
+/// The tabs of Management › Policies. The last one used is remembered.
+enum PoliciesTab: String, CaseIterable, Identifiable {
+    case network
+    case filesystem
+
+    static let selectionKey = "policiesTab"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .network: "Network"
+        case .filesystem: "File System"
+        }
+    }
+}
+
 /// Management › Policies: the network and file system rules for every
-/// sandbox, then each sandbox's own, with ways to add, edit and remove the
-/// network rules added locally.
+/// sandbox, then each sandbox's own, in a tab for each kind, with ways to
+/// add, edit and remove the network rules added locally.
 struct PoliciesView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(PolicyStore.self) private var policies
+    @AppStorage(PoliciesTab.selectionKey) private var tab = PoliciesTab.network
     @State private var editor: NetworkRuleDraft?
     @State private var removal: NetworkRule?
     @State private var isCheckingHost = false
 
     var body: some View {
-        Form {
-            Section {
-                if policies.globalNetworkRules.isEmpty {
-                    Text(policies.hasLoaded ? "No network rules for all sandboxes." : "Loading…")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(policies.globalNetworkRules) { rule in
-                    NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
-                }
-            } header: {
-                Text("All Sandboxes: Network")
-            } footer: {
-                if let error = policies.networkLoadError {
-                    Text("Couldn't list network rules: \(error)")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Deny rules take precedence over allow rules. Changes apply to running sandboxes straight away.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                if policies.globalFilesystemRules.isEmpty {
-                    Text(policies.hasLoaded ? "No file system rules for all sandboxes." : "Loading…")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(policies.globalFilesystemRules) { rule in
-                    FilesystemRuleRow(rule: rule)
-                }
-            } header: {
-                Text("All Sandboxes: File System")
-            } footer: {
-                if let error = policies.filesystemLoadError {
-                    Text("Couldn't list file system rules: \(error)")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("These decide which folders on your Mac sandboxes can mount as a workspace. They're checked when a sandbox is created, and are set by the default policy or your organization.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            ForEach(policies.sandboxRules) { group in
-                let sandbox = store.sandboxes.first { $0.name == group.sandbox }
-                if !group.networkRules.isEmpty {
-                    Section {
-                        ForEach(group.networkRules) { rule in
-                            NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+        TabView(selection: $tab) {
+            ForEach(PoliciesTab.allCases) { tab in
+                Tab(value: tab) {
+                    Form {
+                        switch tab {
+                        case .network: networkSections
+                        case .filesystem: filesystemSections
                         }
-                    } header: {
-                        SandboxRulesHeader(sandbox: sandbox, name: group.sandbox, kind: "Network")
                     }
-                }
-                if !group.filesystemRules.isEmpty {
-                    Section {
-                        ForEach(group.filesystemRules) { rule in
-                            FilesystemRuleRow(rule: rule)
-                        }
-                    } header: {
-                        SandboxRulesHeader(sandbox: sandbox, name: group.sandbox, kind: "File System")
-                    }
+                    .formStyle(.grouped)
+                } label: {
+                    Text(tab.title)
                 }
             }
         }
-        .formStyle(.grouped)
+        .tabViewStyle(.tabBarOnly)
         .navigationTitle("Policies")
         .task {
             await policies.refresh()
@@ -87,15 +57,18 @@ struct PoliciesView: View {
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")
             }
-            ToolbarItemGroup {
-                Button("Check Host", systemImage: "checkmark.shield") {
-                    isCheckingHost = true
+            // File system rules can't be changed, so their tab has no actions.
+            if tab == .network {
+                ToolbarItemGroup {
+                    Button("Check Host", systemImage: "checkmark.shield") {
+                        isCheckingHost = true
+                    }
+                    .help("Check whether sandboxes may reach a host")
+                    Button("Add Network Rule", systemImage: "plus") {
+                        editor = NetworkRuleDraft()
+                    }
+                    .help("Allow or deny network access to hosts, for every sandbox or one")
                 }
-                .help("Check whether sandboxes may reach a host")
-                Button("Add Network Rule", systemImage: "plus") {
-                    editor = NetworkRuleDraft()
-                }
-                .help("Allow or deny network access to hosts, for every sandbox or one")
             }
         }
         .networkRuleEditing(editor: $editor, removal: $removal)
@@ -103,20 +76,85 @@ struct PoliciesView: View {
             NetworkCheckSheet()
         }
     }
+
+    @ViewBuilder
+    private var networkSections: some View {
+        Section {
+            if policies.globalNetworkRules.isEmpty {
+                Text(policies.hasLoaded ? "No rules for all sandboxes." : "Loading…")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(policies.globalNetworkRules) { rule in
+                NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+            }
+        } header: {
+            Text("All Sandboxes")
+        } footer: {
+            if let error = policies.networkLoadError {
+                Text("Couldn't list network rules: \(error)")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Deny rules take precedence over allow rules. Changes apply to running sandboxes straight away.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        ForEach(policies.sandboxRules.filter { !$0.networkRules.isEmpty }) { group in
+            Section {
+                ForEach(group.networkRules) { rule in
+                    NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+                }
+            } header: {
+                SandboxRulesHeader(name: group.sandbox)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var filesystemSections: some View {
+        Section {
+            if policies.globalFilesystemRules.isEmpty {
+                Text(policies.hasLoaded ? "No rules for all sandboxes." : "Loading…")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(policies.globalFilesystemRules) { rule in
+                FilesystemRuleRow(rule: rule)
+            }
+        } header: {
+            Text("All Sandboxes")
+        } footer: {
+            if let error = policies.filesystemLoadError {
+                Text("Couldn't list file system rules: \(error)")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("These decide which folders on your Mac sandboxes can mount as a workspace. They're checked when a sandbox is created, and are set by the default policy or your organization.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        ForEach(policies.sandboxRules.filter { !$0.filesystemRules.isEmpty }) { group in
+            Section {
+                ForEach(group.filesystemRules) { rule in
+                    FilesystemRuleRow(rule: rule)
+                }
+            } header: {
+                SandboxRulesHeader(name: group.sandbox)
+            }
+        }
+    }
 }
 
-/// A sandbox's agent icon and name, and the kind of rules below it, such as
-/// “my-sandbox: Network”.
+/// A sandbox's agent icon and name, over its own rules.
 private struct SandboxRulesHeader: View {
-    let sandbox: Sandbox?
     let name: String
-    let kind: String
+    @Environment(SandboxStore.self) private var store
 
     var body: some View {
+        let sandbox = store.sandboxes.first { $0.name == name }
         HStack(spacing: 5) {
             AgentIcon(agent: sandbox?.knownAgent, size: 12)
                 .foregroundStyle(sandbox?.knownAgent?.color ?? .secondary)
-            Text("\(name): \(kind)")
+            Text(name)
         }
     }
 }

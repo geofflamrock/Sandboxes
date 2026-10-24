@@ -26,6 +26,7 @@ struct SandboxDetailView: View {
     let sandbox: Sandbox
     @Environment(SandboxStore.self) private var store
     @AppStorage(SandboxDetailTab.selectionKey) private var tab = SandboxDetailTab.overview
+    @AppStorage(PoliciesTab.selectionKey) private var policiesTab = PoliciesTab.network
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
     @State private var filesystemRules: [FilesystemRule]?
@@ -373,6 +374,7 @@ struct SandboxDetailView: View {
                 Text("Rules for this sandbox apply alongside rules for all sandboxes, and deny rules take precedence.")
                     .foregroundStyle(.secondary)
                 Button("Manage Policies") {
+                    policiesTab = .network
                     store.selection = .policies
                 }
                 .buttonStyle(.link)
@@ -401,8 +403,15 @@ struct SandboxDetailView: View {
                 Text("Couldn't read the file system policy: \(filesystemError)")
                     .foregroundStyle(.secondary)
             } else {
-                Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
+                        .foregroundStyle(.secondary)
+                    Button("View Policies") {
+                        policiesTab = .filesystem
+                        store.selection = .policies
+                    }
+                    .buttonStyle(.link)
+                }
             }
         }
     }
