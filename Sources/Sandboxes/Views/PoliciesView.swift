@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Management › Network Rules: the network rules for every sandbox and for
-/// each one, with ways to add, edit and remove those added locally.
-struct NetworkRulesView: View {
+/// Management › Policies: the network and file system rules for every
+/// sandbox, then each sandbox's own, with ways to add, edit and remove the
+/// network rules added locally.
+struct PoliciesView: View {
     @Environment(SandboxStore.self) private var store
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @State private var editor: NetworkRuleDraft?
     @State private var removal: NetworkRule?
     @State private var isCheckingHost = false
@@ -12,17 +13,17 @@ struct NetworkRulesView: View {
     var body: some View {
         Form {
             Section {
-                if networkRules.globalRules.isEmpty {
-                    Text(networkRules.hasLoaded ? "No rules for all sandboxes." : "Loading…")
+                if policies.globalNetworkRules.isEmpty {
+                    Text(policies.hasLoaded ? "No network rules for all sandboxes." : "Loading…")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(networkRules.globalRules) { rule in
+                ForEach(policies.globalNetworkRules) { rule in
                     NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
                 }
             } header: {
-                Text("All Sandboxes")
+                Text("All Sandboxes: Network")
             } footer: {
-                if let error = networkRules.loadError {
+                if let error = policies.networkLoadError {
                     Text("Couldn't list network rules: \(error)")
                         .foregroundStyle(.secondary)
                 } else {
@@ -31,25 +32,52 @@ struct NetworkRulesView: View {
                 }
             }
 
-            ForEach(networkRules.sandboxRules) { group in
+            Section {
+                if policies.globalFilesystemRules.isEmpty {
+                    Text(policies.hasLoaded ? "No file system rules for all sandboxes." : "Loading…")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(policies.globalFilesystemRules) { rule in
+                    FilesystemRuleRow(rule: rule)
+                }
+            } header: {
+                Text("All Sandboxes: File System")
+            } footer: {
+                if let error = policies.filesystemLoadError {
+                    Text("Couldn't list file system rules: \(error)")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("These decide which folders on your Mac sandboxes can mount as a workspace. They're checked when a sandbox is created, and are set by the default policy or your organization.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ForEach(policies.sandboxRules) { group in
                 let sandbox = store.sandboxes.first { $0.name == group.sandbox }
-                Section {
-                    ForEach(group.rules) { rule in
-                        NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+                if !group.networkRules.isEmpty {
+                    Section {
+                        ForEach(group.networkRules) { rule in
+                            NetworkRuleRow(rule: rule, editor: $editor, removal: $removal)
+                        }
+                    } header: {
+                        SandboxRulesHeader(sandbox: sandbox, name: group.sandbox, kind: "Network")
                     }
-                } header: {
-                    HStack(spacing: 5) {
-                        AgentIcon(agent: sandbox?.knownAgent, size: 12)
-                            .foregroundStyle(sandbox?.knownAgent?.color ?? .secondary)
-                        Text(group.sandbox)
+                }
+                if !group.filesystemRules.isEmpty {
+                    Section {
+                        ForEach(group.filesystemRules) { rule in
+                            FilesystemRuleRow(rule: rule)
+                        }
+                    } header: {
+                        SandboxRulesHeader(sandbox: sandbox, name: group.sandbox, kind: "File System")
                     }
                 }
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Network Rules")
+        .navigationTitle("Policies")
         .task {
-            await networkRules.refresh()
+            await policies.refresh()
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -77,10 +105,25 @@ struct NetworkRulesView: View {
     }
 }
 
+/// A sandbox's agent icon and name, and the kind of rules below it, such as
+/// “my-sandbox: Network”.
+private struct SandboxRulesHeader: View {
+    let sandbox: Sandbox?
+    let name: String
+    let kind: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            AgentIcon(agent: sandbox?.knownAgent, size: 12)
+                .foregroundStyle(sandbox?.knownAgent?.color ?? .secondary)
+            Text("\(name): \(kind)")
+        }
+    }
+}
+
 extension View {
     /// The sheet for adding or editing a network rule, and the confirmation
-    /// for removing one. Failures to remove show through the network rule
-    /// store's `actionError`, in the main window.
+    /// for removing one. Failures to remove show through the policy store's `actionError`, in the main window.
     func networkRuleEditing(editor: Binding<NetworkRuleDraft?>, removal: Binding<NetworkRule?>) -> some View {
         modifier(NetworkRuleEditing(editor: editor, removal: removal))
     }
@@ -90,7 +133,7 @@ private struct NetworkRuleEditing: ViewModifier {
     @Binding var editor: NetworkRuleDraft?
     @Binding var removal: NetworkRule?
     @Environment(SandboxStore.self) private var store
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
 
     func body(content: Content) -> some View {
         content
@@ -106,7 +149,7 @@ private struct NetworkRuleEditing: ViewModifier {
                 presenting: removal
             ) { rule in
                 Button("Remove", role: .destructive) {
-                    Task { await networkRules.remove(rule) }
+                    Task { await policies.remove(rule) }
                 }
             } message: { rule in
                 Text(removalMessage(for: rule))
@@ -131,7 +174,7 @@ struct NetworkRuleRow: View {
     /// Shown in place of the buttons, such as "Global" for a rule for all
     /// sandboxes listed on a sandbox's page.
     var readOnlyLabel: String?
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
 
     var body: some View {
         HStack(spacing: 10) {
@@ -158,7 +201,7 @@ struct NetworkRuleRow: View {
                     .padding(.vertical, 3)
                     .background(.quaternary, in: .capsule)
                     .help(badge.help)
-            } else if networkRules.isRemoving(rule) {
+            } else if policies.isRemoving(rule) {
                 ProgressView()
                     .controlSize(.small)
             } else {
@@ -194,7 +237,7 @@ struct NetworkRuleRow: View {
     /// where it comes from, or where it's managed.
     private var badge: (label: String, help: String)? {
         if rule.isLocal {
-            return readOnlyLabel.map { (label: $0, help: "A rule for all sandboxes. Change it in Management › Network Rules.") }
+            return readOnlyLabel.map { (label: $0, help: "A rule for all sandboxes. Change it in Management › Policies.") }
         }
         if rule.source?.lowercased() == "org" {
             return (label: "Organization", help: "Set by your organization, so it can't be changed here.")
@@ -227,7 +270,7 @@ struct NetworkRuleRow: View {
 private struct NetworkRuleEditor: View {
     @State var draft: NetworkRuleDraft
     let sandboxNames: [String]
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @Environment(\.dismiss) private var dismiss
     @State private var isSaving = false
     @State private var error: String?
@@ -333,7 +376,7 @@ private struct NetworkRuleEditor: View {
         isSaving = true
         error = nil
         do {
-            try await networkRules.save(draft)
+            try await policies.save(draft)
             dismiss()
         } catch {
             self.error = error.localizedDescription

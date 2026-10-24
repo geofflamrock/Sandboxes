@@ -88,21 +88,26 @@ struct NetworkRuleDraft: Identifiable {
     }
 }
 
-/// Network rules added with `sbx policy`, for every sandbox and for each
-/// one, in Management › Network Rules.
+/// The rules of every policy, for every sandbox and for each one, in
+/// Management › Policies: network rules, which can be added with
+/// `sbx policy`, and file system rules, which can only be listed.
 @MainActor
 @Observable
-final class NetworkRuleStore {
+final class PolicyStore {
+    /// A sandbox's own rules of either kind. One of the two may be empty.
     struct SandboxRules: Identifiable {
         let sandbox: String
-        let rules: [NetworkRule]
+        let networkRules: [NetworkRule]
+        let filesystemRules: [FilesystemRule]
 
         var id: String { sandbox }
     }
 
-    private(set) var rules: [NetworkRule] = []
+    private(set) var networkRules: [NetworkRule] = []
+    private(set) var filesystemRules: [FilesystemRule] = []
     private(set) var hasLoaded = false
-    private(set) var loadError: String?
+    private(set) var networkLoadError: String?
+    private(set) var filesystemLoadError: String?
     /// Rules with a removal in flight.
     private(set) var removingIDs: Set<NetworkRule.ID> = []
     var actionError: SandboxStore.ActionError?
@@ -110,15 +115,25 @@ final class NetworkRuleStore {
     @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private var refreshAgain = false
 
-    var globalRules: [NetworkRule] {
-        rules.filter { $0.sandboxName == nil }
+    var ruleCount: Int {
+        networkRules.count + filesystemRules.count
     }
 
-    /// Each sandbox with rules of its own, by name.
+    var globalNetworkRules: [NetworkRule] {
+        networkRules.filter { $0.sandboxName == nil }
+    }
+
+    var globalFilesystemRules: [FilesystemRule] {
+        filesystemRules.filter { $0.sandboxName == nil }
+    }
+
+    /// Each sandbox with rules of its own of either kind, by name.
     var sandboxRules: [SandboxRules] {
-        Dictionary(grouping: rules.filter { $0.sandboxName != nil }) { $0.sandboxName ?? "" }
-            .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
-            .map { SandboxRules(sandbox: $0.key, rules: $0.value) }
+        let network = Dictionary(grouping: networkRules.filter { $0.sandboxName != nil }) { $0.sandboxName ?? "" }
+        let filesystem = Dictionary(grouping: filesystemRules.filter { $0.sandboxName != nil }) { $0.sandboxName ?? "" }
+        return Set(network.keys).union(filesystem.keys)
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            .map { SandboxRules(sandbox: $0, networkRules: network[$0] ?? [], filesystemRules: filesystem[$0] ?? []) }
     }
 
     /// Reloads the rules. Calls made while a reload is in flight queue one
@@ -136,23 +151,42 @@ final class NetworkRuleStore {
         isRefreshing = false
     }
 
+    /// Each kind reports its own failure, so one that fails doesn't hide the other.
     private func load() async {
+        async let latestNetwork = Self.fetchNetworkRules()
+        async let latestFilesystem = Self.fetchFilesystemRules()
         do {
-            let latest = try await Self.fetch()
-            if latest != rules {
-                rules = latest
+            let latest = try await latestNetwork
+            if latest != networkRules {
+                networkRules = latest
             }
-            loadError = nil
+            networkLoadError = nil
         } catch {
-            loadError = error.localizedDescription
+            networkLoadError = error.localizedDescription
+        }
+        do {
+            let latest = try await latestFilesystem
+            if latest != filesystemRules {
+                filesystemRules = latest
+            }
+            filesystemLoadError = nil
+        } catch {
+            filesystemLoadError = error.localizedDescription
         }
         hasLoaded = true
     }
 
-    /// Every policy's rules, including those scoped to a sandbox.
-    nonisolated private static func fetch() async throws -> [NetworkRule] {
+    /// Every policy's network rules, including those scoped to a sandbox.
+    nonisolated private static func fetchNetworkRules() async throws -> [NetworkRule] {
         PolicyParser.rules(in: try PolicyParser.document(
             try await SbxCLI.runChecked(["policy", "ls", "--type", "network", "--json"])
+        ))
+    }
+
+    /// Every policy's file system rules, including those scoped to a sandbox.
+    nonisolated private static func fetchFilesystemRules() async throws -> [FilesystemRule] {
+        PolicyParser.filesystemRules(in: try PolicyParser.document(
+            try await SbxCLI.runChecked(["policy", "ls", "--type", "filesystem", "--json"])
         ))
     }
 

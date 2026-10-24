@@ -36,7 +36,7 @@ struct SandboxDetailView: View {
     @Environment(MCPServerStore.self) private var mcp
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @State private var ruleEditor: NetworkRuleDraft?
     @State private var ruleRemoval: NetworkRule?
     @State private var isCheckingHost = false
@@ -133,7 +133,7 @@ struct SandboxDetailView: View {
         }
         // Show a rule added, changed or removed here or in Management
         // straight away, rather than at the next poll.
-        .onChange(of: networkRules.rules) {
+        .onChange(of: policies.networkRules) {
             Task { await reloadNetwork() }
         }
         .navigationTitle(sandbox.name)
@@ -345,8 +345,8 @@ struct SandboxDetailView: View {
     }
 
     /// Rules scoped to this sandbox, which can be changed here, then the
-    /// others that apply to it, which are changed in Management › Network
-    /// Rules or set by a kit or organization.
+    /// others that apply to it, which are changed in Management › Policies
+    /// or set by a kit or organization.
     private var rulesSection: some View {
         Section {
             if network == nil {
@@ -372,8 +372,8 @@ struct SandboxDetailView: View {
             HStack(spacing: 4) {
                 Text("Rules for this sandbox apply alongside rules for all sandboxes, and deny rules take precedence.")
                     .foregroundStyle(.secondary)
-                Button("Manage Network Rules") {
-                    store.selection = .networkRules
+                Button("Manage Policies") {
+                    store.selection = .policies
                 }
                 .buttonStyle(.link)
             }
@@ -709,7 +709,7 @@ private struct SectionHeader: View {
     }
 }
 
-private struct FilesystemRuleRow: View {
+struct FilesystemRuleRow: View {
     let rule: FilesystemRule
 
     var body: some View {
