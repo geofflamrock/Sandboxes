@@ -256,6 +256,9 @@ private struct CreateSandboxForm: View {
                 }
             case .runtime:
                 resourcesSection
+                if request.target == .sandbox {
+                    disksSection
+                }
                 environmentSection
                 skillsSection
             case .network:
@@ -505,6 +508,9 @@ private struct CreateSandboxForm: View {
             }
             .pickerStyle(.segmented)
             .disabled(request.workspace == nil)
+            if request.sizedDisks.contains(.clonedWorkspace) {
+                diskSizePicker("Clone Size", for: .clonedWorkspace)
+            }
         } footer: {
             Text(workspaceFooter)
                 .foregroundStyle(.secondary)
@@ -743,6 +749,35 @@ private struct CreateSandboxForm: View {
 
     private static func formattedMemory(_ gib: Double) -> String {
         gib < 1 ? "512 MB" : "\(gib.formatted(.number.precision(.fractionLength(0...1)))) GB"
+    }
+
+    // MARK: Disks
+
+    private var disksSection: some View {
+        Section {
+            diskSizePicker("System", for: .system)
+            diskSizePicker("Docker Data", for: .docker)
+        } header: {
+            Text("Disks")
+        } footer: {
+            Text("Automatic gives the system disk 20 GB and Docker's data disk 10 GB. Disks are sized when the sandbox is created and can't be resized afterwards.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func diskSizePicker(_ title: String, for disk: SandboxDisk) -> some View {
+        let size = Binding {
+            request.diskSizesGiB[disk] ?? 0
+        } set: {
+            request.diskSizesGiB[disk] = $0 > 0 ? $0 : nil
+        }
+        return Picker(title, selection: size) {
+            Text("Automatic").tag(0)
+            Divider()
+            ForEach(disk.choices, id: \.self) { size in
+                Text("\(size) GB").tag(size)
+            }
+        }
     }
 
     // MARK: Environment
