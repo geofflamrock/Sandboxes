@@ -78,6 +78,39 @@ struct EnvironmentVariable: Identifiable, Hashable {
     var isBlank: Bool { trimmedKey.isEmpty && value.isEmpty }
 }
 
+/// A sandbox port to publish on the Mac, as entered in the New Sandbox
+/// window or the Publish Port sheet. sbx binds it to localhost over IPv4.
+struct PortMapping: Identifiable, Hashable {
+    let id = UUID()
+    /// Empty for a free port that sbx picks.
+    var hostPort = ""
+    var sandboxPort = ""
+
+    var trimmedHostPort: String { hostPort.trimmingCharacters(in: .whitespaces) }
+    var trimmedSandboxPort: String { sandboxPort.trimmingCharacters(in: .whitespaces) }
+    var isBlank: Bool { trimmedHostPort.isEmpty && trimmedSandboxPort.isEmpty }
+
+    /// What `--publish` takes: `[HOST_PORT:]SANDBOX_PORT`.
+    var spec: String {
+        trimmedHostPort.isEmpty ? trimmedSandboxPort : "\(trimmedHostPort):\(trimmedSandboxPort)"
+    }
+
+    /// Why the ports can't be published, if they can't.
+    var problem: String? {
+        if trimmedSandboxPort.isEmpty {
+            return "Enter a sandbox port for each port."
+        }
+        for text in [trimmedSandboxPort, trimmedHostPort] where !text.isEmpty && Self.number(text) == nil {
+            return "“\(text)” isn't a port. Ports are numbers from 1 to 65535."
+        }
+        return nil
+    }
+
+    static func number(_ text: String) -> Int? {
+        Int(text).flatMap { (1...65535).contains($0) ? $0 : nil }
+    }
+}
+
 /// The Mac's CPUs and memory, for the limits and defaults sbx applies.
 enum HostResources {
     static let cpuCount = ProcessInfo.processInfo.activeProcessorCount
@@ -119,6 +152,8 @@ struct CreateSandboxRequest {
     /// MCP servers to load when the sandbox starts. Choosing any makes the
     /// set fixed: the agent can't find and load other servers itself.
     var staticMCPServers: [String] = []
+    /// Sandbox ports to publish on the Mac.
+    var ports: [PortMapping] = []
     /// Hosts the sandbox is denied from the start, one per line. Commas and
     /// spaces separate them too, for a pasted list.
     var deniedHosts = ""
@@ -135,6 +170,9 @@ struct CreateSandboxRequest {
     /// The extra folders that have a path. They're only mounted with a main workspace.
     var enteredAdditionalWorkspaces: [AdditionalWorkspace] {
         workspace == nil ? [] : additionalWorkspaces.filter { $0.normalizedPath != nil }
+    }
+    var enteredPorts: [PortMapping] {
+        ports.filter { !$0.isBlank }
     }
     var deniedHostList: [String] {
         deniedHosts
@@ -171,6 +209,9 @@ struct CreateSandboxRequest {
         arguments += kitArgumentFlags
         for server in staticMCPServers {
             arguments += ["--static-mcp", server]
+        }
+        for port in enteredPorts {
+            arguments += ["--publish", port.spec]
         }
         for host in deniedHostList {
             arguments += ["--deny-network", host]
@@ -228,6 +269,15 @@ struct CreateSandboxRequest {
             if variable.trimmedKey.wholeMatch(of: #/[A-Za-z_][A-Za-z0-9_]*/#) == nil {
                 return "“\(variable.trimmedKey)” isn't a valid environment variable name."
             }
+        }
+        for port in enteredPorts {
+            if let problem = port.problem {
+                return problem
+            }
+        }
+        let hostPorts = enteredPorts.map(\.trimmedHostPort).filter { !$0.isEmpty }
+        if let repeated = hostPorts.first(where: { port in hostPorts.filter { $0 == port }.count > 1 }) {
+            return "Host port \(repeated) is used more than once."
         }
         for kit in argumentKits {
             for argument in declaredKitArguments[kit] ?? [] {

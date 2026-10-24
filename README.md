@@ -8,6 +8,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Create new sandboxes quickly and easily.
 - Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
 - Start, stop and remove sandboxes.
+- Publish a sandbox's ports on your Mac when creating it or later, open them in your browser, and unpublish them.
 - Open an interactive shell inside a sandbox in your terminal.
 - Run a sandbox's agent in your terminal, or open any sandbox in [Claude Desktop](https://claude.ai/download).
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
@@ -119,9 +120,9 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
+| Create | `sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--publish [HOST_PORT:]SANDBOX_PORT]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name |
 | Review an environment file's plan | `sbx env plan [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE]`, with the name entered (the file's `name:` to start with), and `--clone` when you choose Clone for a workspace that doesn't set `workspace.clone`. With **Include My Defaults**, it runs in the file's folder without FILE, so sbx adds `~/.sbxenv.yaml`. That's offered when the defaults file exists and the file is called `sbxenv.yaml`, and not for a file in the environment files folder whose defaults would mount the project directory, which would be the file's own folder |
-| Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app |
+| Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app. Ports entered in the New Sandbox window are saved in the file's `ports`, so sbx publishes them from there |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
@@ -130,6 +131,9 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | File system rules (selected sandbox) | `sbx policy ls NAME --type filesystem --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
+| Published ports (selected sandbox's Overview) | `sbx ports NAME --json`, every 5 seconds while the sandbox is running and Overview is shown |
+| Publish a port | `sbx ports NAME --publish [HOST_PORT:]SANDBOX_PORT`, which starts the sandbox if it's stopped |
+| Unpublish a port | `sbx ports NAME --unpublish [HOST_IP:]HOST_PORT:SANDBOX_PORT/PROTOCOL`, as sbx reported the port (after confirming in the app) |
 | List network rules (sidebar and Management › Network Rules) | `sbx policy ls --type network --json` |
 | Add a network rule | `sbx policy allow network [--sandbox NAME] [--protocol tcp\|udp\|tcp,udp] HOSTS` or `sbx policy deny network …` with the same arguments |
 | Edit a network rule | Removes the rule, then adds it again as above. If adding fails, the old rule is added back |
