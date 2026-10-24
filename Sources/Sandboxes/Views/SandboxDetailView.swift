@@ -95,9 +95,10 @@ struct SandboxDetailView: View {
             ports = nil
             portsError = nil
         }
-        // Ports are only read while they're shown.
-        .task(id: "\(sandbox.name) \(tab == .network)") {
-            guard tab == .network else { return }
+        // Ports are only read while they're shown, and sbx can only list
+        // them while the sandbox is running.
+        .task(id: "\(sandbox.name) \(tab == .network && sandbox.state == .running)") {
+            guard tab == .network, sandbox.state == .running else { return }
             while !Task.isCancelled {
                 await reloadPorts()
                 try? await Task.sleep(for: .seconds(5))
@@ -367,7 +368,10 @@ struct SandboxDetailView: View {
 
     private var portsSection: some View {
         Section {
-            if let ports {
+            if sandbox.state != .running {
+                Text("Published ports are shown while the sandbox is running.")
+                    .foregroundStyle(.secondary)
+            } else if let ports {
                 if ports.isEmpty {
                     Text("No ports are published.")
                         .foregroundStyle(.secondary)
@@ -386,9 +390,15 @@ struct SandboxDetailView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            SectionHeader(title: "Published Ports", count: ports?.count, isLoading: isLoadingPorts)
+            SectionHeader(
+                title: "Published Ports",
+                count: sandbox.state == .running ? ports?.count : nil,
+                isLoading: isLoadingPorts && sandbox.state == .running
+            )
         } footer: {
-            if let portsError {
+            if sandbox.state != .running {
+                EmptyView()
+            } else if let portsError {
                 Text("Couldn't read the published ports: \(portsError)")
                     .foregroundStyle(.secondary)
             } else {
