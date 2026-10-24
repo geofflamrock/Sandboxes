@@ -830,7 +830,7 @@ private struct CreateSandboxForm: View {
             }
             .buttonStyle(.borderless)
         } header: {
-            Text("Published Ports")
+            Text("Ports")
         } footer: {
             Text("Published on localhost, so apps on your Mac can reach servers in the sandbox. Leave the host port empty to use a free one.")
                 .foregroundStyle(.secondary)

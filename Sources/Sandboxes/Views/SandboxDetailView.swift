@@ -276,7 +276,7 @@ struct SandboxDetailView: View {
             .buttonStyle(.borderless)
         } header: {
             SectionHeader(
-                title: "Published Ports",
+                title: "Ports",
                 count: sandbox.state == .running ? ports?.count : nil,
                 isLoading: isLoadingPorts && sandbox.state == .running
             )
