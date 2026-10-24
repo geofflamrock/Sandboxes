@@ -150,6 +150,24 @@ enum SandboxDisk: CaseIterable {
     }
 }
 
+/// A disk size picked from the choices, or typed. sbx checks a typed size
+/// when it creates the sandbox, so it's passed on as it is.
+enum DiskSize: Hashable {
+    case gib(Int)
+    case custom(String)
+
+    /// What sbx is given, or nil when a custom size is empty.
+    var value: String? {
+        switch self {
+        case let .gib(gib):
+            return "\(gib)g"
+        case let .custom(text):
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+}
+
 struct CreateSandboxRequest {
     /// What the New Sandbox window makes: a sandbox, or an environment file
     /// with the same options. It's set by how the window was opened.
@@ -170,8 +188,8 @@ struct CreateSandboxRequest {
     var cpus = 0
     /// In GiB. 0 lets sbx choose.
     var memoryGiB = 0
-    /// In GiB, by disk. A disk that isn't here is left to sbx.
-    var diskSizesGiB: [SandboxDisk: Int] = [:]
+    /// A disk that isn't here is left to sbx.
+    var diskSizes: [SandboxDisk: DiskSize] = [:]
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
     /// How the agent sees sbx's shared skills store. Nil leaves it to sbx's
@@ -266,8 +284,8 @@ struct CreateSandboxRequest {
     /// in the order the command line shows them.
     var processEnvironment: [(key: String, value: String)] {
         sizedDisks.compactMap { disk in
-            guard let gib = diskSizesGiB[disk], gib > 0 else { return nil }
-            return (key: disk.environmentVariable, value: "\(gib)g")
+            guard let value = diskSizes[disk]?.value else { return nil }
+            return (key: disk.environmentVariable, value: value)
         }
     }
 

@@ -765,17 +765,47 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    /// A size picker, with a field to type the size under it when it's Custom.
+    @ViewBuilder
     private func diskSizePicker(_ title: String, for disk: SandboxDisk) -> some View {
-        let size = Binding {
-            request.diskSizesGiB[disk] ?? 0
-        } set: {
-            request.diskSizesGiB[disk] = $0 > 0 ? $0 : nil
+        let choice = Binding<DiskSizeChoice> {
+            switch request.diskSizes[disk] {
+            case nil: .automatic
+            case let .gib(gib): .gib(gib)
+            case .custom: .custom
+            }
+        } set: { choice in
+            switch choice {
+            case .automatic:
+                request.diskSizes[disk] = nil
+            case let .gib(gib):
+                request.diskSizes[disk] = .gib(gib)
+            case .custom:
+                if case .custom = request.diskSizes[disk] { return }
+                request.diskSizes[disk] = .custom("")
+            }
         }
-        return Picker(title, selection: size) {
-            Text("Automatic").tag(0)
+        Picker(title, selection: choice) {
+            Text("Automatic").tag(DiskSizeChoice.automatic)
             Divider()
             ForEach(disk.choices, id: \.self) { size in
-                Text("\(size) GB").tag(size)
+                Text("\(size) GB").tag(DiskSizeChoice.gib(size))
+            }
+            Divider()
+            Text("Custom").tag(DiskSizeChoice.custom)
+        }
+        if case let .custom(text) = request.diskSizes[disk] {
+            LabeledContent {
+                TextField("Size", text: Binding {
+                    text
+                } set: {
+                    request.diskSizes[disk] = .custom($0)
+                }, prompt: Text("100g"))
+                .labelsHidden()
+                .font(.body.monospaced())
+            } label: {
+                Text("Custom Size")
+                Text("A number and a binary unit, such as 512m or 100g. sbx checks it when it creates the sandbox.")
             }
         }
     }
@@ -1013,6 +1043,13 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         case .mcp: "puzzlepiece.extension"
         }
     }
+}
+
+/// What a disk size picker shows. A custom size is typed in a field under it.
+private enum DiskSizeChoice: Hashable {
+    case automatic
+    case gib(Int)
+    case custom
 }
 
 /// What's typed into the kit fields before it's added.
