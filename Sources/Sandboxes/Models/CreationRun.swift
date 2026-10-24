@@ -23,21 +23,24 @@ final class CreationRun {
     private(set) var withheldCredential = false
 
     @ObservationIgnored private let arguments: [String]
+    @ObservationIgnored private let environment: [String: String]
     @ObservationIgnored private var task: Task<Void, Never>?
 
     init(request: CreateSandboxRequest) {
         commandLine = request.commandLine
         credentialApprovalCommandLine = request.credentialApprovalCommandLine
         arguments = request.arguments
+        environment = Dictionary(uniqueKeysWithValues: request.processEnvironment.map { ($0.key, $0.value) })
     }
 
     func start(onSuccess: @escaping @MainActor () -> Void) {
         let arguments = arguments
+        let environment = environment
         let output = output
         output.append("$ \(commandLine)\n\n")
         task = Task {
             do {
-                let exitCode = try await SbxCLI.stream(arguments) { text in
+                let exitCode = try await SbxCLI.stream(arguments, environment: environment) { text in
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated { output.append(text) }
                     }

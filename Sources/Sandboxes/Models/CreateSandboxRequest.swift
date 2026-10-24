@@ -124,6 +124,50 @@ enum HostResources {
     static let maxMemoryGiB = max(Int(memoryGiB * 0.75), 1)
 }
 
+/// A disk sbx sizes when it creates a sandbox. `sbx create` has no flags for
+/// these yet, only environment variables it reads when it runs.
+enum SandboxDisk: CaseIterable {
+    case system
+    case docker
+    case clonedWorkspace
+
+    var environmentVariable: String {
+        switch self {
+        case .system: "DOCKER_SANDBOXES_ROOT_SIZE"
+        case .docker: "DOCKER_SANDBOXES_DOCKER_SIZE"
+        case .clonedWorkspace: "DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE"
+        }
+    }
+
+    /// Sizes to choose from, in GB, leaving out the 20 GB system and 10 GB
+    /// Docker data disks that Docker's docs say sbx gives by default.
+    var choices: [Int] {
+        switch self {
+        case .system: [30, 40, 60, 80, 120, 160, 250]
+        case .docker: [5, 20, 40, 60, 80, 120]
+        case .clonedWorkspace: [10, 20, 50, 100, 200, 500]
+        }
+    }
+}
+
+/// A disk size picked from the choices, or typed. sbx checks a typed size
+/// when it creates the sandbox, so it's passed on as it is.
+enum DiskSize: Hashable {
+    case gib(Int)
+    case custom(String)
+
+    /// What sbx is given, or nil when a custom size is empty.
+    var value: String? {
+        switch self {
+        case let .gib(gib):
+            return "\(gib)g"
+        case let .custom(text):
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+}
+
 struct CreateSandboxRequest {
     /// What the New Sandbox window makes: a sandbox, or an environment file
     /// with the same options. It's set by how the window was opened.
@@ -144,6 +188,8 @@ struct CreateSandboxRequest {
     var cpus = 0
     /// In GiB. 0 lets sbx choose.
     var memoryGiB = 0
+    /// A disk that isn't here is left to sbx.
+    var diskSizes: [SandboxDisk: DiskSize] = [:]
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
     /// How the agent sees sbx's shared skills store. Nil leaves it to sbx's
@@ -225,8 +271,28 @@ struct CreateSandboxRequest {
         return arguments
     }
 
+    /// The disks this request sizes: the cloned workspace only when there's a
+    /// workspace to clone. Environment files can't set disk sizes.
+    var sizedDisks: [SandboxDisk] {
+        guard target == .sandbox else { return [] }
+        return SandboxDisk.allCases.filter { disk in
+            disk != .clonedWorkspace || (workspace != nil && mode == .clone)
+        }
+    }
+
+    /// Variables set for the `sbx create` process only, not in the sandbox,
+    /// in the order the command line shows them.
+    var processEnvironment: [(key: String, value: String)] {
+        sizedDisks.compactMap { disk in
+            guard let value = diskSizes[disk]?.value else { return nil }
+            return (key: disk.environmentVariable, value: value)
+        }
+    }
+
+    /// The command as typed in a terminal, with the process's variables in front of it.
     var commandLine: String {
-        (["sbx"] + arguments).map(Self.quoteIfNeeded).joined(separator: " ")
+        let variables = processEnvironment.map { "\($0.key)=\(Self.quoteIfNeeded($0.value))" }
+        return (variables + (["sbx"] + arguments).map(Self.quoteIfNeeded)).joined(separator: " ")
     }
 
     /// Creates an empty sandbox with the same agent and kits, which is where
