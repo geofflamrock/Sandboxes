@@ -19,7 +19,7 @@ struct SandboxesApp: App {
                 .environment(appDelegate.sbxStatus)
                 .environment(appDelegate.secrets)
                 .environment(appDelegate.mcpServers)
-                .environment(appDelegate.networkRules)
+                .environment(appDelegate.policies)
                 .environment(appDelegate.skills)
                 .environment(appDelegate.sbxSettings)
                 .environment(appDelegate.environments)
@@ -65,8 +65,8 @@ struct SandboxesApp: App {
                     store.selection = .mcpServers
                     AppWindows.showMain()
                 }
-                Button("Network Rules") {
-                    store.selection = .networkRules
+                Button("Policies") {
+                    store.selection = .policies
                     AppWindows.showMain()
                 }
                 Button("Secrets") {
@@ -134,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sbxStatus = SbxStatus()
     let secrets: SecretStore
     let mcpServers: MCPServerStore
-    let networkRules = NetworkRuleStore()
+    let policies = PolicyStore()
     let skills = SkillStore()
     let sbxSettings = SbxSettingStore()
     let environments = EnvironmentStore()

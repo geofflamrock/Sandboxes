@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Checks whether a host is allowed with `sbx policy check`, by the global
-/// policy or for one sandbox. Opened from Management › Network Rules, where
+/// policy or for one sandbox. Opened from Management › Policies, where
 /// it starts with the global policy, and from a sandbox's page, where it
 /// starts with that sandbox.
 struct NetworkCheckSheet: View {
