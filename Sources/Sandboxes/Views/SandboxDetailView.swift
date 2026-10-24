@@ -5,7 +5,7 @@ import SwiftUI
 enum SandboxDetailTab: String, CaseIterable, Identifiable {
     case overview
     case policies
-    case network
+    case traffic
     case secrets
 
     static let selectionKey = "sandboxDetailTab"
@@ -16,7 +16,7 @@ enum SandboxDetailTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "Overview"
         case .policies: "Policies"
-        case .network: "Network"
+        case .traffic: "Traffic"
         case .secrets: "Secrets"
         }
     }
@@ -47,7 +47,7 @@ struct SandboxDetailView: View {
     @State private var portRemoval: PublishedPort?
     @State private var unpublishingPorts: Set<PublishedPort.ID> = []
 
-    // The policies are polled here rather than in the Policies and Network
+    // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
     // current.
     var body: some View {
@@ -59,6 +59,7 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
+                            portsSection
                             SandboxResourcesSection(sandbox: sandbox)
                                 .id(sandbox.name)
                         case .policies:
@@ -66,8 +67,7 @@ struct SandboxDetailView: View {
                             policySection
                             rulesSection
                             filesystemRulesSection
-                        case .network:
-                            portsSection
+                        case .traffic:
                             trafficSection
                         case .secrets:
                             secretsSection
@@ -97,8 +97,8 @@ struct SandboxDetailView: View {
         }
         // Ports are only read while they're shown, and sbx can only list
         // them while the sandbox is running.
-        .task(id: "\(sandbox.name) \(tab == .network && sandbox.state == .running)") {
-            guard tab == .network, sandbox.state == .running else { return }
+        .task(id: "\(sandbox.name) \(tab == .overview && sandbox.state == .running)") {
+            guard tab == .overview, sandbox.state == .running else { return }
             while !Task.isCancelled {
                 await reloadPorts()
                 try? await Task.sleep(for: .seconds(5))
@@ -165,15 +165,6 @@ struct SandboxDetailView: View {
                     .help("Store a secret for this sandbox")
                 }
                 // Without it, the button shares the Stop and Open Shell glass.
-                ToolbarSpacer(.fixed)
-            }
-            if tab == .network {
-                ToolbarItem {
-                    Button("Publish Port…", systemImage: "plus") {
-                        isPublishingPort = true
-                    }
-                    .help("Make a port in this sandbox reachable on your Mac")
-                }
                 ToolbarSpacer(.fixed)
             }
             if tab == .policies {
@@ -247,6 +238,58 @@ struct SandboxDetailView: View {
             }
             LabeledContent(sandbox.workspaces.count > 1 ? "Workspaces" : "Workspace") {
                 lines(sandbox.workspaces.map { ($0 as NSString).abbreviatingWithTildeInPath })
+            }
+        }
+    }
+
+    private var portsSection: some View {
+        Section {
+            if sandbox.state != .running {
+                Text("Published ports are shown while the sandbox is running.")
+                    .foregroundStyle(.secondary)
+            } else if let ports {
+                if ports.isEmpty {
+                    Text("No ports are published.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(ports) { port in
+                    PublishedPortRow(
+                        port: port,
+                        sandboxName: sandbox.name,
+                        isUnpublishing: unpublishingPorts.contains(port.id)
+                    ) {
+                        portRemoval = port
+                    }
+                }
+            } else {
+                Text(portsError == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+            // Offered while stopped too: publishing starts the sandbox.
+            HStack {
+                Button("Publish Port…", systemImage: "plus") {
+                    isPublishingPort = true
+                }
+                .help("Make a port in this sandbox reachable on your Mac")
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        } header: {
+            SectionHeader(
+                title: "Published Ports",
+                count: sandbox.state == .running ? ports?.count : nil,
+                isLoading: isLoadingPorts && sandbox.state == .running
+            )
+        } footer: {
+            if sandbox.state != .running {
+                Text("Publishing a port starts the sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if let portsError {
+                Text("Couldn't read the published ports: \(portsError)")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Apps on your Mac reach servers in the sandbox at these addresses.")
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -364,49 +407,7 @@ struct SandboxDetailView: View {
         }
     }
 
-    // MARK: - Network
-
-    private var portsSection: some View {
-        Section {
-            if sandbox.state != .running {
-                Text("Published ports are shown while the sandbox is running.")
-                    .foregroundStyle(.secondary)
-            } else if let ports {
-                if ports.isEmpty {
-                    Text("No ports are published.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(ports) { port in
-                    PublishedPortRow(
-                        port: port,
-                        sandboxName: sandbox.name,
-                        isUnpublishing: unpublishingPorts.contains(port.id)
-                    ) {
-                        portRemoval = port
-                    }
-                }
-            } else {
-                Text(portsError == nil ? "Loading…" : "Unknown")
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            SectionHeader(
-                title: "Published Ports",
-                count: sandbox.state == .running ? ports?.count : nil,
-                isLoading: isLoadingPorts && sandbox.state == .running
-            )
-        } footer: {
-            if sandbox.state != .running {
-                EmptyView()
-            } else if let portsError {
-                Text("Couldn't read the published ports: \(portsError)")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Apps on your Mac reach servers in the sandbox at these addresses.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
+    // MARK: - Traffic
 
     private var trafficSection: some View {
         Section {
@@ -638,7 +639,7 @@ private struct SandboxResourcesSection: View {
                     usageError = error.localizedDescription
                 }
                 isLoadingUsage = false
-                try? await Task.sleep(for: .seconds(4))
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }
