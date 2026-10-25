@@ -42,7 +42,8 @@ main() {
   tmp=$(mktemp -d)
   trap cleanup EXIT
 
-  echo "Downloading Sandboxes $tag…"
+  # Braced because macOS's bash 3.2 would read "…" as part of the name.
+  echo "Downloading Sandboxes ${tag}…"
   curl -fL --progress-bar -o "$tmp/Sandboxes.dmg" "$url"
   hdiutil attach -quiet -nobrowse -readonly -mountpoint "$tmp/mnt" "$tmp/Sandboxes.dmg"
   if [ ! -d "$tmp/mnt/Sandboxes.app" ]; then
