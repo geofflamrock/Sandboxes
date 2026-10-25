@@ -25,6 +25,13 @@ struct FilesystemRule: Identifiable, Hashable {
     /// `all` for a global rule, or `sandbox:NAME` for one scoped to a sandbox.
     let appliesTo: String?
 
+    /// The sandbox a rule is scoped to, or nil for a global rule.
+    var sandboxName: String? {
+        guard let appliesTo, appliesTo.lowercased().hasPrefix("sandbox:") else { return nil }
+        let name = appliesTo.dropFirst("sandbox:".count)
+        return name.isEmpty ? nil : String(name)
+    }
+
     static func fetch(for sandbox: Sandbox) async throws -> [FilesystemRule] {
         let output = try await SbxCLI.runChecked(["policy", "ls", sandbox.name, "--type", "filesystem", "--json"])
         return PolicyParser.filesystemRules(in: try PolicyParser.document(output))

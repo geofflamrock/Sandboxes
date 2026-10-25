@@ -26,6 +26,7 @@ struct SandboxDetailView: View {
     let sandbox: Sandbox
     @Environment(SandboxStore.self) private var store
     @AppStorage(SandboxDetailTab.selectionKey) private var tab = SandboxDetailTab.overview
+    @AppStorage(PoliciesTab.selectionKey) private var policiesTab = PoliciesTab.network
     @State private var network: SandboxNetwork?
     @State private var networkError: String?
     @State private var filesystemRules: [FilesystemRule]?
@@ -36,7 +37,7 @@ struct SandboxDetailView: View {
     @Environment(MCPServerStore.self) private var mcp
     @State private var secretEditor: SecretDraft?
     @State private var secretRemoval: SecretRemoval?
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @State private var ruleEditor: NetworkRuleDraft?
     @State private var ruleRemoval: NetworkRule?
     @State private var isCheckingHost = false
@@ -133,7 +134,7 @@ struct SandboxDetailView: View {
         }
         // Show a rule added, changed or removed here or in Management
         // straight away, rather than at the next poll.
-        .onChange(of: networkRules.rules) {
+        .onChange(of: policies.networkRules) {
             Task { await reloadNetwork() }
         }
         .navigationTitle(sandbox.name)
@@ -345,8 +346,8 @@ struct SandboxDetailView: View {
     }
 
     /// Rules scoped to this sandbox, which can be changed here, then the
-    /// others that apply to it, which are changed in Management › Network
-    /// Rules or set by a kit or organization.
+    /// others that apply to it, which are changed in Management › Policies
+    /// or set by a kit or organization.
     private var rulesSection: some View {
         Section {
             if network == nil {
@@ -372,8 +373,9 @@ struct SandboxDetailView: View {
             HStack(spacing: 4) {
                 Text("Rules for this sandbox apply alongside rules for all sandboxes, and deny rules take precedence.")
                     .foregroundStyle(.secondary)
-                Button("Manage Network Rules") {
-                    store.selection = .networkRules
+                Button("Manage Policies") {
+                    policiesTab = .network
+                    store.selection = .policies
                 }
                 .buttonStyle(.link)
             }
@@ -401,8 +403,15 @@ struct SandboxDetailView: View {
                 Text("Couldn't read the file system policy: \(filesystemError)")
                     .foregroundStyle(.secondary)
             } else {
-                Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("These decide which folders on your Mac the sandbox can mount as a workspace. They're checked when the sandbox is created, and are set by the default policy or your organization.")
+                        .foregroundStyle(.secondary)
+                    Button("View Policies") {
+                        policiesTab = .filesystem
+                        store.selection = .policies
+                    }
+                    .buttonStyle(.link)
+                }
             }
         }
     }
@@ -709,7 +718,7 @@ private struct SectionHeader: View {
     }
 }
 
-private struct FilesystemRuleRow: View {
+struct FilesystemRuleRow: View {
     let rule: FilesystemRule
 
     var body: some View {

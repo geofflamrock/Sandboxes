@@ -4,7 +4,7 @@ struct ContentView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @Environment(SbxSettingStore.self) private var sbxSettings
     @Environment(\.openWindow) private var openWindow
 
@@ -12,7 +12,7 @@ struct ContentView: View {
         @Bindable var store = store
         @Bindable var mcp = mcp
         @Bindable var secrets = secrets
-        @Bindable var networkRules = networkRules
+        @Bindable var policies = policies
         @Bindable var sbxSettings = sbxSettings
 
         NavigationSplitView {
@@ -26,8 +26,8 @@ struct ContentView: View {
                     SecretsView()
                 } else if store.selection == .mcpServers {
                     MCPServersView()
-                } else if store.selection == .networkRules {
-                    NetworkRulesView()
+                } else if store.selection == .policies {
+                    PoliciesView()
                 } else if store.selection == .skills {
                     SkillsView()
                 } else if store.selection == .sbxSettings {
@@ -73,7 +73,7 @@ struct ContentView: View {
         .actionErrorAlert(error: $store.actionError)
         .actionErrorAlert(error: $mcp.actionError)
         .actionErrorAlert(error: $secrets.actionError)
-        .actionErrorAlert(error: $networkRules.actionError)
+        .actionErrorAlert(error: $policies.actionError)
         .actionErrorAlert(error: $sbxSettings.actionError)
         .modifier(EnvironmentPresentations())
         .background(WindowReader(kind: .main))
@@ -130,7 +130,7 @@ struct SandboxSidebar: View {
     @Environment(SandboxStore.self) private var store
     @Environment(SecretStore.self) private var secrets
     @Environment(MCPServerStore.self) private var mcp
-    @Environment(NetworkRuleStore.self) private var networkRules
+    @Environment(PolicyStore.self) private var policies
     @Environment(SkillStore.self) private var skills
     @Environment(EnvironmentStore.self) private var environments
     @Environment(UpdateChecker.self) private var updates
@@ -169,10 +169,10 @@ struct SandboxSidebar: View {
                     .badge(mcp.servers.count)
                     .tag(SidebarItem.mcpServers)
                     .help("MCP servers registered with sbx, which sandboxes reach through its MCP gateway")
-                Label("Network Rules", systemImage: "network")
-                    .badge(networkRules.rules.count)
-                    .tag(SidebarItem.networkRules)
-                    .help("Hosts sandboxes are allowed or denied, for every sandbox or one")
+                Label("Policies", systemImage: "shield.lefthalf.filled")
+                    .badge(policies.ruleCount)
+                    .tag(SidebarItem.policies)
+                    .help("Network and file system rules, for every sandbox or one")
                 Label("Secrets", systemImage: "key")
                     .badge(secrets.secrets.count)
                     .tag(SidebarItem.secrets)
@@ -191,7 +191,7 @@ struct SandboxSidebar: View {
         .task(id: store.sandboxes.map(\.name)) {
             await secrets.refresh()
             await mcp.refresh()
-            await networkRules.refresh()
+            await policies.refresh()
         }
         .onAppear {
             environments.refresh()
