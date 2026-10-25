@@ -197,15 +197,17 @@ section.plain {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 14px 18px 20px;
+  padding: 14px 12px 14px 18px;
 }
 
+/* Wraps rather than scrolls on narrow windows, breaking inside the URL only
+   when it doesn't fit on a line of its own. */
 .terminal code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
-  font-size: 17px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
   padding: 0;
   background: none;
   color: #e6e7ec;
@@ -230,8 +232,8 @@ section.plain {
 .copy.icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border-radius: 8px;
   border-color: #4a4d59;
@@ -244,8 +246,8 @@ section.plain {
 }
 
 .copy.icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
