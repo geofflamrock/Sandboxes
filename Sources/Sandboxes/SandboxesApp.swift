@@ -34,6 +34,11 @@ struct SandboxesApp: App {
                         .version: AppInfo.aboutPanelBuild,
                     ])
                 }
+                if updates.isRunning {
+                    Button("Check for Updates…") {
+                        updates.checkForUpdates()
+                    }
+                }
             }
             CommandGroup(replacing: .newItem) {
                 Button("New Sandbox…") {
@@ -140,7 +145,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let sbxSettings = SbxSettingStore()
     let environments = EnvironmentStore()
     private var refreshTask: Task<Void, Never>?
-    private var updateTask: Task<Void, Never>?
     private var activity: NSObjectProtocol?
 
     override init() {
@@ -170,9 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTask = Task { [store] in
             await store.refreshPeriodically()
         }
-        updateTask = Task { [updates] in
-            await updates.checkPeriodically()
-        }
+        updates.start()
     }
 
     /// Keeps running in the menu bar, so notifications still arrive.

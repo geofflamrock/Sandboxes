@@ -224,14 +224,18 @@ struct SandboxSidebar: View {
                         .help(error)
                 }
                 if let update = updates.availableUpdate {
-                    Link(destination: update.url) {
+                    Button {
+                        updates.checkForUpdates()
+                    } label: {
                         Label("Version \(update.version) available", systemImage: "arrow.down.circle.fill")
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .glassEffect(.regular.interactive(), in: .capsule)
-                    .help("Download Sandboxes \(update.version) from GitHub")
+                    .help("Install Sandboxes \(update.version)")
                 }
                 // On one line when they fit, otherwise the sbx badges go below.
                 ViewThatFits(in: .horizontal) {

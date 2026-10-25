@@ -1,64 +1,91 @@
 import Foundation
 import Observation
+import Sparkle
 
-/// Checks GitHub for a newer release of the app.
+/// Checks for, downloads and installs new releases with Sparkle.
+///
+/// Sparkle reads `appcast.xml` from the latest GitHub release, which lists the
+/// release's DMG and its EdDSA signature. It checks the download against the
+/// public key in Info.plist (`SUPublicEDKey`), replaces the app and relaunches
+/// it. Updates installed this way aren't quarantined, so only the first
+/// download from GitHub needs approving in System Settings.
+///
+/// Scheduled checks don't open Sparkle's window. They set `availableUpdate`
+/// for the sidebar and menu bar, and clicking that opens Sparkle's window.
 ///
 /// Only release builds check, since other builds are labelled and aren't on
-/// the release track. To try it out in another build, use Settings › Development
-/// Settings, which sets these defaults (they also work as launch arguments):
+/// the release track. To try it out in another build, use Settings › Development,
+/// which sets these defaults (they also work as launch arguments):
 ///
 /// - `UpdateCheckForceEnabled YES` checks even though the build has a label.
-/// - `UpdateCheckCurrentVersion 0.0.1` pretends the app is that version.
-/// - `UpdateCheckRepository owner/name` checks another repository's releases.
+/// - `UpdateCheckRepository owner/name` reads another repository's appcast.
 ///
-/// Release builds ignore all three. Every build shares one set of defaults,
-/// so a value left over from testing would otherwise hide or fake an update,
-/// and releases have no Development tab to clear it from.
+/// Release builds ignore both. Every build shares one set of defaults, so a
+/// value left over from testing would otherwise hide or fake an update, and
+/// releases have no Development tab to clear it from.
+///
+/// Sparkle compares build numbers. CI builds are numbered after every release
+/// before them, so only a local build (build 1) sees a release as an update.
 @MainActor
 @Observable
-final class UpdateChecker {
+final class UpdateChecker: NSObject {
     struct Release: Equatable {
-        let version: AppVersion
-        /// The release's page on GitHub, which has the DMG to download.
-        let url: URL
+        /// The version to show, such as "1.2.0".
+        let version: String
     }
 
-    enum Status: Equatable {
-        case notChecked
-        case checking
-        /// The latest release, whether or not it's newer.
-        case checked(latest: AppVersion)
-        case failed(String)
-    }
-
-    /// A release newer than the running app, once a check has found one.
+    /// A release newer than the running app, once a scheduled check has found
+    /// one, until the user installs, skips or dismisses it.
     private(set) var availableUpdate: Release?
-    private(set) var status = Status.notChecked
+    /// Whether Sparkle has started, which it only does in builds that check.
+    private(set) var isRunning = false
+    /// Whether Sparkle checks every few hours, which the user can turn off.
+    private(set) var checksAutomatically = true
 
-    nonisolated static let enabledKey = "checksForUpdates"
+    /// Before Sparkle, whether to check was stored here. Read once, so turning
+    /// checks off carries over, then removed.
+    nonisolated static let legacyEnabledKey = "checksForUpdates"
     nonisolated static let forceEnabledKey = "UpdateCheckForceEnabled"
-    nonisolated static let currentVersionKey = "UpdateCheckCurrentVersion"
     nonisolated static let repositoryKey = "UpdateCheckRepository"
     nonisolated static let defaultRepository = "geofflamrock/Sandboxes"
-    private static let interval = Duration.seconds(6 * 60 * 60)
+
+    @ObservationIgnored
+    private lazy var controller = SPUStandardUpdaterController(
+        startingUpdater: false, updaterDelegate: self, userDriverDelegate: self
+    )
 
     /// Whether this build is one that checks: a release, or one forced to.
+    /// Sparkle refuses to start without a public key, and shows an alert
+    /// saying the app is misconfigured, so builds without one don't try.
     static var isSupported: Bool {
-        AppInfo.buildLabel == nil || UserDefaults.standard.bool(forKey: forceEnabledKey)
+        let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+        guard publicKey?.isEmpty == false else { return false }
+        return AppInfo.buildLabel == nil || UserDefaults.standard.bool(forKey: forceEnabledKey)
     }
 
-    /// Whether the user wants checks, which they can turn off in Settings.
-    static var isEnabled: Bool {
-        isSupported && (UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true)
+    /// Starts Sparkle, which checks straight away when it's due and then on
+    /// the schedule in Info.plist (`SUScheduledCheckInterval`).
+    func start() {
+        guard Self.isSupported, !isRunning else { return }
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.legacyEnabledKey) as? Bool == false {
+            controller.updater.automaticallyChecksForUpdates = false
+        }
+        defaults.removeObject(forKey: Self.legacyEnabledKey)
+        controller.startUpdater()
+        isRunning = true
+        checksAutomatically = controller.updater.automaticallyChecksForUpdates
     }
 
-    /// The version to compare against: the app's own, unless overridden.
-    private static var currentVersionString: String {
-        developmentOverride(forKey: currentVersionKey) ?? AppInfo.version
+    func setChecksAutomatically(_ isOn: Bool) {
+        controller.updater.automaticallyChecksForUpdates = isOn
+        checksAutomatically = isOn
     }
 
-    private static var repository: String {
-        developmentOverride(forKey: repositoryKey) ?? defaultRepository
+    /// Opens Sparkle's window, which shows the update found, or checks first.
+    func checkForUpdates() {
+        guard isRunning else { return }
+        controller.checkForUpdates(nil)
     }
 
     /// A non-empty value from Settings › Development, or nil in release builds.
@@ -68,67 +95,37 @@ final class UpdateChecker {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return value?.isEmpty == false ? value : nil
     }
+}
 
-    /// Checks now and then every few hours, until the calling task is cancelled.
-    func checkPeriodically() async {
-        while !Task.isCancelled {
-            await check()
-            try? await Task.sleep(for: Self.interval)
+extension UpdateChecker: SPUUpdaterDelegate {
+    /// Another repository's appcast when one is set in Settings › Development,
+    /// otherwise nil for `SUFeedURL` from Info.plist.
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        Self.developmentOverride(forKey: Self.repositoryKey).map {
+            "https://github.com/\($0)/releases/latest/download/appcast.xml"
         }
     }
+}
 
-    /// Looks up the latest release. Failures keep the last update found,
-    /// since being offline shouldn't hide an update that was already found.
-    func check() async {
-        guard Self.isEnabled else {
-            availableUpdate = nil
-            status = .notChecked
-            return
-        }
-        guard let current = AppVersion(Self.currentVersionString) else {
-            status = .failed("“\(Self.currentVersionString)” isn't a version number.")
-            return
-        }
-        status = .checking
-        do {
-            let latest = try await Self.latestRelease(in: Self.repository)
-            availableUpdate = latest.version > current ? latest : nil
-            status = .checked(latest: latest.version)
-        } catch {
-            status = .failed(error.localizedDescription)
-        }
+/// Gentle reminders: the app runs in the menu bar, so a scheduled check that
+/// finds an update shows it in the sidebar and menu bar rather than opening a
+/// window over whatever the user is doing.
+extension UpdateChecker: @preconcurrency SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        false
     }
 
-    private struct CheckError: LocalizedError {
-        let errorDescription: String?
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
+    ) {
+        availableUpdate = Release(version: update.displayVersionString)
     }
 
-    /// The newest published release. GitHub leaves out drafts and pre-releases.
-    private static func latestRelease(in repository: String) async throws -> Release {
-        guard let url = URL(string: "https://api.github.com/repos/\(repository)/releases/latest") else {
-            throw CheckError(errorDescription: "“\(repository)” isn't a repository name.")
-        }
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("Sandboxes/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        switch (response as? HTTPURLResponse)?.statusCode {
-        case 200:
-            break
-        case 404:
-            throw CheckError(errorDescription: "\(repository) doesn't exist or has no releases.")
-        case let code:
-            throw CheckError(errorDescription: "GitHub responded with status \(code.map(String.init) ?? "unknown").")
-        }
-
-        struct Payload: Decodable {
-            let tag_name: String
-            let html_url: URL
-        }
-        let payload = try JSONDecoder().decode(Payload.self, from: data)
-        guard let version = AppVersion(payload.tag_name) else {
-            throw CheckError(errorDescription: "The latest release's tag “\(payload.tag_name)” isn't a version number.")
-        }
-        return Release(version: version, url: payload.html_url)
+    func standardUserDriverWillFinishUpdateSession() {
+        availableUpdate = nil
     }
 }

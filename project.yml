@@ -4,6 +4,13 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+packages:
+  # Installs updates. An exact version, since the generated project isn't
+  # committed and so has no Package.resolved to pin it. CI downloads the same
+  # version's tools to sign releases (SPARKLE_VERSION in build.yml).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 settings:
   base:
     # Placeholders for local builds. CI overrides both: releases take the
@@ -15,11 +22,17 @@ settings:
     # Shown next to the version for non-release builds, e.g. "PR #12 · abc1234".
     # CI sets it to an empty string for releases.
     SANDBOXES_BUILD_LABEL: Local
+    # The public half of the EdDSA key that signs releases, from Sparkle's
+    # generate_keys. The private half is the SPARKLE_PRIVATE_KEY secret in CI.
+    # Without it, the app doesn't start Sparkle, so it never checks for updates.
+    SPARKLE_PUBLIC_ED_KEY: ""
     SWIFT_VERSION: "5.0"
 targets:
   Sandboxes:
     type: application
     platform: macOS
+    dependencies:
+      - package: Sparkle
     sources:
       - Sources/Sandboxes
       # The Icon Composer app icon. Xcode compiles it into the app icon.
@@ -36,6 +49,12 @@ targets:
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: ""
         SandboxesBuildLabel: $(SANDBOXES_BUILD_LABEL)
+        # Sparkle reads the appcast attached to the latest release, and checks
+        # every 6 hours without asking first.
+        SUFeedURL: https://github.com/geofflamrock/Sandboxes/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 21600
     settings:
       base:
         PRODUCT_NAME: Sandboxes
