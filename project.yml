@@ -25,7 +25,7 @@ settings:
     # The public half of the EdDSA key that signs releases, from Sparkle's
     # generate_keys. The private half is the SPARKLE_PRIVATE_KEY secret in CI.
     # Without it, the app doesn't start Sparkle, so it never checks for updates.
-    SPARKLE_PUBLIC_ED_KEY: ""
+    SPARKLE_PUBLIC_ED_KEY: OjNHDzyHyKpyVpUteQJdmbaMS1j3btEcmcC8xEiq2vI=
     SWIFT_VERSION: "5.0"
 targets:
   Sandboxes:
