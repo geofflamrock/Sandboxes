@@ -1,0 +1,49 @@
+name: Website
+
+# Publishes site/ to GitHub Pages at https://geofflamrock.github.io/Sandboxes/.
+# The app icon is copied from Design/AppIcon.svg so there's only one copy of it.
+# The Download button finds the latest release in the browser, so releases
+# don't need to redeploy the site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - Design/AppIcon.svg
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Assemble site
+        run: |
+          mkdir _site
+          cp -R site/. _site/
+          cp Design/AppIcon.svg _site/AppIcon.svg
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

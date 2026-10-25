@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sandboxes</title>
+  <meta name="description" content="A macOS app for managing Docker Sandboxes.">
+  <link rel="icon" href="AppIcon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <img class="icon" src="AppIcon.svg" alt="" width="160" height="160">
+    <h1>Sandboxes</h1>
+    <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
+    <div class="actions">
+      <!-- Starts as a link to the latest release page; the script below points it at the DMG and adds the version. -->
+      <a id="download" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Download</a>
+      <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
+    </div>
+    <p class="note">Requires macOS 26 or later.</p>
+  </header>
+
+  <main>
+    <section id="install">
+      <h2>Install</h2>
+      <p>Run this in Terminal to install the latest version into Applications, or to update it:</p>
+      <div class="command">
+        <code id="install-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh | bash</code>
+        <button type="button" class="copy" data-copy="install-command">Copy</button>
+      </div>
+      <p>To read the script first, <a href="install.sh">view install.sh</a>, or download it and run it yourself:</p>
+      <div class="command">
+        <code id="review-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh -o install.sh &amp;&amp; bash install.sh</code>
+        <button type="button" class="copy" data-copy="review-command">Copy</button>
+      </div>
+      <p>Or download the DMG, open it and drag Sandboxes onto Applications. Sandboxes isn’t notarised by Apple yet, so the first time you open a downloaded copy macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once. The install script doesn’t need this step.</p>
+    </section>
+
+    <section id="features">
+      <h2>Features</h2>
+      <ul class="features">
+        <li>See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.</li>
+        <li>Create new sandboxes quickly and easily.</li>
+        <li>Create and manage sandbox <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
+        <li>Start, stop and remove sandboxes.</li>
+        <li>Publish a sandbox’s ports on your Mac when creating it or later, open them in your browser, and unpublish them.</li>
+        <li>Open an interactive shell inside a sandbox in your terminal.</li>
+        <li>Run a sandbox’s agent in your terminal, or open any sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
+        <li>Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.</li>
+        <li>Manage global and sandbox specific secrets.</li>
+        <li>Manage global and sandbox specific network rules.</li>
+        <li>Manage MCP servers and configure sandboxes to use them.</li>
+        <li>Manage agent skills and choose how sandboxes share them.</li>
+        <li>View and change <code>sbx</code> settings, such as proxies and kit policy, and restart the daemon when a change needs it.</li>
+        <li>Install, upgrade and sign in to <code>sbx</code> from the app, and run diagnostics to find problems with your setup.</li>
+      </ul>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>macOS 26 or later.</li>
+        <li>The <a href="https://docs.docker.com/ai/sandboxes/"><code>sbx</code> CLI</a>. Install it with Homebrew: <code>brew install docker/tap/sbx</code>, or from the app.</li>
+        <li><a href="https://claude.ai/download">Claude Desktop</a> v2.110.0 or later, to open sandboxes in Claude Desktop.</li>
+      </ul>
+      <p>The <a href="https://github.com/geofflamrock/Sandboxes#requirements">README</a> lists the <code>sbx</code> versions that some features need.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Sandboxes is an independent project and isn’t affiliated with or endorsed by Docker, Inc.</p>
+    <p><a href="https://github.com/geofflamrock/Sandboxes">GitHub</a> · <a href="https://github.com/geofflamrock/Sandboxes/releases">Releases</a> · <a href="https://github.com/geofflamrock/Sandboxes/issues">Issues</a></p>
+  </footer>
+
+  <script>
+    // Point the Download button at the latest release's DMG and show its version.
+    // If the request fails (for example the API's rate limit of 60 an hour), the
+    // button keeps linking to the latest release page.
+    fetch("https://api.github.com/repos/geofflamrock/Sandboxes/releases/latest")
+      .then(response => response.ok ? response.json() : Promise.reject(response.status))
+      .then(release => {
+        const dmg = (release.assets || []).find(asset => asset.name.endsWith(".dmg"));
+        if (!dmg) return;
+        const button = document.getElementById("download");
+        button.href = dmg.browser_download_url;
+        button.textContent = `Download ${release.tag_name}`;
+      })
+      .catch(() => {});
+
+    for (const button of document.querySelectorAll("button.copy")) {
+      button.addEventListener("click", () => {
+        const text = document.getElementById(button.dataset.copy).textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = "Copy"; }, 1500);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

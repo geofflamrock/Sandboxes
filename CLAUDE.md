@@ -29,6 +29,7 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 - `Services/`: talking to the outside world: `SbxCLI` (runs processes), `ShellEnvironment` (login shell `PATH`), `TerminalLauncher`, `ClaudeDesktopLauncher`, `ApprovalNotifier`, `UpdateChecker`, `AppWindows`, `Homebrew`.
 - `Views/`: SwiftUI views, one file per window, screen or sheet.
 - `Design/AppIcon.icon`: Icon Composer file. Its layers come from `scripts/generate-app-icon.py`, which also writes `Design/AppIcon.svg`.
+- `site/`: the website on GitHub Pages (`index.html`, `style.css`) and `install.sh`, published by `.github/workflows/pages.yml`, which copies in `Design/AppIcon.svg`.
 
 ## Patterns to follow
 
@@ -82,6 +83,8 @@ When a change affects one of these, update it in the same PR:
 - `README.md` › **Update checks**, **Test builds**, **Releases**: when `UpdateChecker`, the CI workflow or the versioning changes.
 - `README.md` › **Requirements**: the macOS version, and the minimum `sbx` or Claude Desktop version a feature needs.
 - `project.yml` comments, and the comments in `.github/workflows/build.yml`, when build settings or versioning change.
+- `site/index.html`: its features and requirements repeat the README's **Features** and **Requirements**, so change them together.
+- `site/install.sh`: it builds the DMG's URL from the release tag (`v1.2.3` gives `Sandboxes-1.2.3.dmg`). Update it if `build.yml` changes how the DMG is named, or the app's name or install location changes.
 - `Design/AppIcon.svg` and `Design/AppIcon.icon/Assets/`: regenerate with `python3 scripts/generate-app-icon.py` after editing the script.
 
 ## Looking up Apple docs

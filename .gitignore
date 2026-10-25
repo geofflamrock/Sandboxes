@@ -6,3 +6,5 @@ build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
+# Website preview, assembled from site/ (see README › Website)
+_site/

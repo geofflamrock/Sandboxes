@@ -31,12 +31,22 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 ### Install
 
-1. Download the latest `Sandboxes-<version>.dmg` from [GitHub releases](https://github.com/geofflamrock/Sandboxes/releases/latest).
+Run this in Terminal to install the latest release into Applications, or to update an existing install:
+
+```bash
+curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh | bash
+```
+
+The script is [`site/install.sh`](site/install.sh). It downloads the latest release's DMG, quits Sandboxes if it's running and copies the app into `/Applications`, asking for your password only if you can't write there. A download made with `curl` doesn't have the quarantine flag, so you can skip [Allow the app to run](#allow-the-app-to-run).
+
+Or install it by hand:
+
+1. Download the latest `Sandboxes-<version>.dmg` from the [website](https://geofflamrock.github.io/Sandboxes/) or [GitHub releases](https://github.com/geofflamrock/Sandboxes/releases/latest).
 2. Open the DMG and drag **Sandboxes** onto **Applications**.
 
 ### Allow the app to run
 
-Sandboxes isn't notarized by Apple yet, so the first time you open it macOS blocks it with a message that it can't check the app for malicious software. To allow it:
+If you installed the app by hand: Sandboxes isn't notarized by Apple yet, so the first time you open it macOS blocks it with a message that it can't check the app for malicious software. To allow it:
 
 1. Open **Sandboxes** from **Applications** and click **Done** on the warning.
 2. Open **System Settings › Privacy & Security**.
@@ -96,6 +106,17 @@ python3 scripts/generate-app-icon.py
 ```
 
 To change the background fill, or how the layers are grouped, scaled or lit, open `Design/AppIcon.icon` in Icon Composer.
+
+### Website
+
+The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or `Design/AppIcon.svg` changes on `main`, copying in the app icon. Its **Download** button asks the GitHub API for the latest release in the browser and shows its version, such as "Download v0.6.1", so publishing a release doesn't need a redeploy. If the request fails, the button links to the latest release page instead.
+
+To preview the site locally:
+
+```bash
+mkdir -p _site && cp -R site/. _site/ && cp Design/AppIcon.svg _site/
+python3 -m http.server --directory _site
+```
 
 ### Test builds
 
