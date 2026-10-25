@@ -10,6 +10,10 @@ import Observation
 /// - `UpdateCheckForceEnabled YES` checks even though the build has a label.
 /// - `UpdateCheckCurrentVersion 0.0.1` pretends the app is that version.
 /// - `UpdateCheckRepository owner/name` checks another repository's releases.
+///
+/// Release builds ignore all three. Every build shares one set of defaults,
+/// so a value left over from testing would otherwise hide or fake an update,
+/// and releases have no Development tab to clear it from.
 @MainActor
 @Observable
 final class UpdateChecker {
@@ -50,15 +54,19 @@ final class UpdateChecker {
 
     /// The version to compare against: the app's own, unless overridden.
     private static var currentVersionString: String {
-        let value = UserDefaults.standard.string(forKey: currentVersionKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value! : AppInfo.version
+        developmentOverride(forKey: currentVersionKey) ?? AppInfo.version
     }
 
     private static var repository: String {
-        let value = UserDefaults.standard.string(forKey: repositoryKey)?
+        developmentOverride(forKey: repositoryKey) ?? defaultRepository
+    }
+
+    /// A non-empty value from Settings › Development, or nil in release builds.
+    private static func developmentOverride(forKey key: String) -> String? {
+        guard AppInfo.buildLabel != nil else { return nil }
+        let value = UserDefaults.standard.string(forKey: key)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value! : defaultRepository
+        return value?.isEmpty == false ? value : nil
     }
 
     /// Checks now and then every few hours, until the calling task is cancelled.
