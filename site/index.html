@@ -14,8 +14,9 @@
     <h1>Sandboxes</h1>
     <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
     <div class="actions">
-      <!-- Starts as a link to the latest release page; the script below points it at the DMG and adds the version. -->
-      <a id="download" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Download</a>
+      <a class="button primary" href="#install">Install</a>
+      <!-- Links to the latest release page; the script below adds its version. -->
+      <a id="release" class="button" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest Release</a>
       <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
     </div>
     <p class="note">Requires macOS 26 or later.</p>
@@ -24,17 +25,14 @@
   <main>
     <section id="install">
       <h2>Install</h2>
-      <p>Run this in Terminal to install the latest version into Applications, or to update it:</p>
       <div class="command">
         <code id="install-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh | bash</code>
         <button type="button" class="copy" data-copy="install-command">Copy</button>
       </div>
-      <p>To read the script first, <a href="install.sh">view install.sh</a>, or download it and run it yourself:</p>
-      <div class="command">
-        <code id="review-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh -o install.sh &amp;&amp; bash install.sh</code>
-        <button type="button" class="copy" data-copy="review-command">Copy</button>
-      </div>
-      <p>Or download the DMG, open it and drag Sandboxes onto Applications. Sandboxes isn’t notarised by Apple yet, so the first time you open a downloaded copy macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once. The install script doesn’t need this step.</p>
+      <p class="links">
+        <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View Source</a>
+        <a href="#other-install">Other Ways to Install</a>
+      </p>
     </section>
 
     <section id="features">
@@ -66,6 +64,23 @@
       </ul>
       <p>The <a href="https://github.com/geofflamrock/Sandboxes#requirements">README</a> lists the <code>sbx</code> versions that some features need.</p>
     </section>
+
+    <section id="other-install">
+      <h2>Other Ways to Install</h2>
+      <h3>Read the script first</h3>
+      <p>Download the install script, read it, then run it:</p>
+      <div class="command">
+        <code id="review-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh -o install.sh &amp;&amp; bash install.sh</code>
+        <button type="button" class="copy" data-copy="review-command">Copy</button>
+      </div>
+      <h3>Download the DMG</h3>
+      <ol>
+        <li>Download <code>Sandboxes-&lt;version&gt;.dmg</code> from the <a href="https://github.com/geofflamrock/Sandboxes/releases/latest">latest release</a>.</li>
+        <li>Open the DMG and drag Sandboxes onto Applications.</li>
+        <li>Sandboxes isn’t notarised by Apple yet, so the first time you open it macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once.</li>
+      </ol>
+      <p>The install script doesn’t need the last step, because macOS doesn’t flag downloads made with <code>curl</code>.</p>
+    </section>
   </main>
 
   <footer>
@@ -74,17 +89,15 @@
   </footer>
 
   <script>
-    // Point the Download button at the latest release's DMG and show its version.
-    // If the request fails (for example the API's rate limit of 60 an hour), the
-    // button keeps linking to the latest release page.
+    // Show the latest release's version on its button. If the request fails (for
+    // example the API's rate limit of 60 an hour), the button keeps its label.
     fetch("https://api.github.com/repos/geofflamrock/Sandboxes/releases/latest")
       .then(response => response.ok ? response.json() : Promise.reject(response.status))
       .then(release => {
-        const dmg = (release.assets || []).find(asset => asset.name.endsWith(".dmg"));
-        if (!dmg) return;
-        const button = document.getElementById("download");
-        button.href = dmg.browser_download_url;
-        button.textContent = `Download ${release.tag_name}`;
+        if (!release.tag_name) return;
+        const button = document.getElementById("release");
+        if (release.html_url) button.href = release.html_url;
+        button.textContent = `Release ${release.tag_name}`;
       })
       .catch(() => {});
 

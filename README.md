@@ -41,7 +41,7 @@ The script is [`site/install.sh`](site/install.sh). It downloads the latest rele
 
 Or install it by hand:
 
-1. Download the latest `Sandboxes-<version>.dmg` from the [website](https://geofflamrock.github.io/Sandboxes/) or [GitHub releases](https://github.com/geofflamrock/Sandboxes/releases/latest).
+1. Download the latest `Sandboxes-<version>.dmg` from [GitHub releases](https://github.com/geofflamrock/Sandboxes/releases/latest).
 2. Open the DMG and drag **Sandboxes** onto **Applications**.
 
 ### Allow the app to run
@@ -109,7 +109,7 @@ To change the background fill, or how the layers are grouped, scaled or lit, ope
 
 ### Website
 
-The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or `Design/AppIcon.svg` changes on `main`, copying in the app icon. Its **Download** button asks the GitHub API for the latest release in the browser and shows its version, such as "Download v0.6.1", so publishing a release doesn't need a redeploy. If the request fails, the button links to the latest release page instead.
+The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or `Design/AppIcon.svg` changes on `main`, copying in the app icon. Its release button asks the GitHub API for the latest release in the browser and shows its version, such as "Release v0.6.1", so publishing a release doesn't need a redeploy. If the request fails, the button says "Latest Release" and still links to the latest release page.
 
 To preview the site locally:
 
