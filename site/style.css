@@ -139,9 +139,128 @@ h2 {
   background: none;
 }
 
-#install .command {
-  font-size: 18px;
-  padding: 14px 14px 14px 18px;
+section.plain {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* A macOS Terminal window. It's dark in both appearances, like Terminal's
+   default dark profiles, so its colours don't use the page's tokens. */
+.terminal {
+  background: #1e1f26;
+  border: 1px solid #3a3c46;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
+  overflow: hidden;
+}
+
+.titlebar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  background: #2a2b33;
+  border-bottom: 1px solid #3a3c46;
+}
+
+.lights {
+  position: absolute;
+  left: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+.lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.lights i:nth-child(2) {
+  background: #febc2e;
+}
+
+.lights i:nth-child(3) {
+  background: #28c840;
+}
+
+.titlebar .title {
+  color: #c9cbd3;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.terminal .body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 14px 18px 20px;
+}
+
+.terminal code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 17px;
+  padding: 0;
+  background: none;
+  color: #e6e7ec;
+}
+
+.tok-cmd {
+  color: #ff79c6;
+}
+
+.tok-flag {
+  color: #8be9fd;
+}
+
+.tok-url {
+  color: #e6e7ec;
+}
+
+.tok-op {
+  color: #8a8d99;
+}
+
+.copy.icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 8px;
+  border-color: #4a4d59;
+  background: #2a2b33;
+  color: #c9cbd3;
+}
+
+.copy.icon:hover {
+  background: #343640;
+}
+
+.copy.icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.copy.icon .done-icon,
+.copy.icon.copied .copy-icon {
+  display: none;
+}
+
+.copy.icon.copied .done-icon {
+  display: block;
+  color: #28c840;
 }
 
 .links {

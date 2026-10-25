@@ -23,11 +23,20 @@
   </header>
 
   <main>
-    <section id="install">
+    <section id="install" class="plain">
       <h2>Install</h2>
-      <div class="command">
-        <code id="install-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh | bash</code>
-        <button type="button" class="copy" data-copy="install-command">Copy</button>
+      <div class="terminal">
+        <div class="titlebar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="title">Terminal</span>
+        </div>
+        <div class="body">
+          <code id="install-command"><span class="tok-cmd">curl</span> <span class="tok-flag">-fsSL</span> <span class="tok-url">https://geofflamrock.github.io/Sandboxes/install.sh</span> <span class="tok-op">|</span> <span class="tok-cmd">bash</span></code>
+          <button type="button" class="copy icon" data-copy="install-command" aria-label="Copy" title="Copy">
+            <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+            <svg class="done-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          </button>
+        </div>
       </div>
       <p class="links">
         <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View Source</a>
@@ -105,8 +114,12 @@
       button.addEventListener("click", () => {
         const text = document.getElementById(button.dataset.copy).textContent;
         navigator.clipboard.writeText(text).then(() => {
-          button.textContent = "Copied";
-          setTimeout(() => { button.textContent = "Copy"; }, 1500);
+          // Text buttons say "Copied"; the terminal's icon button shows a tick.
+          const icon = button.classList.contains("icon");
+          if (icon) button.classList.add("copied"); else button.textContent = "Copied";
+          setTimeout(() => {
+            if (icon) button.classList.remove("copied"); else button.textContent = "Copy";
+          }, 1500);
         });
       });
     }
