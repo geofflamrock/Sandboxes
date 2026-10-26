@@ -13,6 +13,8 @@ Outputs:
   which Icon Composer edits.
 - Design/AppIcon.svg: a flattened preview of the icon. It follows icon.json's
   layer order and offsets, so it matches what Icon Composer shows.
+- Design/AppIconArtwork.svg: the preview's sandbox and agent without the
+  background, cropped to the artwork, for the website's header.
 
 The menu bar item draws a one-colour version of the same shapes in
 NSImage.menuBarSandbox (Sources/Sandboxes/Views/MenuBarViews.swift), so
@@ -185,7 +187,7 @@ def write_layers():
         (LAYERS / f"{name}.svg").write_text(svg(group(shapes(), scale)))
 
 
-def write_preview():
+def preview_layers():
     # Draw the layers bottom first, moved as icon.json moves them. Its offsets
     # are in full-bleed points, with y increasing downwards.
     groups = json.loads((ICON / "icon.json").read_text())["groups"]
@@ -198,15 +200,33 @@ def write_preview():
             dx, dy = (v / FULL_BLEED for v in layer["position"]["translation-in-points"])
             layers.append(f'  <g id="{name.lower()}" transform="translate({dx:.1f} {dy:.1f})">\n'
                           + "\n".join(f"    {s}" for s in LAYER_SHAPES[name]()) + "\n  </g>")
+    return "\n".join(layers)
+
+
+def write_preview():
     top, bottom = BACKGROUND
     defs = (f'<linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">'
             f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/></linearGradient>\n'
             f'    <clipPath id="shape"><rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}"/></clipPath>')
     body = (f'  <rect x="{INSET}" y="{INSET}" width="{BODY}" height="{BODY}" rx="{RADIUS}" fill="url(#fill)"/>\n'
-            '  <g clip-path="url(#shape)">\n' + "\n".join(layers) + "\n  </g>")
+            '  <g clip-path="url(#shape)">\n' + preview_layers() + "\n  </g>")
     (DESIGN / "AppIcon.svg").write_text(svg(body, defs))
+
+
+def write_artwork():
+    # Cropped to the sandbox's sides, the antenna light and the bottom of the
+    # walls, with a margin for any offsets icon.json gives the layers.
+    margin = 12
+    x = CENTRE[0] - W - margin
+    y = CENTRE[1] - _REACH_UP - margin
+    width = 2 * (W + margin)
+    height = _REACH_UP + _REACH_DOWN + 2 * margin
+    viewbox = f"{x:.1f} {y:.1f} {width:.1f} {height:.1f}"
+    (DESIGN / "AppIconArtwork.svg").write_text(
+        svg(preview_layers()).replace(f"0 0 {CANVAS} {CANVAS}", viewbox, 1))
 
 
 if __name__ == "__main__":
     write_layers()
     write_preview()
+    write_artwork()

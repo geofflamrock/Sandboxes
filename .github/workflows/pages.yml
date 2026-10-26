@@ -1,8 +1,9 @@
 name: Website
 
 # Publishes site/ to GitHub Pages at https://geofflamrock.github.io/Sandboxes/.
-# The app icon is copied from Design/AppIcon.svg so there's only one copy of it.
-# The Download button finds the latest release in the browser, so releases
+# The icon (the favicon) and its artwork without the background (the header)
+# are copied from Design/ so there's only one copy of each.
+# The release button finds the latest release in the browser, so releases
 # don't need to redeploy the site.
 
 on:
@@ -11,6 +12,7 @@ on:
     paths:
       - site/**
       - Design/AppIcon.svg
+      - Design/AppIconArtwork.svg
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -37,7 +39,7 @@ jobs:
         run: |
           mkdir _site
           cp -R site/. _site/
-          cp Design/AppIcon.svg _site/AppIcon.svg
+          cp Design/AppIcon.svg Design/AppIconArtwork.svg _site/
 
       - uses: actions/configure-pages@v6
 

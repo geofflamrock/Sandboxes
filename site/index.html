@@ -10,91 +10,103 @@
 </head>
 <body>
   <header class="hero">
-    <img class="icon" src="AppIcon.svg" alt="" width="160" height="160">
-    <h1>Sandboxes</h1>
-    <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
-    <div class="actions">
-      <a class="button primary" href="#install">Install</a>
-      <!-- Links to the latest release page; the script below adds its version. -->
-      <a id="release" class="button" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest Release</a>
-      <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
+    <div class="inner">
+      <div class="brand">
+        <img class="artwork" src="AppIconArtwork.svg" alt="" width="240" height="223">
+        <div class="brand-text">
+          <h1>Sandboxes</h1>
+          <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
+          <div class="actions">
+            <!-- Links to the latest release page; the script below adds its version. -->
+            <a id="release" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest Release</a>
+            <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="install" class="install">
+        <div class="terminal">
+          <div class="titlebar">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="title">Terminal</span>
+          </div>
+          <div class="body">
+            <code id="install-command"><span class="tok-cmd">curl</span> <span class="tok-flag">-fsSL</span> <span class="tok-url">https://geofflamrock.github.io/Sandboxes/install.sh</span> <span class="tok-op">|</span> <span class="tok-cmd">bash</span></code>
+            <button type="button" class="copy icon" data-copy="install-command" aria-label="Copy" title="Copy">
+              <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+              <svg class="done-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            </button>
+          </div>
+        </div>
+        <p class="links">
+          <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View Source</a>
+          <a href="#other-install">Other Ways to Install</a>
+        </p>
+        <p class="note">Requires macOS 26 or later.</p>
+      </div>
     </div>
-    <p class="note">Requires macOS 26 or later.</p>
   </header>
 
   <main>
-    <section id="install" class="plain">
-      <h2>Install</h2>
-      <div class="terminal">
-        <div class="titlebar">
-          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="title">Terminal</span>
-        </div>
-        <div class="body">
-          <code id="install-command"><span class="tok-cmd">curl</span> <span class="tok-flag">-fsSL</span> <span class="tok-url">https://geofflamrock.github.io/Sandboxes/install.sh</span> <span class="tok-op">|</span> <span class="tok-cmd">bash</span></code>
-          <button type="button" class="copy icon" data-copy="install-command" aria-label="Copy" title="Copy">
-            <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
-            <svg class="done-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-          </button>
-        </div>
+    <section id="features" class="band">
+      <div class="inner">
+        <h2>Features</h2>
+        <ul class="features">
+          <li>See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.</li>
+          <li>Create new sandboxes quickly and easily.</li>
+          <li>Create and manage sandbox <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
+          <li>Start, stop and remove sandboxes.</li>
+          <li>Publish a sandbox’s ports on your Mac when creating it or later, open them in your browser, and unpublish them.</li>
+          <li>Open an interactive shell inside a sandbox in your terminal.</li>
+          <li>Run a sandbox’s agent in your terminal, or open any sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
+          <li>Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.</li>
+          <li>Manage global and sandbox specific secrets.</li>
+          <li>Manage global and sandbox specific network rules.</li>
+          <li>Manage MCP servers and configure sandboxes to use them.</li>
+          <li>Manage agent skills and choose how sandboxes share them.</li>
+          <li>View and change <code>sbx</code> settings, such as proxies and kit policy, and restart the daemon when a change needs it.</li>
+          <li>Install, upgrade and sign in to <code>sbx</code> from the app, and run diagnostics to find problems with your setup.</li>
+        </ul>
       </div>
-      <p class="links">
-        <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View Source</a>
-        <a href="#other-install">Other Ways to Install</a>
-      </p>
     </section>
 
-    <section id="features">
-      <h2>Features</h2>
-      <ul class="features">
-        <li>See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.</li>
-        <li>Create new sandboxes quickly and easily.</li>
-        <li>Create and manage sandbox <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
-        <li>Start, stop and remove sandboxes.</li>
-        <li>Publish a sandbox’s ports on your Mac when creating it or later, open them in your browser, and unpublish them.</li>
-        <li>Open an interactive shell inside a sandbox in your terminal.</li>
-        <li>Run a sandbox’s agent in your terminal, or open any sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
-        <li>Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.</li>
-        <li>Manage global and sandbox specific secrets.</li>
-        <li>Manage global and sandbox specific network rules.</li>
-        <li>Manage MCP servers and configure sandboxes to use them.</li>
-        <li>Manage agent skills and choose how sandboxes share them.</li>
-        <li>View and change <code>sbx</code> settings, such as proxies and kit policy, and restart the daemon when a change needs it.</li>
-        <li>Install, upgrade and sign in to <code>sbx</code> from the app, and run diagnostics to find problems with your setup.</li>
-      </ul>
-    </section>
-
-    <section id="requirements">
-      <h2>Requirements</h2>
-      <ul>
-        <li>macOS 26 or later.</li>
-        <li>The <a href="https://docs.docker.com/ai/sandboxes/"><code>sbx</code> CLI</a>. Install it with Homebrew: <code>brew install docker/tap/sbx</code>, or from the app.</li>
-        <li><a href="https://claude.ai/download">Claude Desktop</a> v2.110.0 or later, to open sandboxes in Claude Desktop.</li>
-      </ul>
-      <p>The <a href="https://github.com/geofflamrock/Sandboxes#requirements">README</a> lists the <code>sbx</code> versions that some features need.</p>
-    </section>
-
-    <section id="other-install">
-      <h2>Other Ways to Install</h2>
-      <h3>Read the script first</h3>
-      <p>Download the install script, read it, then run it:</p>
-      <div class="command">
-        <code id="review-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh -o install.sh &amp;&amp; bash install.sh</code>
-        <button type="button" class="copy" data-copy="review-command">Copy</button>
+    <section id="requirements" class="band">
+      <div class="inner">
+        <h2>Requirements</h2>
+        <ul>
+          <li>macOS 26 or later.</li>
+          <li>The <a href="https://docs.docker.com/ai/sandboxes/"><code>sbx</code> CLI</a>. Install it with Homebrew: <code>brew install docker/tap/sbx</code>, or from the app.</li>
+          <li><a href="https://claude.ai/download">Claude Desktop</a> v2.110.0 or later, to open sandboxes in Claude Desktop.</li>
+        </ul>
+        <p>The <a href="https://github.com/geofflamrock/Sandboxes#requirements">README</a> lists the <code>sbx</code> versions that some features need.</p>
       </div>
-      <h3>Download the DMG</h3>
-      <ol>
-        <li>Download <code>Sandboxes-&lt;version&gt;.dmg</code> from the <a href="https://github.com/geofflamrock/Sandboxes/releases/latest">latest release</a>.</li>
-        <li>Open the DMG and drag Sandboxes onto Applications.</li>
-        <li>Sandboxes isn’t notarised by Apple yet, so the first time you open it macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once.</li>
-      </ol>
-      <p>The install script doesn’t need the last step, because macOS doesn’t flag downloads made with <code>curl</code>.</p>
+    </section>
+
+    <section id="other-install" class="band">
+      <div class="inner">
+        <h2>Other Ways to Install</h2>
+        <h3>Read the script first</h3>
+        <p>Download the install script, read it, then run it:</p>
+        <div class="command">
+          <code id="review-command">curl -fsSL https://geofflamrock.github.io/Sandboxes/install.sh -o install.sh &amp;&amp; bash install.sh</code>
+          <button type="button" class="copy" data-copy="review-command">Copy</button>
+        </div>
+        <h3>Download the DMG</h3>
+        <ol>
+          <li>Download <code>Sandboxes-&lt;version&gt;.dmg</code> from the <a href="https://github.com/geofflamrock/Sandboxes/releases/latest">latest release</a>.</li>
+          <li>Open the DMG and drag Sandboxes onto Applications.</li>
+          <li>Sandboxes isn’t notarised by Apple yet, so the first time you open it macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once.</li>
+        </ol>
+        <p>The install script doesn’t need the last step, because macOS doesn’t flag downloads made with <code>curl</code>.</p>
+      </div>
     </section>
   </main>
 
   <footer>
-    <p>Sandboxes is an independent project and isn’t affiliated with or endorsed by Docker, Inc.</p>
-    <p><a href="https://github.com/geofflamrock/Sandboxes">GitHub</a> · <a href="https://github.com/geofflamrock/Sandboxes/releases">Releases</a> · <a href="https://github.com/geofflamrock/Sandboxes/issues">Issues</a></p>
+    <div class="inner">
+      <p>Sandboxes is an independent project and isn’t affiliated with or endorsed by Docker, Inc.</p>
+      <p><a href="https://github.com/geofflamrock/Sandboxes">GitHub</a> · <a href="https://github.com/geofflamrock/Sandboxes/releases">Releases</a> · <a href="https://github.com/geofflamrock/Sandboxes/issues">Issues</a></p>
+    </div>
   </footer>
 
   <script>
