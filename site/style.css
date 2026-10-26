@@ -49,6 +49,14 @@ body {
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+/* Headings use SF Pro Rounded on Apple systems, to suit the icon. Elsewhere
+   ui-rounded isn't available, so they use the same font as the text. */
+h1,
+h2,
+h3 {
+  font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
 a {
   color: var(--accent);
 }
