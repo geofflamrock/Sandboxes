@@ -11,12 +11,12 @@
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
   /* Like a real sky, the page is darkest at the top: the icon's darker sky
-     fades to its light sky, then a pale sky, then warms into a pale version
-     of the icon's sand at the bottom, like sky meeting the sandbox. */
+     fades to its light sky, then a pale sky. The footer is a pale version of
+     the icon's sand, so the sky meets the ground at its top edge. */
   --sky-dark: #a9d3f7;
   --sky-light: #d6ecff;
   --page-bg: #eef5fc;
-  --sand: #f7ebd2;
+  --sand: #f3e3c3;
   /* The header's text and controls, which sit on the sky. */
   --hero-text: #132a5c;
   --hero-muted: #2f4a7a;
@@ -41,18 +41,14 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Two layers: the sand fades in over the bottom of the page, above the sky,
-   which lightens all the way from the top until well below the header. The column
+/* The sky lightens all the way from the top until well below the header. The column
    layout keeps the footer at the bottom of a window taller than the page. */
 body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   margin: 0;
-  background:
-    linear-gradient(transparent, var(--sand)) bottom / 100% 900px no-repeat,
-    linear-gradient(var(--sky-dark), var(--sky-light) 800px, var(--page-bg) 1800px) top / 100% 1800px no-repeat,
-    var(--page-bg);
+  background: linear-gradient(var(--sky-dark), var(--sky-light) 800px, var(--page-bg) 1800px) top / 100% 1800px no-repeat var(--page-bg);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -290,13 +286,14 @@ h3 {
   color: var(--copied);
 }
 
+/* No line on top: the edge between the sky and the sand is the horizon. */
 footer {
   margin-top: auto;
+  background: var(--sand);
   color: var(--muted);
   text-align: center;
   font-size: 14px;
-  padding: 28px 0 36px;
-  border-top: 1px solid var(--border);
+  padding: 36px 0 44px;
 }
 
 @media (max-width: 640px) {
