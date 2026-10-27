@@ -185,23 +185,23 @@ def sand_line():
 # the top of its visor and its eyes; and how far it ducks between peeks.
 SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
 PEEKING = 50
-DUCKED = 95
+DUCKED = 140
 
 # The agent peeks over the sand, ducks back down a little, peeks again, then
 # pops up the rest of the way with a small overshoot. It plays once, after a
 # short pause so the page has settled, and not at all with Reduce Motion on.
 # Browsers run CSS inside an SVG even when it's shown with <img>.
 PEEK_STYLE = f"""<style>
-      .peek {{ animation: peek 2.6s 0.8s both; }}
+      .peek {{ animation: peek 3.4s 0.8s both; }}
       @keyframes peek {{
         0% {{ transform: translateY({SUNK}px); animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }}
-        20% {{ transform: translateY({PEEKING}px); }}
-        32% {{ transform: translateY({PEEKING}px); animation-timing-function: ease-in-out; }}
-        40% {{ transform: translateY({DUCKED}px); }}
-        46% {{ transform: translateY({DUCKED}px); animation-timing-function: ease-out; }}
+        15% {{ transform: translateY({PEEKING}px); }}
+        25% {{ transform: translateY({PEEKING}px); animation-timing-function: ease-in-out; }}
+        32% {{ transform: translateY({DUCKED}px); }}
+        47% {{ transform: translateY({DUCKED}px); animation-timing-function: ease-out; }}
         56% {{ transform: translateY({PEEKING}px); }}
-        70% {{ transform: translateY({PEEKING}px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }}
-        90% {{ transform: translateY(-14px); animation-timing-function: ease-in-out; }}
+        78% {{ transform: translateY({PEEKING}px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }}
+        91% {{ transform: translateY(-14px); animation-timing-function: ease-in-out; }}
         100% {{ transform: translateY(0); }}
       }}
       @media (prefers-reduced-motion: reduce) {{

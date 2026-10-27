@@ -3,16 +3,16 @@
   <defs>
     <clipPath id="sand-line"><path d="M57,0 H967 V536.85 H637 A125,33 0 0 1 387,536.85 H57 Z"/></clipPath>
     <style>
-      .peek { animation: peek 2.6s 0.8s both; }
+      .peek { animation: peek 3.4s 0.8s both; }
       @keyframes peek {
         0% { transform: translateY(313px); animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }
-        20% { transform: translateY(50px); }
-        32% { transform: translateY(50px); animation-timing-function: ease-in-out; }
-        40% { transform: translateY(95px); }
-        46% { transform: translateY(95px); animation-timing-function: ease-out; }
+        15% { transform: translateY(50px); }
+        25% { transform: translateY(50px); animation-timing-function: ease-in-out; }
+        32% { transform: translateY(140px); }
+        47% { transform: translateY(140px); animation-timing-function: ease-out; }
         56% { transform: translateY(50px); }
-        70% { transform: translateY(50px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }
-        90% { transform: translateY(-14px); animation-timing-function: ease-in-out; }
+        78% { transform: translateY(50px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }
+        91% { transform: translateY(-14px); animation-timing-function: ease-in-out; }
         100% { transform: translateY(0); }
       }
       @media (prefers-reduced-motion: reduce) {
