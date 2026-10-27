@@ -70,6 +70,11 @@ code {
   padding: 0 16px;
 }
 
+/* Wider, for the feature rows with screenshots. */
+.inner.wide {
+  max-width: 1120px;
+}
+
 .hero {
   color: var(--hero-text);
   padding: 64px 0 40px;
@@ -212,12 +217,149 @@ h3 {
   margin: 24px 0 8px;
 }
 
-.features {
+/* Feature rows: text on one side and a screenshot on the other, switching
+   sides each row. On phones the text comes first, then the screenshot. */
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: 56px;
+  padding: 36px 0;
+}
+
+.feature.reverse {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+}
+
+.feature.reverse .feature-text {
+  order: 2;
+}
+
+.feature ul {
+  margin: 0;
   padding-left: 1.2em;
 }
 
-.features li {
-  margin-bottom: 6px;
+.feature li {
+  margin-bottom: 8px;
+}
+
+/* A real window screenshot includes its own title bar and shadow. */
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* A placeholder drawn as a macOS window: a title bar with the window
+   controls, a sidebar and a few lines of content. */
+.window {
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 16 / 10;
+  margin: 0;
+  background: #ffffff;
+  border: 1px solid rgb(19 42 92 / 0.14);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgb(19 42 92 / 0.18), 0 2px 6px rgb(19 42 92 / 0.08);
+  overflow: hidden;
+}
+
+.window-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 36px;
+  padding-left: 14px;
+  background: #f4f6f9;
+  border-bottom: 1px solid rgb(19 42 92 / 0.08);
+}
+
+.lights {
+  display: flex;
+  gap: 8px;
+}
+
+.lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.lights i:nth-child(2) {
+  background: #febc2e;
+}
+
+.lights i:nth-child(3) {
+  background: #28c840;
+}
+
+.window-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.window-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 28%;
+  padding: 18px 14px;
+  background: #eef2f7;
+  border-right: 1px solid rgb(19 42 92 / 0.06);
+}
+
+.window-sidebar i,
+.window-content i,
+.window-content b {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: rgb(19 42 92 / 0.1);
+}
+
+.window-sidebar i:nth-child(odd) {
+  width: 70%;
+}
+
+.window-sidebar i:nth-child(even) {
+  width: 88%;
+}
+
+.window-content {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+}
+
+.window-content b {
+  width: 45%;
+  height: 16px;
+  margin-bottom: 4px;
+  background: rgb(19 42 92 / 0.18);
+}
+
+.window-content i {
+  background: rgb(19 42 92 / 0.07);
+}
+
+.window-content i.short {
+  width: 60%;
+}
+
+.window-label {
+  position: absolute;
+  right: 0;
+  bottom: 18px;
+  left: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .copy {
@@ -276,6 +418,20 @@ footer {
   text-align: center;
   font-size: 14px;
   padding: 36px 0 44px;
+}
+
+/* Below this width two columns get too narrow, so the rows stack. */
+@media (max-width: 820px) {
+  .feature,
+  .feature.reverse {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    padding: 24px 0;
+  }
+
+  .feature.reverse .feature-text {
+    order: 0;
+  }
 }
 
 @media (max-width: 640px) {

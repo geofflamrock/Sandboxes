@@ -43,24 +43,67 @@
 
   <main>
     <section id="features" class="band">
-      <div class="inner">
-        <h2>Features</h2>
-        <ul class="features">
-          <li>See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.</li>
-          <li>Create new sandboxes quickly and easily.</li>
-          <li>Create and manage sandbox <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
-          <li>Start, stop and remove sandboxes.</li>
-          <li>Publish a sandbox’s ports on your Mac when creating it or later, open them in your browser, and unpublish them.</li>
-          <li>Open an interactive shell inside a sandbox in your terminal.</li>
-          <li>Run a sandbox’s agent in your terminal, or open any sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
-          <li>Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.</li>
-          <li>Manage global and sandbox specific secrets.</li>
-          <li>Manage global and sandbox specific network rules.</li>
-          <li>Manage MCP servers and configure sandboxes to use them.</li>
-          <li>Manage agent skills and choose how sandboxes share them.</li>
-          <li>View and change <code>sbx</code> settings, such as proxies and kit policy, and restart the daemon when a change needs it.</li>
-          <li>Install, upgrade and sign in to <code>sbx</code> from the app, and run diagnostics to find problems with your setup.</li>
-        </ul>
+      <div class="inner wide">
+        <div class="feature">
+          <div class="feature-text">
+            <h2>Create and manage sandboxes</h2>
+            <ul>
+              <li>Create a sandbox, configuring options such as kits, extra workspace folders and MCP servers.</li>
+              <li>Save <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
+              <li>See each sandbox’s details and resource usage.</li>
+              <li>Start, stop and remove sandboxes.</li>
+              <li>Run a sandbox’s agent in your terminal, or open the sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
+            </ul>
+          </div>
+          <!-- Placeholders until there are screenshots. A window screenshot
+               (Shift-Command-4, then Space) has its own title bar and shadow,
+               so replace each whole figure with an <img class="shot">. -->
+          <figure class="window" role="img" aria-label="Screenshot to come: The main window">
+            <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="window-body" aria-hidden="true">
+              <div class="window-sidebar"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="window-content"><b></b><i></i><i></i><i class="short"></i><span class="window-label">The main window</span></div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="feature reverse">
+          <div class="feature-text">
+            <h2>Manage access</h2>
+            <ul>
+              <li>Get a notification when an agent’s network request needs approval, then approve or deny it.</li>
+              <li>Add network rules for all sandboxes or for just one.</li>
+              <li>See a sandbox’s network traffic, and the network and file system rules that apply to it.</li>
+            </ul>
+          </div>
+          <figure class="window" role="img" aria-label="Screenshot to come: A sandbox’s network policies">
+            <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="window-body" aria-hidden="true">
+              <div class="window-sidebar"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="window-content"><b></b><i></i><i></i><i class="short"></i><span class="window-label">A sandbox’s network policies</span></div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="feature">
+          <div class="feature-text">
+            <h2>Manage settings</h2>
+            <ul>
+              <li>Manage secrets for all sandboxes or for just one.</li>
+              <li>Add MCP servers and choose which sandboxes use them.</li>
+              <li>Add agent skills and choose how sandboxes share them.</li>
+              <li>View and change <code>sbx</code> settings, such as proxies and kit policy.</li>
+              <li>Install, upgrade and sign in to <code>sbx</code>, and run diagnostics when something isn’t working.</li>
+            </ul>
+          </div>
+          <figure class="window" role="img" aria-label="Screenshot to come: MCP servers or Settings">
+            <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="window-body" aria-hidden="true">
+              <div class="window-sidebar"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="window-content"><b></b><i></i><i></i><i class="short"></i><span class="window-label">MCP servers or Settings</span></div>
+            </div>
+          </figure>
+        </div>
       </div>
     </section>
 
