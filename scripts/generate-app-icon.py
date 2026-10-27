@@ -163,10 +163,19 @@ def agent():
         rect(cx - 7, top - ANTENNA_HEIGHT, 14, ANTENNA_HEIGHT + 10, 7, ANTENNA),
         f'<circle cx="{cx}" cy="{top - ANTENNA_HEIGHT:g}" r="{LIGHT_RADIUS}" fill="{ANTENNA_LIGHT}"/>',
         f'<path d="{head}" fill="{AGENT}"/>',
+        *agent_face(),
+    ], agent_grow(), indent="")]
+
+
+def agent_face():
+    # The visor and eyes.
+    cx, cy = CENTRE
+    top = head_top(cy)
+    return [
         rect(cx - 98, top + 44, 196, 114, 52, VISOR),
         rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
         rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
-    ], agent_grow(), indent="")]
+    ]
 
 
 def sand_line():
@@ -184,48 +193,61 @@ def sand_line():
 # the visitor and ducks quickly until only its eyes show. It slowly looks
 # left and right, then crouches and pops out, landing with a little bounce.
 # Each step is (seconds from the start, how far below its resting place the
-# agent is, its tilt in degrees, the easing into the next step). It plays
+# agent is, its tilt in degrees, how far its face turns sideways, the easing
+# into the next step). It plays
 # once, after a short pause so the page has settled, and not at all with
 # Reduce Motion on.
 SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
 POKED = 25
-# Low enough that the sand covers the bottom half of its eyes.
-EYES_SHOWING = 100
+# Low enough that the sand covers most of its eyes.
+EYES_SHOWING = 115
+# How far the visor and eyes slide, and narrow, when it turns its head. The
+# visor has 27 units of head either side of it.
+TURN = 18
 PEEK_DELAY = 0.9
 PEEK_STEPS = [
-    (0.00, SUNK, 0, "cubic-bezier(0.25, 0.8, 0.35, 1)"),  # rises slowly
-    (0.70, POKED, 0, "linear"),  # spots the visitor
-    (0.85, POKED, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
-    (0.97, EYES_SHOWING, 0, "linear"),
-    (1.20, EYES_SHOWING, 0, "ease-in-out"),  # looks around slowly
-    (1.75, EYES_SHOWING, -5, "ease-in-out"),
-    (2.45, EYES_SHOWING, 5, "ease-in-out"),
-    (2.95, EYES_SHOWING, 0, "linear"),
-    (3.15, EYES_SHOWING, 0, "ease-in"),  # crouches
-    (3.30, EYES_SHOWING + 22, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
-    (3.54, -20, 0, "ease-in"),  # lands
-    (3.76, 0, 0, "ease-out"),
-    (3.86, -4, 0, "ease-in"),
-    (3.96, 0, 0, None),
+    (0.00, SUNK, 0, 0, "cubic-bezier(0.25, 0.8, 0.35, 1)"),  # rises slowly
+    (0.70, POKED, 0, 0, "linear"),  # spots the visitor
+    (0.85, POKED, 0, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
+    (0.97, EYES_SHOWING, 0, 0, "linear"),
+    (1.20, EYES_SHOWING, 0, 0, "ease-in-out"),  # looks around slowly
+    (1.75, EYES_SHOWING, -5, -TURN, "ease-in-out"),
+    (2.45, EYES_SHOWING, 5, TURN, "ease-in-out"),
+    (2.95, EYES_SHOWING, 0, 0, "linear"),
+    (3.15, EYES_SHOWING, 0, 0, "ease-in"),  # crouches
+    (3.30, EYES_SHOWING + 22, 0, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
+    (3.54, -20, 0, 0, "ease-in"),  # lands
+    (3.76, 0, 0, 0, "ease-out"),
+    (3.86, -4, 0, 0, "ease-in"),
+    (3.96, 0, 0, 0, None),
 ]
 
 
 def peek_style():
     # Browsers run CSS inside an SVG even when it's shown with <img>. The tilt
-    # turns the agent about the middle of its bottom edge.
+    # turns the agent about the middle of its bottom edge. Turning its head
+    # slides the face sideways and narrows it a little, as a face looks when
+    # it turns away, while the round head stays where it is.
     total = PEEK_STEPS[-1][0]
-    frames = []
-    for t, y, angle, easing in PEEK_STEPS:
+    body, face = [], []
+    for t, y, angle, turn, easing in PEEK_STEPS:
+        at = f"        {t / total * 100:.1f}%"
         timing = f" animation-timing-function: {easing};" if easing else ""
-        frames.append(f"        {t / total * 100:.1f}% {{ transform: translateY({y:g}px) rotate({angle:g}deg);{timing} }}")
-    keyframes = "\n".join(frames)
+        body.append(f"{at} {{ transform: translateY({y:g}px) rotate({angle:g}deg);{timing} }}")
+        narrow = 1 - abs(turn) / TURN * 0.1
+        face.append(f"{at} {{ transform: translateX({turn:g}px) scaleX({narrow:g});{timing} }}")
+    body, face = "\n".join(body), "\n".join(face)
     return f"""<style>
       .peek {{ transform-box: fill-box; transform-origin: 50% 100%; animation: peek {total:g}s {PEEK_DELAY:g}s both; }}
+      .face {{ transform-box: fill-box; transform-origin: 50% 50%; animation: turn {total:g}s {PEEK_DELAY:g}s both; }}
       @keyframes peek {{
-{keyframes}
+{body}
+      }}
+      @keyframes turn {{
+{face}
       }}
       @media (prefers-reduced-motion: reduce) {{
-        .peek {{ animation: none; }}
+        .peek, .face {{ animation: none; }}
       }}
     </style>"""
 
@@ -297,6 +319,9 @@ def write_artwork():
     assert layers.count(grown) == 1 and layers.endswith(end)
     layers = layers.replace(grown, f'<g transform="{agent_grow()}" clip-path="url(#sand-line)">\n<g class="peek">', 1)
     layers = layers[:-len(end)] + "\n</g>" + end
+    face = "\n  ".join(agent_face())
+    assert layers.count(face) == 1
+    layers = layers.replace(face, '<g class="face">\n    ' + face.replace("\n  ", "\n    ") + "\n  </g>", 1)
     defs = f'<clipPath id="sand-line"><path d="{sand_line()}"/></clipPath>\n    {peek_style()}'
     (DESIGN / "AppIconArtwork.svg").write_text(
         svg(layers, defs).replace(f"0 0 {CANVAS} {CANVAS}", viewbox, 1))
