@@ -216,9 +216,22 @@ h2 {
   margin: 0 0 20px;
 }
 
-h3 {
-  font-size: 19px;
-  margin: 24px 0 8px;
+/* One heading over all the feature rows, centred over both columns. */
+.features-title {
+  margin-bottom: 56px;
+  text-align: center;
+}
+
+/* Each row has a small label rather than a heading of its own. */
+.feature-label {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(19 42 92 / 0.08);
+  color: var(--hero-text);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* Feature rows: text on one side and a screenshot on the other, switching
@@ -488,6 +501,7 @@ footer a {
 
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
+    .features-title,
     .feature-text,
     .feature > .window,
     .feature > .shot,
