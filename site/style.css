@@ -1,7 +1,8 @@
 /* Colours come from the app icon: the sky (#D6ECFF to #A9D3F7), the robot's
    navy visor (#132A5C) and blues, and the sand and wood. */
 :root {
-  color-scheme: light dark;
+  /* Light only, so the sky looks the same everywhere. */
+  color-scheme: light;
   --text: #1d1d1f;
   --muted: #5f6368;
   --border: #d9dde3;
@@ -27,35 +28,6 @@
   --tok-flag: #0b6e86;
   --tok-op: #6b7fa6;
   --copied: #1e8e4e;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #f2f2f4;
-    --muted: #a1a6ad;
-    --border: #2e333b;
-    --accent: #6fa8ff;
-    --code-bg: rgb(255 255 255 / 0.08);
-    --surface: #1b1e24;
-    /* A night sky: the icon's blues, darkened, so light text reads on it
-       from the top of the page down. */
-    --sky-top: #2a4f8f;
-    --sky-mid: #18305e;
-    --page-bg: #0f1724;
-    --hero-text: #eef2fa;
-    --hero-muted: #b9c7e0;
-    --button-bg: rgb(255 255 255 / 0.08);
-    --button-border: rgb(255 255 255 / 0.22);
-    --button-hover: rgb(255 255 255 / 0.16);
-    --primary-bg: #d6ecff;
-    --primary-text: #132a5c;
-    --command-bg: rgb(255 255 255 / 0.06);
-    --command-border: rgb(214 236 255 / 0.28);
-    --tok-cmd: #ff8ccf;
-    --tok-flag: #8be9fd;
-    --tok-op: #8b9bbd;
-    --copied: #5be38f;
-  }
 }
 
 * {
