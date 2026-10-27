@@ -212,16 +212,16 @@ PEEK_STEPS = [
     (0.97, EYES_SHOWING, 0, 0, "linear"),
     # Waits. To have it look left and right here instead, give these steps
     # a tilt such as -5 and 5, and a turn of -TURN and TURN.
-    (1.20, EYES_SHOWING, 0, 0, "ease-in-out"),
-    (1.75, EYES_SHOWING, 0, 0, "ease-in-out"),
-    (2.45, EYES_SHOWING, 0, 0, "ease-in-out"),
-    (2.95, EYES_SHOWING, 0, 0, "linear"),
-    (3.15, EYES_SHOWING, 0, 0, "ease-in"),  # crouches
-    (3.30, EYES_SHOWING + 22, 0, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
-    (3.54, -20, 0, 0, "ease-in"),  # lands
-    (3.76, 0, 0, 0, "ease-out"),
-    (3.86, -4, 0, 0, "ease-in"),
-    (3.96, 0, 0, 0, None),
+    (1.14, EYES_SHOWING, 0, 0, "ease-in-out"),
+    (1.56, EYES_SHOWING, 0, 0, "ease-in-out"),
+    (2.08, EYES_SHOWING, 0, 0, "ease-in-out"),
+    (2.46, EYES_SHOWING, 0, 0, "linear"),
+    (2.61, EYES_SHOWING, 0, 0, "ease-in"),  # crouches
+    (2.76, EYES_SHOWING + 22, 0, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
+    (3.00, -20, 0, 0, "ease-in"),  # lands
+    (3.22, 0, 0, 0, "ease-out"),
+    (3.32, -4, 0, 0, "ease-in"),
+    (3.42, 0, 0, 0, None),
 ]
 
 
