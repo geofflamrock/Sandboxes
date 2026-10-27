@@ -251,17 +251,18 @@ h3 {
   height: auto;
 }
 
-/* A placeholder drawn as a macOS window: a title bar with the window
-   controls, a sidebar and a few lines of content. */
+/* A placeholder drawn as a macOS window in dark mode, to match the
+   screenshots: a title bar with the window controls, a sidebar and a few
+   lines of content. */
 .window {
   display: flex;
   flex-direction: column;
   aspect-ratio: 16 / 10;
   margin: 0;
-  background: #ffffff;
-  border: 1px solid rgb(19 42 92 / 0.14);
+  background: #1e1f24;
+  border: 1px solid rgb(0 0 0 / 0.5);
   border-radius: 12px;
-  box-shadow: 0 24px 48px rgb(19 42 92 / 0.18), 0 2px 6px rgb(19 42 92 / 0.08);
+  box-shadow: 0 24px 48px rgb(19 42 92 / 0.3), 0 2px 6px rgb(19 42 92 / 0.15), inset 0 0 0 1px rgb(255 255 255 / 0.08);
   overflow: hidden;
 }
 
@@ -271,8 +272,8 @@ h3 {
   align-items: center;
   height: 36px;
   padding-left: 14px;
-  background: #f4f6f9;
-  border-bottom: 1px solid rgb(19 42 92 / 0.08);
+  background: #2a2b31;
+  border-bottom: 1px solid rgb(0 0 0 / 0.4);
 }
 
 .lights {
@@ -307,8 +308,8 @@ h3 {
   gap: 12px;
   width: 28%;
   padding: 18px 14px;
-  background: #eef2f7;
-  border-right: 1px solid rgb(19 42 92 / 0.06);
+  background: #26272d;
+  border-right: 1px solid rgb(0 0 0 / 0.3);
 }
 
 .window-sidebar i,
@@ -317,7 +318,7 @@ h3 {
   display: block;
   height: 10px;
   border-radius: 5px;
-  background: rgb(19 42 92 / 0.1);
+  background: rgb(255 255 255 / 0.12);
 }
 
 .window-sidebar i:nth-child(odd) {
@@ -341,11 +342,11 @@ h3 {
   width: 45%;
   height: 16px;
   margin-bottom: 4px;
-  background: rgb(19 42 92 / 0.18);
+  background: rgb(255 255 255 / 0.22);
 }
 
 .window-content i {
-  background: rgb(19 42 92 / 0.07);
+  background: rgb(255 255 255 / 0.08);
 }
 
 .window-content i.short {
@@ -357,7 +358,7 @@ h3 {
   right: 0;
   bottom: 18px;
   left: 0;
-  color: var(--muted);
+  color: #9a9ca6;
   font-size: 13px;
   text-align: center;
 }
