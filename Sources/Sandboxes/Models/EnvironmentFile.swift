@@ -240,6 +240,12 @@ extension CreateSandboxRequest {
                 })))
             }
         }
+        let mounts = enteredHostMounts
+        if !mounts.isEmpty {
+            entries.append(YAMLEntry(key: "mounts", value: .map(mounts.map {
+                YAMLEntry(key: $0.trimmedSandboxPath, value: .scalar($0.normalizedHostPath ?? ""))
+            })))
+        }
         let variables = environment.filter { !$0.isBlank }
         if !variables.isEmpty {
             entries.append(YAMLEntry(key: "env", value: .map(variables.map {
@@ -350,6 +356,17 @@ extension CreateSandboxRequest {
                         continue
                     }
                     additionalWorkspaces.append(AdditionalWorkspace(path: path, isReadOnly: item["readOnly"]?.bool ?? false))
+                }
+            case "mounts":
+                // Kit host mounts: sandbox paths to folders on the Mac. sbx
+                // resolves a relative folder from the file's own folder.
+                guard let items = value.map else { unsupported.append("mounts"); continue }
+                for item in items {
+                    guard let path = item.value.string, let hostPath = Self.workspacePath(path, against: directory) else {
+                        unsupported.append("mounts")
+                        continue
+                    }
+                    hostMounts.append(HostMount(sandboxPath: item.key, hostPath: hostPath))
                 }
             case "env":
                 guard let variables = value.map else { unsupported.append("env"); continue }
