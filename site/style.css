@@ -476,12 +476,12 @@ footer a {
    position, so they slide back out when scrolled up again. Screenshots start
    a little after their text. Browsers without scroll-driven animations, and
    visitors with Reduce Motion on, see everything in place. The ranges end
-   while each element is still entering, so ones near the bottom of the page
-   finish too. */
+   early in each element's entry, and ease out, so it settles after a short
+   scroll and ones near the bottom of the page finish too. */
 @keyframes slide-up {
   from {
     opacity: 0;
-    transform: translateY(40px);
+    transform: translateY(24px);
   }
 }
 
@@ -492,14 +492,14 @@ footer a {
     .feature > .shot,
     #requirements .inner,
     #other-install .inner {
-      animation: slide-up linear both;
+      animation: slide-up ease-out both;
       animation-timeline: view();
-      animation-range: entry 0% entry 70%;
+      animation-range: entry 0% entry 30%;
     }
 
     .feature > .window,
     .feature > .shot {
-      animation-range: entry 15% entry 85%;
+      animation-range: entry 10% entry 45%;
     }
   }
 }
