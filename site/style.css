@@ -505,9 +505,10 @@ footer a {
   }
 }
 
-/* When the page loads, the title, the install command and the main
-   screenshot fade up one after another. They're done in about half a second,
-   before the robot starts peeking at 0.9 seconds. */
+/* When the page loads, the sandbox rises into place, then the title, the
+   install command and the main screenshot fade up one after another. The
+   sandbox has settled before the robot starts peeking out of it at 1.2
+   seconds (PEEK_DELAY in scripts/generate-app-icon.py). */
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -515,19 +516,34 @@ footer a {
   }
 }
 
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.94);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .artwork {
+    animation: rise-in 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+
   .brand-text,
   .install,
   .main-shot {
-    animation: fade-up 0.35s ease-out both;
+    animation: fade-up 0.6s ease-out both;
+  }
+
+  .brand-text {
+    animation-delay: 0.15s;
   }
 
   .install {
-    animation-delay: 0.08s;
+    animation-delay: 0.3s;
   }
 
   .main-shot {
-    animation-delay: 0.16s;
+    animation-delay: 0.45s;
   }
 }
 

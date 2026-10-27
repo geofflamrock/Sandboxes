@@ -194,9 +194,9 @@ def sand_line():
 # moment, then crouches and pops out, landing with a little bounce.
 # Each step is (seconds from the start, how far below its resting place the
 # agent is, its tilt in degrees, how far its face turns sideways, the easing
-# into the next step). It plays
-# once, after a short pause so the page has settled, and not at all with
-# Reduce Motion on.
+# into the next step). It plays once, and not at all with Reduce Motion on.
+# PEEK_DELAY waits for the website's header to rise into place first (see
+# the fade-up in site/style.css).
 SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
 POKED = 25
 # Low enough that the sand covers most of its eyes.
@@ -204,7 +204,7 @@ EYES_SHOWING = 115
 # How far the visor and eyes slide, and narrow, when it turns its head. The
 # visor has 27 units of head either side of it.
 TURN = 18
-PEEK_DELAY = 0.9
+PEEK_DELAY = 1.2
 PEEK_STEPS = [
     (0.00, SUNK, 0, 0, "cubic-bezier(0.25, 0.8, 0.35, 1)"),  # rises slowly
     (0.70, POKED, 0, 0, "linear"),  # spots the visitor

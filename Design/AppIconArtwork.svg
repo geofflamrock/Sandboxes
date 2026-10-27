@@ -3,8 +3,8 @@
   <defs>
     <clipPath id="sand-line"><path d="M57,0 H967 V536.85 H637 A125,33 0 0 1 387,536.85 H57 Z"/></clipPath>
     <style>
-      .peek { transform-box: fill-box; transform-origin: 50% 100%; animation: peek 3.42s 0.9s both; }
-      .face { transform-box: fill-box; transform-origin: 50% 50%; animation: turn 3.42s 0.9s both; }
+      .peek { transform-box: fill-box; transform-origin: 50% 100%; animation: peek 3.42s 1.2s both; }
+      .face { transform-box: fill-box; transform-origin: 50% 50%; animation: turn 3.42s 1.2s both; }
       @keyframes peek {
         0.0% { transform: translateY(313px) rotate(0deg); animation-timing-function: cubic-bezier(0.25, 0.8, 0.35, 1); }
         20.5% { transform: translateY(25px) rotate(0deg); animation-timing-function: linear; }
