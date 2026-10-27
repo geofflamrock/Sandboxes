@@ -4,16 +4,17 @@
   /* Light only, so the sky looks the same everywhere. */
   color-scheme: light;
   --text: #1d1d1f;
-  --muted: #5f6368;
-  --border: #d9dde3;
-  --accent: #1c5cdb;
+  --muted: #3d4a5c;
+  --border: rgb(19 42 92 / 0.18);
+  /* Darker than the icon's blue so links are readable on the sky. */
+  --accent: #0b3f9e;
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
-  /* The page is one gradient from the icon's sky at the top, through its
-     darker blue, to a pale sky that continues below the header. */
+  /* The page fades from the icon's light sky at the top to its darker sky,
+     which continues to the footer. The footer is a paler sky. */
   --sky-top: #d6ecff;
-  --sky-mid: #a9d3f7;
-  --page-bg: #eef5fc;
+  --page-bg: #a9d3f7;
+  --footer-bg: #eef5fc;
   /* The header's text and controls, which sit on the sky. */
   --hero-text: #132a5c;
   --hero-muted: #2f4a7a;
@@ -38,11 +39,15 @@ html {
   scroll-behavior: smooth;
 }
 
-/* The gradient finishes a little below the header, so its end matches the
-   plain background under it. */
+/* The gradient reaches the darker sky around the install command, then the
+   plain background carries on. The column layout keeps the footer at the
+   bottom of a window taller than the page. */
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   margin: 0;
-  background: linear-gradient(var(--sky-top), var(--sky-mid) 560px, var(--page-bg) 1100px) no-repeat var(--page-bg);
+  background: linear-gradient(var(--sky-top), var(--page-bg) 560px) no-repeat var(--page-bg);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -281,6 +286,8 @@ h3 {
 }
 
 footer {
+  margin-top: auto;
+  background: var(--footer-bg);
   color: var(--muted);
   text-align: center;
   font-size: 14px;
