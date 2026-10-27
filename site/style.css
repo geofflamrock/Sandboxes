@@ -8,13 +8,8 @@
   --accent: #1c5cdb;
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
-  /* The section bands, top to bottom: white, a sand tint, a sky tint. */
-  --band-1: #ffffff;
-  --band-2: #fbf4e6;
-  --band-3: #eef5fc;
-  --footer-bg: #132a5c;
-  --footer-text: #c9d6ee;
-  --footer-link: #a6d5fa;
+  /* Everything below the header, which fades into it: a pale sky. */
+  --page-bg: #eef5fc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,12 +20,7 @@
     --accent: #6fa8ff;
     --code-bg: rgb(255 255 255 / 0.08);
     --surface: #1b1e24;
-    --band-1: #121418;
-    --band-2: #1a1712;
-    --band-3: #0f1724;
-    --footer-bg: #0b1630;
-    --footer-text: #a9b6cf;
-    --footer-link: #a6d5fa;
+    --page-bg: #0f1724;
   }
 }
 
@@ -44,17 +34,9 @@ html {
 
 body {
   margin: 0;
-  background: var(--band-1);
+  background: var(--page-bg);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
-}
-
-/* Headings use SF Pro Rounded on Apple systems, to suit the icon. Elsewhere
-   ui-rounded isn't available, so they use the same font as the text. */
-h1,
-h2,
-h3 {
-  font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 a {
@@ -75,11 +57,24 @@ code {
 }
 
 /* The header is the icon's sky in both appearances, so its colours are fixed
-   rather than using the tokens above. */
+   rather than using the tokens above. Below its content, ::after fades the sky
+   into the page's background so there's no hard edge. */
 .hero {
   background: linear-gradient(#d6ecff, #a9d3f7);
   color: #132a5c;
-  padding: 64px 0 56px;
+  padding-top: 64px;
+}
+
+.hero > .inner {
+  padding-bottom: 40px;
+}
+
+.hero::after {
+  content: "";
+  display: block;
+  height: 240px;
+  margin-bottom: -120px;
+  background: linear-gradient(#a9d3f7, var(--page-bg));
 }
 
 .hero a {
@@ -95,7 +90,7 @@ code {
 
 .artwork {
   flex: none;
-  width: 240px;
+  width: 200px;
   height: auto;
   filter: drop-shadow(0 12px 20px rgb(19 42 92 / 0.18));
 }
@@ -203,21 +198,9 @@ h1 {
   font-size: 15px;
 }
 
-/* Full-width sections with alternating backgrounds. */
 .band {
+  position: relative;
   padding: 48px 0;
-}
-
-#features {
-  background: var(--band-1);
-}
-
-#requirements {
-  background: var(--band-2);
-}
-
-#other-install {
-  background: var(--band-3);
 }
 
 h2 {
@@ -306,20 +289,21 @@ h3 {
 }
 
 footer {
-  background: var(--footer-bg);
-  color: var(--footer-text);
+  color: var(--muted);
   text-align: center;
   font-size: 14px;
   padding: 28px 0 36px;
-}
-
-footer a {
-  color: var(--footer-link);
+  border-top: 1px solid var(--border);
 }
 
 @media (max-width: 640px) {
   .hero {
-    padding: 40px 0;
+    padding-top: 40px;
+  }
+
+  .hero::after {
+    height: 160px;
+    margin-bottom: -80px;
   }
 
   .brand {
@@ -329,7 +313,7 @@ footer a {
   }
 
   .artwork {
-    width: 180px;
+    width: 150px;
   }
 
   .actions {

@@ -12,13 +12,13 @@
   <header class="hero">
     <div class="inner">
       <div class="brand">
-        <img class="artwork" src="AppIconArtwork.svg" alt="" width="240" height="223">
+        <img class="artwork" src="AppIconArtwork.svg" alt="" width="200" height="186">
         <div class="brand-text">
           <h1>Sandboxes</h1>
           <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
           <div class="actions">
             <!-- Links to the latest release page; the script below adds its version. -->
-            <a id="release" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest Release</a>
+            <a id="release" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest release</a>
             <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
           </div>
         </div>
@@ -33,8 +33,8 @@
           </button>
         </div>
         <p class="links">
-          <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View Source</a>
-          <a href="#other-install">Other Ways to Install</a>
+          <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View source</a>
+          <a href="#other-install">Other ways to install</a>
         </p>
         <p class="note">Requires macOS 26 or later.</p>
       </div>
@@ -78,7 +78,7 @@
 
     <section id="other-install" class="band">
       <div class="inner">
-        <h2>Other Ways to Install</h2>
+        <h2>Other ways to install</h2>
         <h3>Read the script first</h3>
         <p>Download the install script, read it, then run it:</p>
         <div class="command">
@@ -112,7 +112,7 @@
         if (!release.tag_name) return;
         const button = document.getElementById("release");
         if (release.html_url) button.href = release.html_url;
-        button.textContent = `Release ${release.tag_name}`;
+        button.textContent = `Latest release: ${release.tag_name}`;
       })
       .catch(() => {});
 
