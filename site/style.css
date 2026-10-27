@@ -11,11 +11,10 @@
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
   /* Like a real sky, the page is darkest at the top: the icon's darker sky
-     fades to its light sky, then a slightly paler sky. The footer is the
-     sandbox: a wooden rim like the icon's, then its sand. */
+     fades to its light sky, which continues down to the footer. The footer
+     is the sandbox: a wooden rim like the icon's, then its sand. */
   --sky-dark: #a9d3f7;
   --sky-light: #d6ecff;
-  --page-bg: #e0effd;
   --sand-top: #edc77f;
   --sand-bottom: #f3dba8;
   --wood-top: #e39b5b;
@@ -46,14 +45,14 @@ html {
   scroll-behavior: smooth;
 }
 
-/* The sky lightens all the way from the top until well below the header. The column
+/* The sky lightens from the top until a little below the header. The column
    layout keeps the footer at the bottom of a window taller than the page. */
 body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(var(--sky-dark), var(--sky-light) 800px, var(--page-bg) 1800px) top / 100% 1800px no-repeat var(--page-bg);
+  background: linear-gradient(var(--sky-dark), var(--sky-light) 800px) top / 100% 800px no-repeat var(--sky-light);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
