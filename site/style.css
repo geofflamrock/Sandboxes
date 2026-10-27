@@ -11,11 +11,11 @@
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
   /* Like a real sky, the page is darkest at the top: the icon's darker sky
-     fades to its light sky, then a pale sky. The footer is a pale version of
+     fades to its light sky, then a slightly paler sky. The footer is a pale version of
      the icon's sand, so the sky meets the ground at its top edge. */
   --sky-dark: #a9d3f7;
   --sky-light: #d6ecff;
-  --page-bg: #eef5fc;
+  --page-bg: #e0effd;
   --sand: #f3e3c3;
   /* The header's text and controls, which sit on the sky. */
   --hero-text: #132a5c;
