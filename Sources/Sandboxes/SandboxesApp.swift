@@ -103,6 +103,7 @@ struct SandboxesApp: App {
                 .environment(recents)
                 .environment(appDelegate.mcpServers)
                 .environment(appDelegate.environments)
+                .environment(appDelegate.sbxStatus)
         }
         .defaultSize(width: 820, height: 700)
         .windowResizability(.contentMinSize)

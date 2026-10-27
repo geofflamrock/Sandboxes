@@ -145,6 +145,15 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether the installed sbx takes `--mount` for kit host mounts, added in
+    /// v0.50.0. True when the version isn't known, such as for a nightly build.
+    var supportsHostMounts: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.50.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// A newer stable release than the installed version.
     var availableUpgrade: Release? {
         guard let installed = installation?.version, let latest, installed < latest.version

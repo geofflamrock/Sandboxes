@@ -139,6 +139,7 @@ private struct CreateSandboxForm: View {
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(SbxStatus.self) private var sbxStatus
     @State private var kitDraft = KitDraft()
     @State private var section = CreateSandboxSection.general
     /// Sections visited before and after the current one, for Back and Forward.
@@ -243,6 +244,8 @@ private struct CreateSandboxForm: View {
                 if request.workspace != nil {
                     additionalWorkspacesSection
                 }
+            case .hostMounts:
+                hostMountsSection
             case .kits:
                 kitsSection
                 if !availableRecentKits.isEmpty {
@@ -297,16 +300,22 @@ private struct CreateSandboxForm: View {
 
     /// The sections for what's being made. An environment file doesn't pick MCP
     /// servers the way `sbx create` does: it registers servers itself.
+    /// Host mounts need sbx v0.50.0.
     private var visibleSections: [CreateSandboxSection] {
-        request.target == .environment
-            ? CreateSandboxSection.allCases.filter { $0 != .mcp }
-            : CreateSandboxSection.allCases
+        CreateSandboxSection.allCases.filter { section in
+            switch section {
+            case .mcp: request.target == .sandbox
+            case .hostMounts: sbxStatus.supportsHostMounts
+            default: true
+            }
+        }
     }
 
     /// How many things are added in a section, so what's set elsewhere shows
     /// without opening it. A zero badge isn't shown.
     private func badge(for section: CreateSandboxSection) -> Int {
         switch section {
+        case .hostMounts: request.enteredHostMounts.count
         case .kits: request.kits.count
         case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
         case .mcp: request.staticMCPServers.count
@@ -551,6 +560,46 @@ private struct CreateSandboxForm: View {
             Text("Additional Folders")
         } footer: {
             Text("These folders are mounted at the same paths as on your Mac.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Host Mounts
+
+    private var hostMountsSection: some View {
+        Section {
+            ForEach($request.hostMounts) { $mount in
+                HStack {
+                    TextField("Sandbox Path", text: $mount.sandboxPath, prompt: Text("/home/agent/.cache"))
+                        .labelsHidden()
+                        .font(.body.monospaced())
+                        .frame(maxWidth: 220)
+                        .help("The path in the sandbox, from the kit's documentation")
+                    Image(systemName: "arrow.left")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    WorkspacePathField(
+                        path: $mount.hostPath,
+                        prompt: "~/.cache",
+                        panelMessage: "Choose the folder on your Mac to use for \(mount.trimmedSandboxPath.isEmpty ? "this host mount" : "“\(mount.trimmedSandboxPath)”").",
+                        canCreateFolders: true
+                    )
+                    RemoveButton(help: "Remove host mount") {
+                        request.hostMounts.removeAll { $0.id == mount.id }
+                    }
+                }
+            }
+            HStack {
+                Button("Add Host Mount", systemImage: "plus") {
+                    request.hostMounts.append(HostMount())
+                }
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        } header: {
+            Text("Host Mounts")
+        } footer: {
+            Text("Some kits share a folder with your Mac, at a sandbox path given in the kit's documentation. Docker Sandboxes manages that folder unless you choose your own here. Its files are kept when the sandbox is removed.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -1015,6 +1064,7 @@ private struct CreateSandboxForm: View {
 private enum CreateSandboxSection: CaseIterable, Identifiable {
     case general
     case workspace
+    case hostMounts
     case kits
     case runtime
     case network
@@ -1026,6 +1076,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .workspace: "Workspace"
+        case .hostMounts: "Host Mounts"
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .network: "Network"
@@ -1037,6 +1088,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .workspace: "folder"
+        case .hostMounts: "externaldrive.connected.to.line.below"
         case .kits: "shippingbox"
         case .runtime: "cpu"
         case .network: "network"
@@ -1081,6 +1133,8 @@ private struct WorkspacePathField: View {
     @Binding var path: String
     let prompt: String
     let panelMessage: String
+    /// Whether New Folder is offered, for a folder that may not exist yet.
+    var canCreateFolders = false
     var onChoose: (URL) -> Void = { _ in }
 
     var body: some View {
@@ -1090,7 +1144,7 @@ private struct WorkspacePathField: View {
                 .font(.body.monospaced())
                 .help(path)
             Button("Choose…") {
-                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: panelMessage).first {
+                if let url = OpenPanel.choose(directories: true, canCreateDirectories: canCreateFolders, prompt: "Choose", message: panelMessage).first {
                     path = url.path
                     onChoose(url)
                 }
@@ -1141,6 +1195,7 @@ enum OpenPanel {
         directories: Bool = false,
         files: [UTType] = [],
         multiple: Bool = false,
+        canCreateDirectories: Bool = false,
         showsHiddenFiles: Bool = false,
         prompt: String,
         message: String
@@ -1150,7 +1205,7 @@ enum OpenPanel {
         panel.canChooseFiles = !files.isEmpty
         panel.allowedContentTypes = files
         panel.allowsMultipleSelection = multiple
-        panel.canCreateDirectories = false
+        panel.canCreateDirectories = canCreateDirectories
         panel.showsHiddenFiles = showsHiddenFiles
         panel.prompt = prompt
         panel.message = message
