@@ -180,29 +180,51 @@ def sand_line():
             f"A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} H{left - W:g} Z")
 
 
-# How far below the sand the agent starts in the website's animation, enough
-# to hide the antenna light; how far down it waits while peeking, which shows
-# the top of its visor and its eyes; and how far it ducks between peeks.
+# The website's animation: the agent pokes its head out of the sand, spots
+# the visitor and ducks straight back down, leaving its antenna up. After a
+# moment it creeps back up, looks left and right, then crouches and pops out,
+# landing with a little bounce. Each step is (seconds from the start, how far
+# below its resting place the agent is, its tilt in degrees, the easing into
+# the next step). It plays once, after a short pause so the page has
+# settled, and not at all with Reduce Motion on.
 SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
 PEEKING = 50
-DUCKED = 140
+HIDING = 200
+CREEPING = 120
+PEEK_DELAY = 0.9
+PEEK_STEPS = [
+    (0.00, SUNK, 0, "cubic-bezier(0.25, 0.8, 0.35, 1)"),  # rises slowly
+    (0.70, PEEKING, 0, "linear"),  # spots the visitor
+    (0.85, PEEKING, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
+    (0.97, HIDING, 0, "linear"),  # hides
+    (1.75, HIDING, 0, "cubic-bezier(0.3, 0.6, 0.4, 1)"),  # creeps up
+    (2.15, CREEPING, 0, "linear"),
+    (2.40, CREEPING, 0, "ease-in-out"),
+    (2.70, PEEKING, 0, "ease-in-out"),  # looks around
+    (2.95, PEEKING, -5, "ease-in-out"),
+    (3.30, PEEKING, 5, "ease-in-out"),
+    (3.55, PEEKING, 0, "ease-in"),  # crouches
+    (3.70, PEEKING + 22, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
+    (3.92, -20, 0, "ease-in"),  # lands
+    (4.12, 0, 0, "ease-out"),
+    (4.22, -4, 0, "ease-in"),
+    (4.32, 0, 0, None),
+]
 
-# The agent peeks over the sand, ducks back down a little, peeks again, then
-# pops up the rest of the way with a small overshoot. It plays once, after a
-# short pause so the page has settled, and not at all with Reduce Motion on.
-# Browsers run CSS inside an SVG even when it's shown with <img>.
-PEEK_STYLE = f"""<style>
-      .peek {{ animation: peek 3.4s 0.8s both; }}
+
+def peek_style():
+    # Browsers run CSS inside an SVG even when it's shown with <img>. The tilt
+    # turns the agent about the middle of its bottom edge.
+    total = PEEK_STEPS[-1][0]
+    frames = []
+    for t, y, angle, easing in PEEK_STEPS:
+        timing = f" animation-timing-function: {easing};" if easing else ""
+        frames.append(f"        {t / total * 100:.1f}% {{ transform: translateY({y:g}px) rotate({angle:g}deg);{timing} }}")
+    keyframes = "\n".join(frames)
+    return f"""<style>
+      .peek {{ transform-box: fill-box; transform-origin: 50% 100%; animation: peek {total:g}s {PEEK_DELAY:g}s both; }}
       @keyframes peek {{
-        0% {{ transform: translateY({SUNK}px); animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }}
-        15% {{ transform: translateY({PEEKING}px); }}
-        25% {{ transform: translateY({PEEKING}px); animation-timing-function: ease-in-out; }}
-        32% {{ transform: translateY({DUCKED}px); }}
-        47% {{ transform: translateY({DUCKED}px); animation-timing-function: ease-out; }}
-        56% {{ transform: translateY({PEEKING}px); }}
-        78% {{ transform: translateY({PEEKING}px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }}
-        91% {{ transform: translateY(-14px); animation-timing-function: ease-in-out; }}
-        100% {{ transform: translateY(0); }}
+{keyframes}
       }}
       @media (prefers-reduced-motion: reduce) {{
         .peek {{ animation: none; }}
@@ -277,7 +299,7 @@ def write_artwork():
     assert layers.count(grown) == 1 and layers.endswith(end)
     layers = layers.replace(grown, f'<g transform="{agent_grow()}" clip-path="url(#sand-line)">\n<g class="peek">', 1)
     layers = layers[:-len(end)] + "\n</g>" + end
-    defs = f'<clipPath id="sand-line"><path d="{sand_line()}"/></clipPath>\n    {PEEK_STYLE}'
+    defs = f'<clipPath id="sand-line"><path d="{sand_line()}"/></clipPath>\n    {peek_style()}'
     (DESIGN / "AppIconArtwork.svg").write_text(
         svg(layers, defs).replace(f"0 0 {CANVAS} {CANVAS}", viewbox, 1))
 
