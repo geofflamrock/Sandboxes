@@ -28,7 +28,7 @@ Because nothing compiles locally, be strict with APIs: confirm any API you aren'
 - `Models/`: `@Observable` stores and value types, plus parsers for `sbx` output.
 - `Services/`: talking to the outside world: `SbxCLI` (runs processes), `ShellEnvironment` (login shell `PATH`), `TerminalLauncher`, `ClaudeDesktopLauncher`, `ApprovalNotifier`, `UpdateChecker`, `AppWindows`, `Homebrew`.
 - `Views/`: SwiftUI views, one file per window, screen or sheet.
-- `Design/AppIcon.icon`: Icon Composer file. Its layers come from `scripts/generate-app-icon.py`, which also writes `Design/AppIcon.svg` and `Design/AppIconArtwork.svg` (the artwork without the background, for the website).
+- `Design/AppIcon.icon`: Icon Composer file. Its layers come from `scripts/generate-app-icon.py`, which also writes `Design/AppIcon.svg` and `Design/AppIconArtwork.svg` (the artwork without the background, for the website, where the robot peeks out of the sand on load).
 - `site/`: the website on GitHub Pages (`index.html`, `style.css`) and `install.sh`, published by `.github/workflows/pages.yml`, which copies in `Design/AppIcon.svg` and `Design/AppIconArtwork.svg`.
 
 ## Patterns to follow

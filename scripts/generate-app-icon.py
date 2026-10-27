@@ -14,7 +14,8 @@ Outputs:
 - Design/AppIcon.svg: a flattened preview of the icon. It follows icon.json's
   layer order and offsets, so it matches what Icon Composer shows.
 - Design/AppIconArtwork.svg: the preview's sandbox and agent without the
-  background, cropped to the artwork, for the website's header.
+  background, cropped to the artwork, for the website's header. In it the
+  agent peeks out of the sand when the page loads (see write_artwork).
 
 The menu bar item draws a one-colour version of the same shapes in
 NSImage.menuBarSandbox (Sources/Sandboxes/Views/MenuBarViews.swift), so
@@ -141,6 +142,13 @@ def sand():
     return [polygon([(cx, cy - h + SAND_DROP), (cx + side, cy + SAND_DROP / 2), (cx, cy + h), (cx - side, cy + SAND_DROP / 2)], SAND)]
 
 
+def agent_grow():
+    # Grows the agent by AGENT_SCALE from where it meets the sand.
+    cx, cy = CENTRE
+    bottom = head_bottom(cy)
+    return f"translate({cx:g} {bottom:g}) scale({AGENT_SCALE:g}) translate({-cx:g} {-bottom:g})"
+
+
 def agent():
     # A rounded head with a visor and two eyes, and an antenna on top. Its
     # bottom is a shallow curve where it disappears into the sand.
@@ -151,8 +159,6 @@ def agent():
     head = (f"M{left:g},{sides:g} V{top + r:g} A{r},{r} 0 0 1 {left + r:g},{top:g} "
             f"H{right - r:g} A{r},{r} 0 0 1 {right:g},{top + r:g} "
             f"V{sides:g} A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} Z")
-    bottom = head_bottom(cy)
-    grow = f"translate({cx:g} {bottom:g}) scale({AGENT_SCALE:g}) translate({-cx:g} {-bottom:g})"
     return [group([
         rect(cx - 7, top - ANTENNA_HEIGHT, 14, ANTENNA_HEIGHT + 10, 7, ANTENNA),
         f'<circle cx="{cx}" cy="{top - ANTENNA_HEIGHT:g}" r="{LIGHT_RADIUS}" fill="{ANTENNA_LIGHT}"/>',
@@ -160,7 +166,42 @@ def agent():
         rect(cx - 98, top + 44, 196, 114, 52, VISOR),
         rect(cx - 38 - 19, top + 71, 38, 60, 19, EYES),
         rect(cx + 38 - 19, top + 71, 38, 60, 19, EYES),
-    ], grow, indent="")]
+    ], agent_grow(), indent="")]
+
+
+def sand_line():
+    # Everything above where the agent meets the sand: straight out from the
+    # sides of its head, and along the curve of its bottom between them. In
+    # the agent's own coordinates, before agent_grow.
+    cx, cy = CENTRE
+    sides = head_top(cy) + HEAD_SHOWN
+    left, right = cx - HEAD_WIDTH / 2, cx + HEAD_WIDTH / 2
+    return (f"M{left - W:g},0 H{right + W:g} V{sides:g} H{right:g} "
+            f"A{HEAD_WIDTH / 2:g},{HEAD_DIP} 0 0 1 {left:g},{sides:g} H{left - W:g} Z")
+
+
+# How far below the sand the agent starts in the website's animation, enough
+# to hide the antenna light, and how far down it waits while peeking, which
+# shows the top of its visor and its eyes.
+SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
+PEEKING = 50
+
+# The agent rises to peek over the sand, pauses, then pops up the rest of the
+# way with a small overshoot. It plays once, and not at all with Reduce Motion
+# on. Browsers run CSS inside an SVG even when it's shown with <img>.
+PEEK_STYLE = f"""<style>
+      .peek {{ animation: peek 1.6s 0.3s both; }}
+      @keyframes peek {{
+        0% {{ transform: translateY({SUNK}px); animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }}
+        35% {{ transform: translateY({PEEKING}px); }}
+        60% {{ transform: translateY({PEEKING}px); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1.4); }}
+        85% {{ transform: translateY(-14px); animation-timing-function: ease-in-out; }}
+        100% {{ transform: translateY(0); }}
+      }}
+      @media (prefers-reduced-motion: reduce) {{
+        .peek {{ animation: none; }}
+      }}
+    </style>"""
 
 
 LAYER_SHAPES = {"Frame": frame, "Sand": sand, "Agent": agent}
@@ -222,8 +263,17 @@ def write_artwork():
     width = 2 * (W + margin)
     height = _REACH_UP + _REACH_DOWN + 2 * margin
     viewbox = f"{x:.1f} {y:.1f} {width:.1f} {height:.1f}"
+    # Clip the agent at the sand and wrap its shapes in a group to animate,
+    # so it rises out of the sand rather than sliding over it.
+    grown = f'<g transform="{agent_grow()}">'
+    layers = preview_layers()
+    end = "\n</g>\n  </g>"
+    assert layers.count(grown) == 1 and layers.endswith(end)
+    layers = layers.replace(grown, f'<g transform="{agent_grow()}" clip-path="url(#sand-line)">\n<g class="peek">', 1)
+    layers = layers[:-len(end)] + "\n</g>" + end
+    defs = f'<clipPath id="sand-line"><path d="{sand_line()}"/></clipPath>\n    {PEEK_STYLE}'
     (DESIGN / "AppIconArtwork.svg").write_text(
-        svg(preview_layers()).replace(f"0 0 {CANVAS} {CANVAS}", viewbox, 1))
+        svg(layers, defs).replace(f"0 0 {CANVAS} {CANVAS}", viewbox, 1))
 
 
 if __name__ == "__main__":
