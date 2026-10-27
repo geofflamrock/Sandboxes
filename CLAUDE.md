@@ -83,7 +83,7 @@ When a change affects one of these, update it in the same PR:
 - `README.md` › **Update checks**, **Test builds**, **Releases**: when `UpdateChecker`, the CI workflow or the versioning changes.
 - `README.md` › **Requirements**: the macOS version, and the minimum `sbx` or Claude Desktop version a feature needs.
 - `project.yml` comments, and the comments in `.github/workflows/build.yml`, when build settings or versioning change.
-- `site/index.html`: its feature sections (Create and manage sandboxes, Manage access, Manage settings) summarise the main items in the README's **Features**, and its requirements repeat **Requirements**. Update the site when a feature belongs in one of those sections or a requirement changes.
+- `site/index.html`: its feature sections (Create and run sandboxes, Control access, Set up `sbx`) summarise the main items in the README's **Features**, and its requirements repeat **Requirements**. Update the site when a feature belongs in one of those sections or a requirement changes.
 - `site/install.sh`: it builds the DMG's URL from the release tag (`v1.2.3` gives `Sandboxes-1.2.3.dmg`). Update it if `build.yml` changes how the DMG is named, or the app's name or install location changes.
 - `Design/AppIcon.svg`, `Design/AppIconArtwork.svg` and `Design/AppIcon.icon/Assets/`: regenerate with `python3 scripts/generate-app-icon.py` after editing the script.
 
