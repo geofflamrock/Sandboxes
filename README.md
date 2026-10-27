@@ -6,7 +6,6 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 - See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
-- Choose the folders on your Mac that a kit shares with a sandbox (host mounts), with recent ones a click away, and see which folders a sandbox uses.
 - Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
 - Start, stop and remove sandboxes.
 - Publish a sandbox's ports on your Mac when creating it or later, open them in your browser, and unpublish them.
