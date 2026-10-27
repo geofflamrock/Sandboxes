@@ -17,7 +17,7 @@
           <h1>Sandboxes</h1>
           <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
           <div class="actions">
-            <!-- Links to the latest release page; the script below adds its version. -->
+            <!-- .github/workflows/pages.yml fills in the latest release's version and page when it deploys. -->
             <a id="release" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest release</a>
             <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
           </div>
@@ -160,18 +160,6 @@
   </footer>
 
   <script>
-    // Show the latest release's version on its button. If the request fails (for
-    // example the API's rate limit of 60 an hour), the button keeps its label.
-    fetch("https://api.github.com/repos/geofflamrock/Sandboxes/releases/latest")
-      .then(response => response.ok ? response.json() : Promise.reject(response.status))
-      .then(release => {
-        if (!release.tag_name) return;
-        const button = document.getElementById("release");
-        if (release.html_url) button.href = release.html_url;
-        button.textContent = `Latest release: ${release.tag_name}`;
-      })
-      .catch(() => {});
-
     for (const button of document.querySelectorAll("button.copy")) {
       button.addEventListener("click", () => {
         const text = document.getElementById(button.dataset.copy).textContent;

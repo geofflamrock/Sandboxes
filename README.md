@@ -109,7 +109,7 @@ To change the background fill, or how the layers are grouped, scaled or lit, ope
 
 ### Website
 
-The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or the icon SVGs in `Design/` change on `main`, copying in `Design/AppIcon.svg` (the favicon) and `Design/AppIconArtwork.svg` (the header's artwork). Its release button asks the GitHub API for the latest release in the browser and shows its version, such as "Latest release: v0.6.1", so publishing a release doesn't need a redeploy. If the request fails, the button says "Latest release" and still links to the latest release page.
+The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or the icon SVGs in `Design/` change on `main`, copying in `Design/AppIcon.svg` (the favicon) and `Design/AppIconArtwork.svg` (the header's artwork). When it deploys, it fills in the release button with the latest release's version and page, such as "Latest release: v0.6.1", so the button doesn't change after the page loads. Publishing a release redeploys the site once the DMG is attached. Before the first release, and in a local preview, the button says "Latest release" and links to the latest release page.
 
 To preview the site locally:
 
@@ -130,7 +130,7 @@ gh run download --repo geofflamrock/Sandboxes --name Sandboxes "$(gh run list --
 
 ### Releases
 
-Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
+Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it, then redeploys the [website](#website) so its release button shows the new version. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
 
 ### Commands the app runs
 
