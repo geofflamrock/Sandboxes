@@ -190,8 +190,8 @@ def sand_line():
 
 
 # The website's animation: the agent pokes its head out of the sand, spots
-# the visitor and ducks quickly until only its eyes show. It slowly looks
-# left and right, then crouches and pops out, landing with a little bounce.
+# the visitor and ducks quickly until only its eyes show. It waits there a
+# moment, then crouches and pops out, landing with a little bounce.
 # Each step is (seconds from the start, how far below its resting place the
 # agent is, its tilt in degrees, how far its face turns sideways, the easing
 # into the next step). It plays
@@ -210,9 +210,11 @@ PEEK_STEPS = [
     (0.70, POKED, 0, 0, "linear"),  # spots the visitor
     (0.85, POKED, 0, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
     (0.97, EYES_SHOWING, 0, 0, "linear"),
-    (1.20, EYES_SHOWING, 0, 0, "ease-in-out"),  # looks around slowly
-    (1.75, EYES_SHOWING, -5, -TURN, "ease-in-out"),
-    (2.45, EYES_SHOWING, 5, TURN, "ease-in-out"),
+    # Waits. To have it look left and right here instead, give these steps
+    # a tilt such as -5 and 5, and a turn of -TURN and TURN.
+    (1.20, EYES_SHOWING, 0, 0, "ease-in-out"),
+    (1.75, EYES_SHOWING, 0, 0, "ease-in-out"),
+    (2.45, EYES_SHOWING, 0, 0, "ease-in-out"),
     (2.95, EYES_SHOWING, 0, 0, "linear"),
     (3.15, EYES_SHOWING, 0, 0, "ease-in"),  # crouches
     (3.30, EYES_SHOWING + 22, 0, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out

@@ -11,8 +11,8 @@
         21.5% { transform: translateY(25px) rotate(0deg); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
         24.5% { transform: translateY(115px) rotate(0deg); animation-timing-function: linear; }
         30.3% { transform: translateY(115px) rotate(0deg); animation-timing-function: ease-in-out; }
-        44.2% { transform: translateY(115px) rotate(-5deg); animation-timing-function: ease-in-out; }
-        61.9% { transform: translateY(115px) rotate(5deg); animation-timing-function: ease-in-out; }
+        44.2% { transform: translateY(115px) rotate(0deg); animation-timing-function: ease-in-out; }
+        61.9% { transform: translateY(115px) rotate(0deg); animation-timing-function: ease-in-out; }
         74.5% { transform: translateY(115px) rotate(0deg); animation-timing-function: linear; }
         79.5% { transform: translateY(115px) rotate(0deg); animation-timing-function: ease-in; }
         83.3% { transform: translateY(137px) rotate(0deg); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
@@ -27,8 +27,8 @@
         21.5% { transform: translateX(0px) scaleX(1); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
         24.5% { transform: translateX(0px) scaleX(1); animation-timing-function: linear; }
         30.3% { transform: translateX(0px) scaleX(1); animation-timing-function: ease-in-out; }
-        44.2% { transform: translateX(-18px) scaleX(0.9); animation-timing-function: ease-in-out; }
-        61.9% { transform: translateX(18px) scaleX(0.9); animation-timing-function: ease-in-out; }
+        44.2% { transform: translateX(0px) scaleX(1); animation-timing-function: ease-in-out; }
+        61.9% { transform: translateX(0px) scaleX(1); animation-timing-function: ease-in-out; }
         74.5% { transform: translateX(0px) scaleX(1); animation-timing-function: linear; }
         79.5% { transform: translateX(0px) scaleX(1); animation-timing-function: ease-in; }
         83.3% { transform: translateX(0px) scaleX(1); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
