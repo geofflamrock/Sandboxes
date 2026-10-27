@@ -266,6 +266,12 @@ struct CreateSandboxRequest {
     var enteredHostMounts: [HostMount] {
         hostMounts.filter { !$0.isBlank }
     }
+    /// The host mounts to offer next time.
+    var recentHostMounts: [RecentHostMount] {
+        enteredHostMounts.compactMap { mount in
+            mount.normalizedHostPath.map { RecentHostMount(sandboxPath: mount.trimmedSandboxPath, hostPath: $0) }
+        }
+    }
     var deniedHostList: [String] {
         deniedHosts
             .split(whereSeparator: { $0 == "," || $0.isWhitespace })

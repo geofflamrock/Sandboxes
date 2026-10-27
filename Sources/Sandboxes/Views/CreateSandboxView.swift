@@ -99,7 +99,7 @@ struct CreateSandboxView: View {
     private func save() {
         do {
             try environments.save(request, to: editingURL)
-            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits, hostMounts: request.recentHostMounts)
             store.selection = .environments
             close()
             AppWindows.showMain()
@@ -116,7 +116,7 @@ struct CreateSandboxView: View {
         let request = request
         let run = CreationRun(request: request)
         run.start { [recents, store] in
-            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits, hostMounts: request.recentHostMounts)
             Task { await store.refresh() }
         }
         self.run = run
@@ -246,6 +246,9 @@ private struct CreateSandboxForm: View {
                 }
             case .hostMounts:
                 hostMountsSection
+                if !availableRecentHostMounts.isEmpty {
+                    recentHostMountsSection
+                }
             case .kits:
                 kitsSection
                 if !availableRecentKits.isEmpty {
@@ -604,6 +607,65 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Recent host mounts
+
+    /// Recent host mounts at sandbox paths that don't have one already,
+    /// since a path can only have one.
+    private var availableRecentHostMounts: [RecentHostMount] {
+        let used = Set(request.enteredHostMounts.map(\.trimmedSandboxPath))
+        return recents.hostMounts.filter { !used.contains($0.sandboxPath) }
+    }
+
+    /// Cards for the most recent host mounts, such as package caches, so one
+    /// used before is a click away.
+    private var recentHostMountsSection: some View {
+        let mounts = availableRecentHostMounts
+        let shown = mounts.prefix(Self.recentKitCardLimit)
+        let more = mounts.dropFirst(Self.recentKitCardLimit)
+        return Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
+                ForEach(Array(shown)) { mount in
+                    RecentCard(
+                        title: mount.sandboxPath,
+                        subtitle: (mount.hostPath as NSString).abbreviatingWithTildeInPath,
+                        systemImage: "externaldrive.connected.to.line.below",
+                        help: "Add “\(mount.sandboxPath)”"
+                    ) {
+                        add(mount)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            HStack {
+                Text("Recent Host Mounts")
+                Spacer()
+                if !more.isEmpty {
+                    Menu("More") {
+                        ForEach(Array(more)) { mount in
+                            Button("\(mount.sandboxPath) ← \((mount.hostPath as NSString).abbreviatingWithTildeInPath)") { add(mount) }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                Button("Clear") { recents.clearHostMounts() }
+                    .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    /// Fills the first empty row, if there is one, rather than leaving it
+    /// above the added mount.
+    private func add(_ mount: RecentHostMount) {
+        let added = HostMount(sandboxPath: mount.sandboxPath, hostPath: mount.hostPath)
+        if let index = request.hostMounts.firstIndex(where: \.isBlank) {
+            request.hostMounts[index] = added
+        } else {
+            request.hostMounts.append(added)
+        }
+    }
+
     // MARK: Kits
 
     private var kitsSection: some View {
@@ -676,7 +738,15 @@ private struct CreateSandboxForm: View {
         return Section {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
                 ForEach(Array(shown), id: \.self) { kit in
-                    RecentKitCard(kit: kit) { add(kit: kit) }
+                    let source = KitSource(reference: kit)
+                    RecentCard(
+                        title: KitArgument.handle(for: kit),
+                        subtitle: source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit,
+                        systemImage: source.systemImage,
+                        help: "Add “\(kit)”"
+                    ) {
+                        add(kit: kit)
+                    }
                 }
             }
             .padding(.vertical, 4)
@@ -1274,26 +1344,28 @@ private struct AgentTile: View {
     }
 }
 
-/// A kit used before, by its short name and where it's from, which adds it
-/// when clicked.
-private struct RecentKitCard: View {
-    let kit: String
+/// Something used before, such as a kit by its short name and where it's
+/// from, which adds it when clicked.
+private struct RecentCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let help: String
     let action: () -> Void
 
     @State private var isHovering = false
 
     var body: some View {
-        let source = KitSource(reference: kit)
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: source.systemImage)
+                Image(systemName: systemImage)
                     .foregroundStyle(.secondary)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(KitArgument.handle(for: kit))
+                    Text(title)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text(source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
+                    Text(subtitle)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1312,7 +1384,7 @@ private struct RecentKitCard: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help("Add “\(kit)”")
+        .help(help)
     }
 }
 

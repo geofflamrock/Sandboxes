@@ -49,8 +49,10 @@ struct SandboxDetailView: View {
     @State private var portRemoval: PublishedPort?
     @State private var unpublishingPorts: Set<PublishedPort.ID> = []
     @Environment(SbxStatus.self) private var sbxStatus
-    @State private var hostMounts: [SandboxHostMount] = []
+    /// Nil until they've been read.
+    @State private var hostMounts: [SandboxHostMount]?
     @State private var hostMountsError: String?
+    @State private var isLoadingHostMounts = false
 
     // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
@@ -64,8 +66,12 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
-                            if !hostMounts.isEmpty || hostMountsError != nil {
-                                SandboxHostMountsSection(mounts: hostMounts, error: hostMountsError)
+                            if sbxStatus.supportsHostMounts {
+                                SandboxHostMountsSection(
+                                    mounts: hostMounts,
+                                    error: hostMountsError,
+                                    isLoading: isLoadingHostMounts
+                                )
                             }
                             portsSection
                             SandboxResourcesSection(sandbox: sandbox)
@@ -105,9 +111,11 @@ struct SandboxDetailView: View {
         }
         // Host mounts are fixed when a sandbox is created, so they're read once.
         .task(id: sandbox.name) {
-            hostMounts = []
+            hostMounts = nil
             hostMountsError = nil
             guard sbxStatus.supportsHostMounts else { return }
+            isLoadingHostMounts = true
+            defer { isLoadingHostMounts = false }
             do {
                 hostMounts = try await SandboxHostMount.fetch(for: sandbox.name)
             } catch {
@@ -610,18 +618,22 @@ struct SandboxDetailView: View {
     }
 }
 
-/// CPU, memory, disk and uptime. Limits come from `sbx ls`; usage is sampled
-/// every few seconds while the sandbox is running.
-/// The folders on the Mac that the sandbox's kits share with it. Most
-/// sandboxes have none, so it's only shown when there are some, or when
-/// they couldn't be read.
+/// The folders on the Mac that the sandbox's kits share with it.
 private struct SandboxHostMountsSection: View {
-    let mounts: [SandboxHostMount]
+    let mounts: [SandboxHostMount]?
     let error: String?
+    let isLoading: Bool
 
     var body: some View {
         Section {
-            ForEach(mounts) { mount in
+            if let mounts, mounts.isEmpty {
+                Text("No kits share a folder with this sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if mounts == nil {
+                Text(error == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(mounts ?? []) { mount in
                 LabeledContent {
                     HStack(spacing: 6) {
                         Text(mount.isManaged ? "Managed by Docker Sandboxes" : (mount.hostPath as NSString).abbreviatingWithTildeInPath)
@@ -644,7 +656,7 @@ private struct SandboxHostMountsSection: View {
                 }
             }
         } header: {
-            Text("Host Mounts")
+            SectionHeader(title: "Host Mounts", count: mounts?.count, isLoading: isLoading)
         } footer: {
             Text(error.map { "Couldn't read the host mounts: \($0)" }
                 ?? "Folders on your Mac that the sandbox's kits share with it. Their files are kept when the sandbox is removed.")
@@ -653,6 +665,8 @@ private struct SandboxHostMountsSection: View {
     }
 }
 
+/// CPU, memory, disk and uptime. Limits come from `sbx ls`; usage is sampled
+/// every few seconds while the sandbox is running.
 private struct SandboxResourcesSection: View {
     let sandbox: Sandbox
     @State private var usage: SandboxUsage?
