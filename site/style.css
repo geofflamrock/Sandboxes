@@ -81,7 +81,7 @@ code {
 
 .hero {
   color: var(--hero-text);
-  padding: 64px 0 40px;
+  padding: 96px 0 72px;
 }
 
 .hero a {
@@ -142,7 +142,7 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 44px;
+  margin-top: 64px;
 }
 
 .install .links {
@@ -207,13 +207,13 @@ h1 {
 
 .band {
   position: relative;
-  padding: 48px 0;
+  padding: 80px 0;
 }
 
 h2 {
   font-size: 30px;
   letter-spacing: -0.01em;
-  margin: 0 0 16px;
+  margin: 0 0 20px;
 }
 
 h3 {
@@ -228,7 +228,16 @@ h3 {
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: center;
   gap: 56px;
-  padding: 36px 0;
+  padding: 48px 0;
+}
+
+/* The section's own padding spaces the first and last rows. */
+.feature:first-child {
+  padding-top: 0;
+}
+
+.feature:last-child {
+  padding-bottom: 0;
 }
 
 .feature.reverse {
@@ -425,7 +434,7 @@ footer {
   color: var(--sand-text);
   text-align: center;
   font-size: 14px;
-  padding: 48px 0 44px;
+  padding: 64px 0 56px;
 }
 
 footer a {
@@ -438,7 +447,7 @@ footer a {
   .feature.reverse {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
-    padding: 24px 0;
+    padding: 32px 0;
   }
 
   .feature.reverse .feature-text {
@@ -448,7 +457,7 @@ footer a {
 
 @media (max-width: 640px) {
   .hero {
-    padding-top: 40px;
+    padding: 56px 0 48px;
   }
 
   .brand {
@@ -474,6 +483,6 @@ footer a {
   }
 
   .band {
-    padding: 36px 0;
+    padding: 56px 0;
   }
 }
