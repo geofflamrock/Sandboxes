@@ -366,6 +366,37 @@ h3 {
   width: 60%;
 }
 
+/* The New Sandbox window's form: a label and a field on each row. */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.window-content .form-row i {
+  flex: none;
+  width: 22%;
+}
+
+.form-row u {
+  display: block;
+  flex: 1;
+  height: 24px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.form-row u.short {
+  flex: 0 0 40%;
+}
+
+/* The main window's screenshot, centred below the install command. */
+.main-shot {
+  max-width: 1000px;
+  margin: 64px auto 0;
+}
+
 .window-label {
   position: absolute;
   right: 0;
@@ -441,6 +472,38 @@ footer a {
   color: var(--hero-text);
 }
 
+/* Sections slide up and fade in as they scroll into view, tied to the scroll
+   position, so they slide back out when scrolled up again. Screenshots start
+   a little after their text. Browsers without scroll-driven animations, and
+   visitors with Reduce Motion on, see everything in place. The ranges end
+   while each element is still entering, so ones near the bottom of the page
+   finish too. */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .feature-text,
+    .feature > .window,
+    .feature > .shot,
+    #requirements .inner,
+    #other-install .inner {
+      animation: slide-up linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+
+    .feature > .window,
+    .feature > .shot {
+      animation-range: entry 15% entry 85%;
+    }
+  }
+}
+
 /* Below this width two columns get too narrow, so the rows stack. */
 @media (max-width: 820px) {
   .feature,
@@ -484,5 +547,9 @@ footer a {
 
   .band {
     padding: 56px 0;
+  }
+
+  .main-shot {
+    margin-top: 40px;
   }
 }
