@@ -181,34 +181,32 @@ def sand_line():
 
 
 # The website's animation: the agent pokes its head out of the sand, spots
-# the visitor and ducks straight back down, leaving its antenna up. After a
-# moment it creeps back up, looks left and right, then crouches and pops out,
-# landing with a little bounce. Each step is (seconds from the start, how far
-# below its resting place the agent is, its tilt in degrees, the easing into
-# the next step). It plays once, after a short pause so the page has
-# settled, and not at all with Reduce Motion on.
+# the visitor and ducks quickly until only its eyes show. It slowly looks
+# left and right, then crouches and pops out, landing with a little bounce.
+# Each step is (seconds from the start, how far below its resting place the
+# agent is, its tilt in degrees, the easing into the next step). It plays
+# once, after a short pause so the page has settled, and not at all with
+# Reduce Motion on.
 SUNK = HEAD_SHOWN + HEAD_DIP + ANTENNA_HEIGHT + LIGHT_RADIUS + 10
-PEEKING = 50
-HIDING = 200
-CREEPING = 120
+POKED = 25
+# Low enough that the sand covers the bottom half of its eyes.
+EYES_SHOWING = 100
 PEEK_DELAY = 0.9
 PEEK_STEPS = [
     (0.00, SUNK, 0, "cubic-bezier(0.25, 0.8, 0.35, 1)"),  # rises slowly
-    (0.70, PEEKING, 0, "linear"),  # spots the visitor
-    (0.85, PEEKING, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
-    (0.97, HIDING, 0, "linear"),  # hides
-    (1.75, HIDING, 0, "cubic-bezier(0.3, 0.6, 0.4, 1)"),  # creeps up
-    (2.15, CREEPING, 0, "linear"),
-    (2.40, CREEPING, 0, "ease-in-out"),
-    (2.70, PEEKING, 0, "ease-in-out"),  # looks around
-    (2.95, PEEKING, -5, "ease-in-out"),
-    (3.30, PEEKING, 5, "ease-in-out"),
-    (3.55, PEEKING, 0, "ease-in"),  # crouches
-    (3.70, PEEKING + 22, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
-    (3.92, -20, 0, "ease-in"),  # lands
-    (4.12, 0, 0, "ease-out"),
-    (4.22, -4, 0, "ease-in"),
-    (4.32, 0, 0, None),
+    (0.70, POKED, 0, "linear"),  # spots the visitor
+    (0.85, POKED, 0, "cubic-bezier(0.5, 0, 1, 0.6)"),  # ducks fast
+    (0.97, EYES_SHOWING, 0, "linear"),
+    (1.20, EYES_SHOWING, 0, "ease-in-out"),  # looks around slowly
+    (1.75, EYES_SHOWING, -5, "ease-in-out"),
+    (2.45, EYES_SHOWING, 5, "ease-in-out"),
+    (2.95, EYES_SHOWING, 0, "linear"),
+    (3.15, EYES_SHOWING, 0, "ease-in"),  # crouches
+    (3.30, EYES_SHOWING + 22, 0, "cubic-bezier(0.2, 0.9, 0.4, 1)"),  # pops out
+    (3.54, -20, 0, "ease-in"),  # lands
+    (3.76, 0, 0, "ease-out"),
+    (3.86, -4, 0, "ease-in"),
+    (3.96, 0, 0, None),
 ]
 
 

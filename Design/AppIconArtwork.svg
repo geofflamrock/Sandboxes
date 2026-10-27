@@ -3,23 +3,21 @@
   <defs>
     <clipPath id="sand-line"><path d="M57,0 H967 V536.85 H637 A125,33 0 0 1 387,536.85 H57 Z"/></clipPath>
     <style>
-      .peek { transform-box: fill-box; transform-origin: 50% 100%; animation: peek 4.32s 0.9s both; }
+      .peek { transform-box: fill-box; transform-origin: 50% 100%; animation: peek 3.96s 0.9s both; }
       @keyframes peek {
         0.0% { transform: translateY(313px) rotate(0deg); animation-timing-function: cubic-bezier(0.25, 0.8, 0.35, 1); }
-        16.2% { transform: translateY(50px) rotate(0deg); animation-timing-function: linear; }
-        19.7% { transform: translateY(50px) rotate(0deg); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
-        22.5% { transform: translateY(200px) rotate(0deg); animation-timing-function: linear; }
-        40.5% { transform: translateY(200px) rotate(0deg); animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1); }
-        49.8% { transform: translateY(120px) rotate(0deg); animation-timing-function: linear; }
-        55.6% { transform: translateY(120px) rotate(0deg); animation-timing-function: ease-in-out; }
-        62.5% { transform: translateY(50px) rotate(0deg); animation-timing-function: ease-in-out; }
-        68.3% { transform: translateY(50px) rotate(-5deg); animation-timing-function: ease-in-out; }
-        76.4% { transform: translateY(50px) rotate(5deg); animation-timing-function: ease-in-out; }
-        82.2% { transform: translateY(50px) rotate(0deg); animation-timing-function: ease-in; }
-        85.6% { transform: translateY(72px) rotate(0deg); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
-        90.7% { transform: translateY(-20px) rotate(0deg); animation-timing-function: ease-in; }
-        95.4% { transform: translateY(0px) rotate(0deg); animation-timing-function: ease-out; }
-        97.7% { transform: translateY(-4px) rotate(0deg); animation-timing-function: ease-in; }
+        17.7% { transform: translateY(25px) rotate(0deg); animation-timing-function: linear; }
+        21.5% { transform: translateY(25px) rotate(0deg); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
+        24.5% { transform: translateY(100px) rotate(0deg); animation-timing-function: linear; }
+        30.3% { transform: translateY(100px) rotate(0deg); animation-timing-function: ease-in-out; }
+        44.2% { transform: translateY(100px) rotate(-5deg); animation-timing-function: ease-in-out; }
+        61.9% { transform: translateY(100px) rotate(5deg); animation-timing-function: ease-in-out; }
+        74.5% { transform: translateY(100px) rotate(0deg); animation-timing-function: linear; }
+        79.5% { transform: translateY(100px) rotate(0deg); animation-timing-function: ease-in; }
+        83.3% { transform: translateY(122px) rotate(0deg); animation-timing-function: cubic-bezier(0.2, 0.9, 0.4, 1); }
+        89.4% { transform: translateY(-20px) rotate(0deg); animation-timing-function: ease-in; }
+        94.9% { transform: translateY(0px) rotate(0deg); animation-timing-function: ease-out; }
+        97.5% { transform: translateY(-4px) rotate(0deg); animation-timing-function: ease-in; }
         100.0% { transform: translateY(0px) rotate(0deg); }
       }
       @media (prefers-reduced-motion: reduce) {
