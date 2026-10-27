@@ -475,9 +475,10 @@ footer a {
 /* Sections slide up and fade in as they scroll into view, tied to the scroll
    position, so they slide back out when scrolled up again. Screenshots start
    a little after their text. Browsers without scroll-driven animations, and
-   visitors with Reduce Motion on, see everything in place. The ranges end
-   early in each element's entry, and ease out, so it settles after a short
-   scroll and ones near the bottom of the page finish too. */
+   visitors with Reduce Motion on, see everything in place. Each one starts
+   as it comes into view and settles once it's a little way up the window, so
+   the movement happens where it can be seen; that's early enough for the
+   sections near the bottom of the page to finish too. */
 @keyframes slide-up {
   from {
     opacity: 0;
@@ -494,13 +495,39 @@ footer a {
     #other-install .inner {
       animation: slide-up ease-out both;
       animation-timeline: view();
-      animation-range: entry 0% entry 30%;
+      animation-range: entry 10% cover 25%;
     }
 
     .feature > .window,
     .feature > .shot {
-      animation-range: entry 10% entry 45%;
+      animation-range: entry 20% cover 32%;
     }
+  }
+}
+
+/* When the page loads, the title, the install command and the main
+   screenshot fade up one after another. They're done in about half a second,
+   before the robot starts peeking at 0.9 seconds. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .brand-text,
+  .install,
+  .main-shot {
+    animation: fade-up 0.35s ease-out both;
+  }
+
+  .install {
+    animation-delay: 0.08s;
+  }
+
+  .main-shot {
+    animation-delay: 0.16s;
   }
 }
 
