@@ -8,8 +8,25 @@
   --accent: #1c5cdb;
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
-  /* Everything below the header, which fades into it: a pale sky. */
+  /* The page is one gradient from the icon's sky at the top, through its
+     darker blue, to a pale sky that continues below the header. */
+  --sky-top: #d6ecff;
+  --sky-mid: #a9d3f7;
   --page-bg: #eef5fc;
+  /* The header's text and controls, which sit on the sky. */
+  --hero-text: #132a5c;
+  --hero-muted: #2f4a7a;
+  --button-bg: rgb(255 255 255 / 0.6);
+  --button-border: rgb(19 42 92 / 0.2);
+  --button-hover: rgb(255 255 255 / 0.9);
+  --primary-bg: #132a5c;
+  --primary-text: #ffffff;
+  --command-bg: rgb(255 255 255 / 0.45);
+  --command-border: rgb(19 42 92 / 0.22);
+  --tok-cmd: #b4237a;
+  --tok-flag: #0b6e86;
+  --tok-op: #6b7fa6;
+  --copied: #1e8e4e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,7 +37,24 @@
     --accent: #6fa8ff;
     --code-bg: rgb(255 255 255 / 0.08);
     --surface: #1b1e24;
+    /* A night sky: the icon's blues, darkened, so light text reads on it
+       from the top of the page down. */
+    --sky-top: #2a4f8f;
+    --sky-mid: #18305e;
     --page-bg: #0f1724;
+    --hero-text: #eef2fa;
+    --hero-muted: #b9c7e0;
+    --button-bg: rgb(255 255 255 / 0.08);
+    --button-border: rgb(255 255 255 / 0.22);
+    --button-hover: rgb(255 255 255 / 0.16);
+    --primary-bg: #d6ecff;
+    --primary-text: #132a5c;
+    --command-bg: rgb(255 255 255 / 0.06);
+    --command-border: rgb(214 236 255 / 0.28);
+    --tok-cmd: #ff8ccf;
+    --tok-flag: #8be9fd;
+    --tok-op: #8b9bbd;
+    --copied: #5be38f;
   }
 }
 
@@ -32,9 +66,11 @@ html {
   scroll-behavior: smooth;
 }
 
+/* The gradient finishes a little below the header, so its end matches the
+   plain background under it. */
 body {
   margin: 0;
-  background: var(--page-bg);
+  background: linear-gradient(var(--sky-top), var(--sky-mid) 560px, var(--page-bg) 1100px) no-repeat var(--page-bg);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -56,29 +92,13 @@ code {
   padding: 0 16px;
 }
 
-/* The header is the icon's sky in both appearances, so its colours are fixed
-   rather than using the tokens above. Below its content, ::after fades the sky
-   into the page's background so there's no hard edge. */
 .hero {
-  background: linear-gradient(#d6ecff, #a9d3f7);
-  color: #132a5c;
-  padding-top: 64px;
-}
-
-.hero > .inner {
-  padding-bottom: 40px;
-}
-
-.hero::after {
-  content: "";
-  display: block;
-  height: 240px;
-  margin-bottom: -120px;
-  background: linear-gradient(#a9d3f7, var(--page-bg));
+  color: var(--hero-text);
+  padding: 64px 0 40px;
 }
 
 .hero a {
-  color: #132a5c;
+  color: var(--hero-text);
 }
 
 .brand {
@@ -104,7 +124,7 @@ h1 {
 
 .tagline {
   font-size: 22px;
-  color: #2f4a7a;
+  color: var(--hero-muted);
   margin: 0 0 22px;
 }
 
@@ -118,17 +138,17 @@ h1 {
   display: inline-block;
   padding: 10px 20px;
   border-radius: 999px;
-  border: 1px solid rgb(19 42 92 / 0.2);
-  background: rgb(255 255 255 / 0.6);
-  color: #132a5c;
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
+  color: var(--hero-text);
   font-weight: 600;
   text-decoration: none;
 }
 
 .hero .button.primary {
-  background: #132a5c;
-  border-color: #132a5c;
-  color: #ffffff;
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-text);
 }
 
 .install {
@@ -144,7 +164,7 @@ h1 {
 }
 
 .note {
-  color: #2f4a7a;
+  color: var(--hero-muted);
   font-size: 15px;
   margin: 8px 0 0;
 }
@@ -159,8 +179,8 @@ h1 {
   width: fit-content;
   max-width: 100%;
   padding: 12px 12px 12px 20px;
-  background: rgb(255 255 255 / 0.45);
-  border: 2px solid rgb(19 42 92 / 0.22);
+  background: var(--command-bg);
+  border: 2px solid var(--command-border);
   border-radius: 14px;
   backdrop-filter: blur(8px);
 }
@@ -172,23 +192,23 @@ h1 {
   line-height: 1.6;
   padding: 0;
   background: none;
-  color: #132a5c;
+  color: var(--hero-text);
 }
 
 .tok-cmd {
-  color: #b4237a;
+  color: var(--tok-cmd);
 }
 
 .tok-flag {
-  color: #0b6e86;
+  color: var(--tok-flag);
 }
 
 .tok-url {
-  color: #132a5c;
+  color: var(--hero-text);
 }
 
 .tok-op {
-  color: #6b7fa6;
+  color: var(--tok-op);
 }
 
 .links {
@@ -259,13 +279,13 @@ h3 {
   height: 32px;
   padding: 0;
   border-radius: 8px;
-  border-color: rgb(19 42 92 / 0.2);
-  background: rgb(255 255 255 / 0.6);
-  color: #132a5c;
+  border-color: var(--button-border);
+  background: var(--button-bg);
+  color: var(--hero-text);
 }
 
 .copy.icon:hover {
-  background: rgb(255 255 255 / 0.9);
+  background: var(--button-hover);
 }
 
 .copy.icon svg {
@@ -285,7 +305,7 @@ h3 {
 
 .copy.icon.copied .done-icon {
   display: block;
-  color: #1e8e4e;
+  color: var(--copied);
 }
 
 footer {
@@ -299,11 +319,6 @@ footer {
 @media (max-width: 640px) {
   .hero {
     padding-top: 40px;
-  }
-
-  .hero::after {
-    height: 160px;
-    margin-bottom: -80px;
   }
 
   .brand {
