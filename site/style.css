@@ -10,12 +10,14 @@
   --accent: #0b3f9e;
   --code-bg: rgb(19 42 92 / 0.07);
   --surface: #ffffff;
-  /* The page is one gradient from the icon's sky at the top, through its
-     darker blue around the install command, then slowly back to a pale sky
-     that continues to the bottom. */
+  /* The page goes from the icon's sky at the top, through its darker blue
+     around the install command, slowly back to a pale sky, then warms into
+     a pale version of the icon's sand at the bottom, like sky meeting the
+     sandbox. */
   --sky-top: #d6ecff;
   --sky-mid: #a9d3f7;
   --page-bg: #eef5fc;
+  --sand: #f7ebd2;
   /* The header's text and controls, which sit on the sky. */
   --hero-text: #132a5c;
   --hero-muted: #2f4a7a;
@@ -40,15 +42,19 @@ html {
   scroll-behavior: smooth;
 }
 
-/* The gradient reaches the darker sky around the install command, then takes
-   most of a screen's height to fade back to the pale sky. The column layout
-   keeps the footer at the bottom of a window taller than the page. */
+/* Two layers: the sand fades in over the bottom of the page, above the sky,
+   which reaches its darker blue around the install command and then takes
+   well over a screen's height to fade back to the pale sky. The column
+   layout keeps the footer at the bottom of a window taller than the page. */
 body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(var(--sky-top), var(--sky-mid) 560px, var(--page-bg) 1700px) no-repeat var(--page-bg);
+  background:
+    linear-gradient(transparent, var(--sand)) bottom / 100% 900px no-repeat,
+    linear-gradient(var(--sky-top), var(--sky-mid) 560px, var(--page-bg) 2200px) top / 100% 2200px no-repeat,
+    var(--page-bg);
   color: var(--text);
   font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
