@@ -111,12 +111,13 @@ To change the background fill, or how the layers are grouped, scaled or lit, ope
 
 The website at [geofflamrock.github.io/Sandboxes](https://geofflamrock.github.io/Sandboxes/) is the static page in `site/`, along with the install script. The `Website` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages when `site/` or the icon SVGs in `Design/` change on `main`, copying in `Design/AppIcon.svg` (the favicon) and `Design/AppIconArtwork.svg` (the header's artwork). When it deploys, it fills in the release button with the latest release's version and page, such as "Latest release: v0.6.1", so the button doesn't change after the page loads. Publishing a release redeploys the site once the DMG is attached. Before the first release, and in a local preview, the button says "Latest release" and links to the latest release page.
 
-To preview the site locally:
+To preview the site locally at http://localhost:8000:
 
 ```bash
-mkdir -p _site && cp -R site/. _site/ && cp Design/AppIcon.svg Design/AppIconArtwork.svg _site/
-python3 -m http.server --directory _site
+scripts/preview-site.sh
 ```
+
+It assembles `_site/` from symlinks to `site/` and the icon SVGs, so edits show up without running it again. With Node installed, it serves the site with [Browsersync](https://browsersync.io), which reloads the page when a file changes. Otherwise it uses Python's web server, and you reload yourself. Pass a port to use another one, such as `scripts/preview-site.sh 8080`.
 
 ### Test builds
 
