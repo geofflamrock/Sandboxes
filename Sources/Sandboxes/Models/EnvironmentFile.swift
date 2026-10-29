@@ -91,16 +91,7 @@ struct EnvironmentFile: Identifiable, Hashable {
         }
         setsClone = workspaceValue?["clone"] != nil
         kits = (document["kits"]?.list ?? []).compactMap { $0.string ?? $0["source"]?.string }
-        arguments = (document["args"]?.map ?? []).map { entry in
-            KitArgument(
-                name: entry.key,
-                description: entry.value["description"]?.string,
-                defaultValue: entry.value["default"]?.string,
-                isRequired: entry.value["required"]?.bool ?? false,
-                choices: (entry.value["enum"]?.list ?? []).compactMap(\.string),
-                pattern: entry.value["pattern"]?.string
-            )
-        }
+        arguments = (document["args"]?.map ?? []).map { KitArgument(name: $0.key, declaration: $0.value) }
         let lifecycle = document["lifecycle"]?.map ?? []
         let commandSecrets = (document["secrets"]?.map ?? []).contains { $0.value["command"] != nil }
         let commandRegistries = (document["registries"]?.map ?? []).contains { registry in
@@ -217,15 +208,20 @@ extension CreateSandboxRequest {
         } else {
             entries.append(YAMLEntry(key: "agent", value: .scalar(trimmedWorkload)))
         }
+        if !environmentArguments.isEmpty {
+            entries.append(YAMLEntry(key: "args", value: .map(environmentArguments.map {
+                YAMLEntry(key: $0.name, value: $0.declarationDocument)
+            })))
+        }
         kitEntries += kits.map(kitEntry(for:))
         if !kitEntries.isEmpty {
             entries.append(YAMLEntry(key: "kits", value: .list(kitEntries)))
         }
         if let workspace {
-            if mode == .clone {
+            if mode == .clone || cloneArgument != nil {
                 entries.append(YAMLEntry(key: "workspace", value: .map([
                     YAMLEntry(key: "path", value: .scalar(workspace)),
-                    YAMLEntry(key: "clone", value: .plain("true")),
+                    YAMLEntry(key: "clone", value: Self.plainReference(cloneArgument) ?? .plain("true")),
                 ])))
             } else {
                 entries.append(YAMLEntry(key: "workspace", value: .scalar(workspace)))
@@ -235,7 +231,7 @@ extension CreateSandboxRequest {
                 entries.append(YAMLEntry(key: "additionalWorkspaces", value: .list(folders.map { folder in
                     YAMLValue.map([
                         YAMLEntry(key: "path", value: .scalar(folder.normalizedPath ?? "")),
-                        YAMLEntry(key: "readOnly", value: .plain(folder.isReadOnly ? "true" : "false")),
+                        YAMLEntry(key: "readOnly", value: Self.plainReference(folder.readOnlyArgument) ?? .plain(folder.isReadOnly ? "true" : "false")),
                     ])
                 })))
             }
@@ -263,19 +259,31 @@ extension CreateSandboxRequest {
             })))
         }
         var options: [YAMLEntry] = []
-        if cpus > 0 {
+        if let cpusArgument {
+            options.append(YAMLEntry(key: "cpus", value: .plain(ArgumentReference.text(for: cpusArgument))))
+        } else if cpus > 0 {
             options.append(YAMLEntry(key: "cpus", value: .plain(String(cpus))))
         }
-        if memoryGiB > 0 {
+        if let memoryArgument {
+            options.append(YAMLEntry(key: "memory", value: .scalar(ArgumentReference.text(for: memoryArgument))))
+        } else if memoryGiB > 0 {
             options.append(YAMLEntry(key: "memory", value: .scalar("\(memoryGiB)g")))
         }
-        if let skillsMode {
+        if let skillsArgument {
+            options.append(YAMLEntry(key: "skills", value: .scalar(ArgumentReference.text(for: skillsArgument))))
+        } else if let skillsMode {
             options.append(YAMLEntry(key: "skills", value: .scalar(skillsMode.rawValue)))
         }
         if !options.isEmpty {
             entries.append(YAMLEntry(key: "sandboxOptions", value: .map(options)))
         }
         return .map(entries)
+    }
+
+    /// An argument used for a number or a boolean. It's written without
+    /// quotes, so sbx reads the value it's given as a number or a boolean too.
+    private static func plainReference(_ argument: String?) -> YAMLValue? {
+        argument.map { .plain(ArgumentReference.text(for: $0)) }
     }
 
     /// A kit, with the values entered for its arguments when there are any.
@@ -298,6 +306,7 @@ extension CreateSandboxRequest {
     init(environmentFile document: YAMLValue, at url: URL) throws {
         self.init()
         target = .environment
+        isEditingFile = true
         guard let entries = document.map else {
             throw UnsupportedFields(fields: ["(not a mapping)"])
         }
@@ -311,9 +320,21 @@ extension CreateSandboxRequest {
             case "schemaVersion":
                 if value.string != "1" { unsupported.append("schemaVersion") }
             case "name":
-                if let text = value.string, !text.contains("${{") { name = text } else { unsupported.append("name") }
+                if let text = value.string, ArgumentReference.isEditable(text) { name = text } else { unsupported.append("name") }
             case "agent":
-                if let text = value.string, !text.contains("${{") { workload = text } else { unsupported.append("agent") }
+                if let text = value.string, ArgumentReference.isEditable(text) { workload = text } else { unsupported.append("agent") }
+            case "args":
+                guard let declarations = value.map else { unsupported.append("args"); continue }
+                for declaration in declarations {
+                    guard let fields = declaration.value.map else {
+                        unsupported.append("args.\(declaration.key)")
+                        continue
+                    }
+                    unsupported += fields.map(\.key)
+                        .filter { !KitArgument.declarationFields.contains($0) }
+                        .map { "args.\(declaration.key).\($0)" }
+                    environmentArguments.append(KitArgument(name: declaration.key, declaration: declaration.value))
+                }
             case "kits":
                 guard let items = value.list else { unsupported.append("kits"); continue }
                 for item in items {
@@ -323,7 +344,7 @@ extension CreateSandboxRequest {
                               fields.allSatisfy({ ["source", "args"].contains($0.key) }) {
                         var arguments: [String: String] = [:]
                         for argument in item["args"]?.map ?? [] {
-                            guard let text = argument.value.string, !text.contains("${{") else {
+                            guard let text = argument.value.string, ArgumentReference.isEditable(text) else {
                                 unsupported.append("kits.args")
                                 continue
                             }
@@ -342,7 +363,15 @@ extension CreateSandboxRequest {
                           fields.allSatisfy({ ["path", "clone"].contains($0.key) }) {
                     workspacePath = Self.workspacePath(path, against: directory) ?? ""
                     if workspacePath.isEmpty { unsupported.append("workspace") }
-                    mode = value["clone"]?.bool == true ? .clone : .direct
+                    if let clone = value["clone"] {
+                        if let argument = clone.string.flatMap(ArgumentReference.name(of:)) {
+                            cloneArgument = argument
+                        } else if let isClone = clone.bool {
+                            mode = isClone ? .clone : .direct
+                        } else {
+                            unsupported.append("workspace.clone")
+                        }
+                    }
                 } else {
                     unsupported.append("workspace")
                 }
@@ -355,7 +384,15 @@ extension CreateSandboxRequest {
                         unsupported.append("additionalWorkspaces")
                         continue
                     }
-                    additionalWorkspaces.append(AdditionalWorkspace(path: path, isReadOnly: item["readOnly"]?.bool ?? false))
+                    var folder = AdditionalWorkspace(path: path, isReadOnly: item["readOnly"]?.bool ?? false)
+                    if let readOnly = item["readOnly"], readOnly.bool == nil {
+                        if let argument = readOnly.string.flatMap(ArgumentReference.name(of:)) {
+                            folder.readOnlyArgument = argument
+                        } else {
+                            unsupported.append("additionalWorkspaces.readOnly")
+                        }
+                    }
+                    additionalWorkspaces.append(folder)
                 }
             case "mounts":
                 // Kit host mounts: sandbox paths to folders on the Mac. sbx
@@ -371,7 +408,7 @@ extension CreateSandboxRequest {
             case "env":
                 guard let variables = value.map else { unsupported.append("env"); continue }
                 for variable in variables {
-                    guard let text = variable.value.string, !text.contains("${{") else {
+                    guard let text = variable.value.string, ArgumentReference.isEditable(text) else {
                         unsupported.append("env")
                         continue
                     }
@@ -386,8 +423,10 @@ extension CreateSandboxRequest {
                     let others = fields.map(\.key).filter { !["sandbox", "host"].contains($0) }
                     let sandboxPort = item["sandbox"]?.string ?? ""
                     let hostPort = item["host"]?.string ?? ""
-                    guard others.isEmpty, PortMapping.number(sandboxPort) != nil,
-                          hostPort.isEmpty || PortMapping.number(hostPort) != nil else {
+                    func isPort(_ text: String) -> Bool {
+                        PortMapping.number(text) != nil || ArgumentReference.name(of: text) != nil
+                    }
+                    guard others.isEmpty, isPort(sandboxPort), hostPort.isEmpty || isPort(hostPort) else {
                         unsupported += others.isEmpty ? ["ports"] : others.map { "ports.\($0)" }
                         continue
                     }
@@ -397,19 +436,25 @@ extension CreateSandboxRequest {
                 for option in value.map ?? [] {
                     switch option.key {
                     case "cpus":
-                        if let count = option.value.string.flatMap({ Int($0) }), count >= 0 {
+                        if let argument = option.value.string.flatMap(ArgumentReference.name(of:)) {
+                            cpusArgument = argument
+                        } else if let count = option.value.string.flatMap({ Int($0) }), count >= 0 {
                             cpus = count
                         } else {
                             unsupported.append("sandboxOptions.cpus")
                         }
                     case "memory":
-                        if let gib = option.value.string.flatMap(Self.memoryGiB(from:)) {
+                        if let argument = option.value.string.flatMap(ArgumentReference.name(of:)) {
+                            memoryArgument = argument
+                        } else if let gib = option.value.string.flatMap(Self.memoryGiB(from:)) {
                             memoryGiB = gib
                         } else {
                             unsupported.append("sandboxOptions.memory")
                         }
                     case "skills":
-                        if let mode = option.value.string.flatMap({ SkillsMode(rawValue: $0.lowercased()) }) {
+                        if let argument = option.value.string.flatMap(ArgumentReference.name(of:)) {
+                            skillsArgument = argument
+                        } else if let mode = option.value.string.flatMap({ SkillsMode(rawValue: $0.lowercased()) }) {
                             skillsMode = mode
                         } else {
                             unsupported.append("sandboxOptions.skills")
@@ -446,11 +491,20 @@ extension CreateSandboxRequest {
         }
     }
 
-    /// An absolute path. A reference such as `${{ env.projectDir }}` can't
-    /// be shown, and saving would lose it.
+    /// An absolute path, which may use the file's arguments. Another
+    /// reference, such as `${{ env.projectDir }}`, can't be shown, and saving would lose it.
     private static func workspacePath(_ path: String, against directory: URL) -> String? {
-        guard !path.isEmpty, !path.contains("${{") else { return nil }
-        let resolved = EnvironmentFile.resolve(path, against: directory)
+        guard !path.isEmpty, ArgumentReference.isEditable(path) else { return nil }
+        let resolved: String
+        if ArgumentReference.appears(in: path) {
+            // A relative path is still from the file's folder, unless an argument starts it.
+            let expanded = (path as NSString).expandingTildeInPath
+            resolved = expanded.hasPrefix("/") || expanded.hasPrefix("${{")
+                ? expanded
+                : directory.appendingPathComponent(expanded).standardizedFileURL.path
+        } else {
+            resolved = EnvironmentFile.resolve(path, against: directory)
+        }
         return WorkspacePath.problem(with: resolved, inEnvironmentFile: true) == nil ? resolved : nil
     }
 
