@@ -198,3 +198,7 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Open in Claude Desktop | `sbx setup ssh` (first time only), then opens `claude://code/new?ssh_host=NAME.sbx&ssh_folder=WORKSPACE` |
 
 Agent and service logos are from [Simple Icons](https://simpleicons.org) (CC0).
+
+## Licence
+
+Sandboxes is free and open source under the [MIT licence](LICENSE).
