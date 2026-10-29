@@ -38,6 +38,21 @@ struct ContentView: View {
                     HomeView()
                 }
             }
+            .toolbar {
+                // Walks the pages visited, like the New Sandbox window's
+                // sections. The shortcuts are on the buttons rather than in a
+                // menu so they only apply to this window.
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.backward", action: { store.goBack() })
+                        .disabled(!store.canGoBack)
+                        .keyboardShortcut("[")
+                        .help("See the page you were on before")
+                    Button("Forward", systemImage: "chevron.forward", action: { store.goForward() })
+                        .disabled(!store.canGoForward)
+                        .keyboardShortcut("]")
+                        .help("See the page you went back from")
+                }
+            }
             // Content scrolled under the toolbar and the sandbox tabs fades out,
             // as in System Settings, rather than showing through behind them.
             .scrollEdgeEffectStyle(.soft, for: .top)

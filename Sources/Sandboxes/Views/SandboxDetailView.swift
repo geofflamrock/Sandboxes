@@ -166,13 +166,6 @@ struct SandboxDetailView: View {
         }
         .navigationTitle(sandbox.name)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = .home
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             // Kept out of the actions' group so it doesn't widen it, and always
             // laid out so the toolbar doesn't shift when it appears.
             ToolbarItem {
