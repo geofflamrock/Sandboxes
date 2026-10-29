@@ -55,13 +55,6 @@ struct MCPServersView: View {
             await secrets.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = .home
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             ToolbarItem {
                 Button("Add Server", systemImage: "plus") {
                     isAdding = true
