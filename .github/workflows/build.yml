@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Matches the Sparkle package version in project.yml.
+  SPARKLE_VERSION: 2.10.0
+
 jobs:
   build:
     name: Build Sandboxes.app
@@ -97,10 +101,16 @@ jobs:
 
       - name: Show bundle details
         run: |
-          plist=build/Build/Products/Release/Sandboxes.app/Contents/Info.plist
-          for key in CFBundleName CFBundleExecutable CFBundleShortVersionString CFBundleVersion SandboxesBuildLabel; do
+          app=build/Build/Products/Release/Sandboxes.app
+          plist=$app/Contents/Info.plist
+          for key in CFBundleName CFBundleExecutable CFBundleShortVersionString CFBundleVersion SandboxesBuildLabel SUFeedURL SUPublicEDKey; do
             echo "$key: $(/usr/libexec/PlistBuddy -c "Print :$key" "$plist")"
           done
+          if ! [ -d "$app/Contents/Frameworks/Sparkle.framework" ]; then
+            echo "::error::Sparkle.framework isn't embedded in the app"
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app"
 
       # The DMG window shows the app next to an Applications shortcut to drag it onto.
       - name: Package DMG
@@ -128,8 +138,61 @@ jobs:
           path: ${{ steps.package.outputs.dmg }}
           if-no-files-found: error
 
+      # Sparkle in the app reads appcast.xml from the latest release. It lists
+      # the release's DMG, its release notes and an EdDSA signature that the
+      # app checks against its SUPublicEDKey before installing the update.
+      - name: Generate appcast
+        if: github.event_name == 'release'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          DMG: ${{ steps.package.outputs.dmg }}
+          TAG: ${{ github.event.release.tag_name }}
+          NOTES: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          public_key=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" build/Build/Products/Release/Sandboxes.app/Contents/Info.plist)
+          if [ -z "$public_key" ]; then
+            echo "::error::SPARKLE_PUBLIC_ED_KEY in project.yml is empty, so the app can't install updates"
+            exit 1
+          fi
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::The SPARKLE_PRIVATE_KEY secret isn't set, so the release can't be signed"
+            exit 1
+          fi
+
+          mkdir sparkle appcast
+          curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" \
+            | tar -xJ -C sparkle
+
+          # generate_appcast reads the version from the app in the DMG, and
+          # embeds release notes from a Markdown file with the DMG's name.
+          cp "$DMG" appcast/
+          printf '%s\n' "${NOTES:-See the release on GitHub.}" > "appcast/${DMG%.dmg}.md"
+          echo "$SPARKLE_PRIVATE_KEY" | sparkle/bin/generate_appcast \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            --embed-release-notes \
+            --link "$RELEASE_URL" \
+            --maximum-versions 1 \
+            -o appcast.xml \
+            appcast
+          cat appcast.xml
+          # generate_appcast leaves the signature out, rather than failing, when
+          # the private key doesn't match the app's public key.
+          if ! grep -q 'sparkle:edSignature=' appcast.xml; then
+            echo "::error::The appcast isn't signed. Check SPARKLE_PRIVATE_KEY matches SPARKLE_PUBLIC_ED_KEY"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'release'
+        with:
+          name: appcast
+          path: appcast.xml
+          if-no-files-found: error
+
   release:
-    name: Attach DMG to release
+    name: Attach DMG and appcast to release
     if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
@@ -140,9 +203,13 @@ jobs:
         with:
           name: Sandboxes
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: appcast
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
           DMG: ${{ needs.build.outputs.dmg }}
-        run: gh release upload "$TAG" "$DMG" --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" "$DMG" appcast.xml --clobber --repo "$GITHUB_REPOSITORY"

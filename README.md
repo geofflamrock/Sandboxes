@@ -18,6 +18,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Manage agent skills and choose how sandboxes share them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
+- Install new versions of Sandboxes from inside the app.
 
 ## Getting started
 
@@ -44,7 +45,7 @@ Sandboxes isn't notarized by Apple yet, so the first time you open it macOS bloc
 3. Scroll down to the message that Sandboxes was blocked and click **Open Anyway**.
 4. Click **Open Anyway** again and enter your password when asked.
 
-You only need to do this once. Alternatively, clear the quarantine flag in Terminal after copying the app to Applications:
+You only need to do this once. Updates installed from inside the app aren't blocked. Alternatively, clear the quarantine flag in Terminal after copying the app to Applications:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Sandboxes.app
@@ -76,14 +77,14 @@ Local builds show a "Local" badge at the bottom of the sidebar and have version 
 
 ### Update checks
 
-Release builds check the [latest GitHub release](https://github.com/geofflamrock/Sandboxes/releases/latest) at launch and every 6 hours. When it's newer, the sidebar and the menu bar menu link to it. Drafts and pre-releases are ignored.
+Release builds use [Sparkle](https://sparkle-project.org) to check for and install updates. Every 6 hours, Sparkle reads `appcast.xml` from the [latest GitHub release](https://github.com/geofflamrock/Sandboxes/releases/latest), so drafts and pre-releases are ignored. When it lists a newer build, the sidebar and the menu bar menu show it, and clicking it opens Sparkle's window with the release notes and **Install Update**. **Sandboxes › Check for Updates…** and **Settings › General** check straight away. Sparkle downloads the DMG, checks its EdDSA signature against the public key in the app (`SUPublicEDKey`), replaces the app and reopens it. Updates installed this way aren't quarantined, so macOS doesn't block them.
 
-Other builds don't check. To try it out in one, open **Settings › Development**, turn on **Check for updates in this build** and enter an older version to pretend to be, such as `0.0.1`. You can also check another repository's releases there.
+Other builds don't check. To try it out in one, open **Settings › Development** and turn on **Check for updates in this build**. Sparkle compares build numbers, and builds from CI are numbered after the releases before them, so only a local build (build 1) sees the latest release as an update. You can also read another repository's appcast there.
 
-These settings are stored as the `UpdateCheckForceEnabled`, `UpdateCheckCurrentVersion` and `UpdateCheckRepository` defaults, so they also work as launch arguments:
+These settings are stored as the `UpdateCheckForceEnabled` and `UpdateCheckRepository` defaults, so they also work as launch arguments:
 
 ```bash
-open Sandboxes.app --args -UpdateCheckForceEnabled YES -UpdateCheckCurrentVersion 0.0.1
+open Sandboxes.app --args -UpdateCheckForceEnabled YES
 ```
 
 Release builds ignore them, so values left over from testing a build don't affect a release.
@@ -110,7 +111,21 @@ gh run download --repo geofflamrock/Sandboxes --name Sandboxes "$(gh run list --
 
 ### Releases
 
-Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
+Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` and `appcast.xml` to it. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
+
+The appcast is what [update checks](#update-checks) read. Sparkle's `generate_appcast` writes it with the release's notes and an EdDSA signature for the DMG, made with the private key in the `SPARKLE_PRIVATE_KEY` repository secret. The app checks the signature with the public key in `project.yml` (`SPARKLE_PUBLIC_ED_KEY`). To set up the keys, download Sparkle from its [releases](https://github.com/sparkle-project/Sparkle/releases) and run:
+
+```bash
+./bin/generate_keys
+```
+
+It saves the private key in your Keychain and prints the public key to put in `project.yml` (`./bin/generate_keys -p` prints it again). Then export the private key, copy it into the secret and delete the export:
+
+```bash
+./bin/generate_keys -x sparkle-private-key && gh secret set SPARKLE_PRIVATE_KEY --repo geofflamrock/Sandboxes < sparkle-private-key && rm -P sparkle-private-key
+```
+
+Keep a backup of the private key. Without it, existing installs can't install any later release, and users have to download one from GitHub again. A release fails to build if either key is missing or they don't match.
 
 ### Commands the app runs
 
