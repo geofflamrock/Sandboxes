@@ -7,6 +7,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
 - Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
+- Declare arguments in an environment file and use them in its options, such as environment variables, kit arguments, folders, ports and CPUs, then give their values when creating a sandbox from it.
 - Start, stop and remove sandboxes.
 - Publish a sandbox's ports on your Mac when creating it or later, open them in your browser, and unpublish them.
 - Open an interactive shell inside a sandbox in your terminal.

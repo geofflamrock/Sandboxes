@@ -13,6 +13,8 @@ struct KitArgumentsSection: View {
     let onRetry: () -> Void
     /// Removes a mixin kit. The workload has none.
     var onRemove: (() -> Void)?
+    /// The environment file's arguments, which a value can use. Empty for a sandbox.
+    var environmentArguments: [KitArgument] = []
 
     var body: some View {
         if isShown {
@@ -70,7 +72,8 @@ struct KitArgumentsSection: View {
                 KitArgumentRow(
                     argument: argument,
                     isFixed: argument.buildArgument != nil && KitSource(reference: kit) == .registry,
-                    values: $values
+                    values: $values,
+                    environmentArguments: environmentArguments
                 )
             }
         }
@@ -127,23 +130,41 @@ struct KitArgumentRow: View {
     /// A build argument of a published kit was used when it was built, so it can't change.
     let isFixed: Bool
     @Binding var values: [String: String]
+    /// An environment file's arguments, which the value can use. Empty for a sandbox.
+    var environmentArguments: [KitArgument] = []
 
     // The label is outside the control, so a fixed argument's control is
     // disabled while its info button still opens.
     var body: some View {
         LabeledContent {
-            control
-                .labelsHidden()
-                .accessibilityLabel(argument.name)
-                .disabled(isFixed)
+            HStack {
+                control
+                    .labelsHidden()
+                    .accessibilityLabel(argument.name)
+                if !environmentArguments.isEmpty {
+                    ArgumentMenu(arguments: environmentArguments, help: "Use one of the file's arguments in “\(argument.name)”") { name in
+                        // Text can have an argument within it; a switch or a menu takes its whole value from one.
+                        let current = argument.input == .text ? (values[argument.name] ?? "") : ""
+                        values[argument.name] = current + ArgumentReference.text(for: name)
+                    }
+                }
+            }
+            .disabled(isFixed)
         } label: {
             label
         }
     }
 
+    /// Whether the value uses an environment file's argument, which is only
+    /// known when a sandbox is created from the file.
+    private var usesArgument: Bool {
+        values[argument.name].map(ArgumentReference.appears(in:)) ?? false
+    }
+
     @ViewBuilder
     private var control: some View {
-        switch argument.input {
+        // A switch or a menu can't show an argument, so its reference is shown as text.
+        switch usesArgument ? KitArgument.Input.text : argument.input {
         case .toggle:
             Toggle(argument.name, isOn: toggleBinding)
         case .choice:
@@ -173,7 +194,7 @@ struct KitArgumentRow: View {
                     InfoButton(text: details.joined(separator: "\n\n"))
                 }
             }
-            if let problem = argument.problem(with: values[argument.name]),
+            if !usesArgument, let problem = argument.problem(with: values[argument.name]),
                values[argument.name]?.isEmpty == false || argument.input != .text {
                 Text(problem)
                     .font(.caption)
