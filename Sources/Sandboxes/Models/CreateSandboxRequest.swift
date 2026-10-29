@@ -34,11 +34,17 @@ enum WorkspacePath {
 
     /// Why `text` can't be mounted, if it can't. A sandbox needs a folder
     /// that exists; an environment file may be used on another Mac, so only
-    /// the form of its paths is checked.
+    /// the form of its paths is checked, and it can use its arguments in them.
     static func problem(with text: String, inEnvironmentFile: Bool) -> String? {
         guard let path = normalized(text) else { return nil }
         if path.contains("${{") {
-            return "Enter a folder's full path rather than “\(path)”."
+            guard inEnvironmentFile, ArgumentReference.isEditable(path) else {
+                return "Enter a folder's full path rather than “\(path)”."
+            }
+            guard path.hasPrefix("/") || path.hasPrefix("${{") else {
+                return "Enter the full path of “\(path)”, starting with /, ~ or an argument."
+            }
+            return nil
         }
         guard path.hasPrefix("/") else {
             return "Enter the full path of “\(path)”, starting with / or ~."
@@ -61,6 +67,8 @@ struct AdditionalWorkspace: Identifiable, Hashable {
     var isReadOnly = true
     /// Where it's mounted in the sandbox. Empty for the same path as on the Mac.
     var target = ""
+    /// The environment file argument that says whether it's read-only, instead of `isReadOnly`.
+    var readOnlyArgument: String?
 
     var normalizedPath: String? { WorkspacePath.normalized(path) }
     var trimmedTarget: String { target.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -158,11 +166,15 @@ struct PortMapping: Identifiable, Hashable {
     }
 
     /// Why the ports can't be published, if they can't.
-    var problem: String? {
+    var problem: String? { problem(inEnvironmentFile: false) }
+
+    /// An environment file can take either port from one of its arguments.
+    func problem(inEnvironmentFile: Bool) -> String? {
         if trimmedSandboxPort.isEmpty {
             return "Enter a sandbox port for each port."
         }
         for text in [trimmedSandboxPort, trimmedHostPort] where !text.isEmpty && Self.number(text) == nil {
+            if inEnvironmentFile && ArgumentReference.name(of: text) != nil { continue }
             return "“\(text)” isn't a port. Ports are numbers from 1 to 65535."
         }
         return nil
@@ -335,6 +347,18 @@ struct CreateSandboxRequest {
     /// kit (v0.51.0 and later), so the agent's kit arguments can be set. The
     /// New Sandbox window keeps this in step with `SbxStatus`.
     var agentsAreKits = false
+    /// What an environment file declares under `args:`, which its values can
+    /// use as `${{ env.args.NAME }}`.
+    var environmentArguments: [KitArgument] = []
+    /// Arguments used for options picked from a menu, instead of the option
+    /// itself. Only an environment file can use them.
+    var cloneArgument: String?
+    var cpusArgument: String?
+    var memoryArgument: String?
+    var skillsArgument: String?
+    /// Whether this edits an environment file that's already saved, whose
+    /// name the window can't change.
+    var isEditingFile = false
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -350,10 +374,12 @@ struct CreateSandboxRequest {
     var enteredHostMounts: [HostMount] {
         hostMounts.filter { !$0.isBlank }
     }
-    /// The host mounts to offer next time.
+    /// The host mounts to offer next time. A folder that uses an environment
+    /// file's arguments is only a folder in that file.
     var recentHostMounts: [RecentHostMount] {
         enteredHostMounts.compactMap { mount in
-            mount.normalizedHostPath.map { RecentHostMount(sandboxPath: mount.trimmedSandboxPath, hostPath: $0) }
+            guard let hostPath = mount.normalizedHostPath, !ArgumentReference.appears(in: hostPath) else { return nil }
+            return RecentHostMount(sandboxPath: mount.trimmedSandboxPath, hostPath: hostPath)
         }
     }
     var deniedHostList: [String] {
@@ -463,10 +489,18 @@ struct CreateSandboxRequest {
         if target == .environment && trimmedName.isEmpty {
             return "Enter a name for the environment file."
         }
-        if !trimmedName.isEmpty, let problem = Self.nameProblem(trimmedName) {
+        let inEnvironmentFile = target == .environment
+        if ArgumentReference.appears(in: trimmedName) && inEnvironmentFile {
+            // A new file's name is its folder's, which can't come from an argument.
+            if !isEditingFile {
+                return "Enter a name without an argument. It names the environment file's folder."
+            }
+        } else if !trimmedName.isEmpty, let problem = Self.nameProblem(trimmedName) {
             return problem
         }
-        let inEnvironmentFile = target == .environment
+        if let problem = argumentsProblem {
+            return problem
+        }
         if let problem = WorkspacePath.problem(with: workspacePath, inEnvironmentFile: inEnvironmentFile) {
             return problem
         }
@@ -500,7 +534,7 @@ struct CreateSandboxRequest {
             }
         }
         for port in enteredPorts {
-            if let problem = port.problem {
+            if let problem = port.problem(inEnvironmentFile: inEnvironmentFile) {
                 return problem
             }
         }
@@ -510,12 +544,83 @@ struct CreateSandboxRequest {
         }
         for kit in argumentKits {
             for argument in declaredKitArguments[kit] ?? [] {
-                if let problem = argument.problem(with: kitArgumentValues[kit]?[argument.name]) {
+                let value = kitArgumentValues[kit]?[argument.name]
+                // A value from the file's arguments is only known when a sandbox is created.
+                if inEnvironmentFile, let value, ArgumentReference.appears(in: value) { continue }
+                if let problem = argument.problem(with: value) {
                     return problem
                 }
             }
         }
         return nil
+    }
+
+    /// Why the environment file's arguments, or how it uses them, won't do.
+    /// A sandbox made in the window can't use them, since `sbx create` has none.
+    private var argumentsProblem: String? {
+        guard target == .environment else {
+            let usesArgument = cloneArgument != nil || cpusArgument != nil || memoryArgument != nil
+                || skillsArgument != nil || additionalWorkspaces.contains { $0.readOnlyArgument != nil }
+            return usesArgument ? "Only an environment file can use arguments. Choose values for the options that use one." : nil
+        }
+        var names: Set<String> = []
+        for argument in environmentArguments {
+            if let problem = argument.declarationProblem {
+                return problem
+            }
+            if !names.insert(argument.name).inserted {
+                return "There's more than one argument called “\(argument.name)”."
+            }
+        }
+        if let undeclared = argumentUsages.keys.sorted().first(where: { !names.contains($0) }) {
+            return "There's no argument called “\(undeclared)”. Add it in Arguments, or stop using it."
+        }
+        return nil
+    }
+
+    /// Where each argument is used in the environment file, by name.
+    var argumentUsages: [String: [String]] {
+        ArgumentReference.usages(in: environmentDocument)
+    }
+
+    /// Adds `argument`, or replaces the one called `originalName`. A renamed
+    /// argument is renamed wherever it's used, too.
+    mutating func saveArgument(_ argument: KitArgument, replacing originalName: String?) {
+        guard let originalName, let index = environmentArguments.firstIndex(where: { $0.name == originalName }) else {
+            environmentArguments.append(argument)
+            return
+        }
+        environmentArguments[index] = argument
+        if originalName != argument.name {
+            renameArgument(originalName, to: argument.name)
+        }
+    }
+
+    private mutating func renameArgument(_ old: String, to new: String) {
+        func renamedText(_ text: String) -> String { ArgumentReference.renaming(old, to: new, in: text) }
+        func renamedArgument(_ argument: String?) -> String? { argument == old ? new : argument }
+        name = renamedText(name)
+        workload = renamedText(workload)
+        workspacePath = renamedText(workspacePath)
+        for index in additionalWorkspaces.indices {
+            additionalWorkspaces[index].path = renamedText(additionalWorkspaces[index].path)
+            additionalWorkspaces[index].readOnlyArgument = renamedArgument(additionalWorkspaces[index].readOnlyArgument)
+        }
+        for index in hostMounts.indices {
+            hostMounts[index].hostPath = renamedText(hostMounts[index].hostPath)
+        }
+        for index in environment.indices {
+            environment[index].value = renamedText(environment[index].value)
+        }
+        for index in ports.indices {
+            ports[index].hostPort = renamedText(ports[index].hostPort)
+            ports[index].sandboxPort = renamedText(ports[index].sandboxPort)
+        }
+        kitArgumentValues = kitArgumentValues.mapValues { $0.mapValues(renamedText) }
+        cloneArgument = renamedArgument(cloneArgument)
+        cpusArgument = renamedArgument(cpusArgument)
+        memoryArgument = renamedArgument(memoryArgument)
+        skillsArgument = renamedArgument(skillsArgument)
     }
 
     /// Why sbx won't accept `name` for a sandbox, if it won't.
