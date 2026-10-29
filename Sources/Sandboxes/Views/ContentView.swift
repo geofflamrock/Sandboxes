@@ -148,6 +148,12 @@ struct SandboxSidebar: View {
         @Bindable var store = store
 
         List(selection: $store.selection) {
+            // Outside the sections so it stays put when they're collapsed or
+            // a search filters the sandboxes.
+            Label("Home", systemImage: "house")
+                .badge(store.approvals.count)
+                .tag(SidebarItem.home)
+                .help("Things to set up, requests waiting for approval, and shortcuts for creating a sandbox")
             Section("Sandboxes", isExpanded: $sandboxesExpanded) {
                 ForEach(filteredSandboxes) { sandbox in
                     SandboxRow(

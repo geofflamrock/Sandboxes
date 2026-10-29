@@ -57,7 +57,7 @@ struct MCPServersView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
+                    store.selection = .home
                 }
                 .keyboardShortcut("[", modifiers: .command)
                 .help("Back to Home")

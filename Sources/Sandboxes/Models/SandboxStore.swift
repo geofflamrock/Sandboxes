@@ -1,8 +1,10 @@
 import Foundation
 import Observation
 
-/// What's selected in the sidebar: a sandbox, or one of the management pages.
+/// What's selected in the sidebar: Home, a sandbox, or one of the
+/// management pages.
 enum SidebarItem: Hashable {
+    case home
     case sandbox(Sandbox.ID)
     case environments
     case secrets
@@ -37,7 +39,9 @@ final class SandboxStore {
     private(set) var approvals: [NetworkApproval] = []
     /// Approvals with a response or deny in flight.
     private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
-    var selection: SidebarItem?
+    /// Home when nothing else is chosen. `nil` (such as after Command-clicking
+    /// the selected row) shows Home too, without a row selected.
+    var selection: SidebarItem? = .home
     /// Whether the main window is open. While it's closed the app stays in
     /// the menu bar and only checks for pending approvals.
     private(set) var isWindowOpen = false
@@ -206,7 +210,7 @@ final class SandboxStore {
     /// which lists every sandbox's, when there's no such sandbox.
     func showApprovals(forSandbox name: String?) {
         guard let name else {
-            selection = nil
+            selection = .home
             return
         }
         approvalsToReveal = name
@@ -215,7 +219,7 @@ final class SandboxStore {
         } else {
             // Not loaded yet, or new since the list was last loaded, which it
             // isn't while the window is closed.
-            selection = nil
+            selection = .home
             pendingSelection = name
         }
     }
@@ -317,7 +321,7 @@ final class SandboxStore {
                 }
             }
             if case let .sandbox(id) = selection, !sandboxes.contains(where: { $0.id == id }) {
-                selection = nil
+                selection = .home
             }
         } catch {
             let wasFailing = loadError != nil
