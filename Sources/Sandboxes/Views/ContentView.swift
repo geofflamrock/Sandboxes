@@ -152,6 +152,11 @@ struct SandboxSidebar: View {
     @State private var searchText = ""
     @AppStorage("sidebarSandboxesExpanded") private var sandboxesExpanded = true
     @AppStorage("sidebarManagementExpanded") private var managementExpanded = true
+    @AppStorage(SandboxSidebar.hidesVersionBadgeKey) private var hidesVersionBadge = false
+
+    /// Set from Settings › Development, for taking screenshots of a build
+    /// that isn't a release. Releases always show their version.
+    nonisolated static let hidesVersionBadgeKey = "HideVersionBadge"
 
     private var filteredSandboxes: [Sandbox] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -261,11 +266,15 @@ struct SandboxSidebar: View {
                 // On one line when they fit, otherwise the sbx badges go below.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {
-                        versionBadge
+                        if showsVersionBadge {
+                            versionBadge
+                        }
                         SbxStatusBadges()
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        versionBadge
+                        if showsVersionBadge {
+                            versionBadge
+                        }
                         HStack(spacing: 6) {
                             SbxStatusBadges()
                         }
@@ -331,6 +340,10 @@ struct SandboxSidebar: View {
                 EmptyView()
             }
         }
+    }
+
+    private var showsVersionBadge: Bool {
+        AppInfo.buildLabel == nil || !hidesVersionBadge
     }
 
     /// Releases show their version; other builds show what they are built

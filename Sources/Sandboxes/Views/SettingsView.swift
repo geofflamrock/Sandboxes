@@ -138,6 +138,7 @@ private struct GeneralSettingsView: View {
 private struct DevelopmentSettingsView: View {
     @AppStorage(UpdateChecker.forceEnabledKey) private var forcesUpdateChecks = false
     @AppStorage(UpdateChecker.repositoryKey) private var updateRepository = ""
+    @AppStorage(SandboxSidebar.hidesVersionBadgeKey) private var hidesVersionBadge = false
     @Environment(UpdateChecker.self) private var updates
 
     var body: some View {
@@ -164,6 +165,15 @@ private struct DevelopmentSettingsView: View {
                 Text("Updates")
             } footer: {
                 Text("Only in builds that aren't releases. Sparkle compares build numbers, so a local build (build 1) sees the latest release as an update, but builds from CI don't. Turning this off takes effect the next time Sandboxes opens.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Hide the version badge", isOn: $hidesVersionBadge)
+            } header: {
+                Text("Screenshots")
+            } footer: {
+                Text("Hides the build's badge at the bottom of the sidebar, so screenshots don't show that this isn't a release.")
                     .foregroundStyle(.secondary)
             }
         }
