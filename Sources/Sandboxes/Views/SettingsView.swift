@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 /// Settings, with general options in one tab and sbx in another.
@@ -176,6 +177,8 @@ private struct DevelopmentSettingsView: View {
                 Text("Hides the build's badge at the bottom of the sidebar, so screenshots don't show that this isn't a release.")
                     .foregroundStyle(.secondary)
             }
+
+            WindowSizeSection()
         }
         .formStyle(.grouped)
         .frame(width: 480)
@@ -185,5 +188,107 @@ private struct DevelopmentSettingsView: View {
                 updates.start()
             }
         }
+    }
+}
+
+/// Settings › Development › Window Size, for taking screenshots of the main
+/// window or the New Sandbox window at a set size.
+private struct WindowSizeSection: View {
+    private struct Preset: Identifiable {
+        let width: Int
+        let height: Int
+        let ratio: String
+
+        var id: String { "\(width)x\(height)" }
+    }
+
+    private static let presets = [
+        Preset(width: 1280, height: 800, ratio: "16:10"),
+        Preset(width: 1440, height: 900, ratio: "16:10"),
+        Preset(width: 1280, height: 720, ratio: "16:9"),
+        Preset(width: 1600, height: 900, ratio: "16:9"),
+        Preset(width: 1024, height: 768, ratio: "4:3"),
+    ]
+
+    @State private var window = AppWindows.Kind.main
+    // Text rather than numbers, since a number field only updates when
+    // editing ends, and clicking Apply doesn't end it.
+    @State private var width = "1280"
+    @State private var height = "800"
+    @State private var currentSize: CGSize?
+
+    var body: some View {
+        Section {
+            Picker("Window", selection: $window) {
+                Text("Sandboxes").tag(AppWindows.Kind.main)
+                Text("New Sandbox").tag(AppWindows.Kind.create)
+            }
+            LabeledContent("Current size") {
+                if let currentSize {
+                    Text("\(Int(currentSize.width.rounded())) × \(Int(currentSize.height.rounded()))")
+                        .monospacedDigit()
+                } else {
+                    Text("Not open")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            LabeledContent("Preset") {
+                Menu("Resize") {
+                    ForEach(Self.presets) { preset in
+                        Button("\(preset.width) × \(preset.height) (\(preset.ratio))") {
+                            width = String(preset.width)
+                            height = String(preset.height)
+                            apply()
+                        }
+                    }
+                }
+                .fixedSize()
+            }
+            .disabled(currentSize == nil)
+            LabeledContent("Custom size") {
+                HStack(spacing: 4) {
+                    TextField("Width", text: $width)
+                        .frame(width: 60)
+                        .onSubmit(apply)
+                    Text("×")
+                    TextField("Height", text: $height)
+                        .frame(width: 60)
+                        .onSubmit(apply)
+                    Button("Apply", action: apply)
+                        .disabled(customSize == nil)
+                }
+                .labelsHidden()
+                .multilineTextAlignment(.trailing)
+            }
+            .disabled(currentSize == nil)
+        } header: {
+            Text("Window Size")
+        } footer: {
+            Text("Sizes are in points and include the title bar. On a Retina display, a screenshot of the window has twice as many pixels each way, plus its shadow unless you hold Option as you click the window. Sizes below the window's minimum are raised to it.")
+                .foregroundStyle(.secondary)
+        }
+        .onAppear(perform: refresh)
+        .onChange(of: window) { refresh() }
+        // Settings becomes key again when the user comes back to it, after
+        // opening or closing the window.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in refresh() }
+    }
+
+    private var customSize: CGSize? {
+        guard let width = Int(width.trimmingCharacters(in: .whitespaces)), width > 0,
+              let height = Int(height.trimmingCharacters(in: .whitespaces)), height > 0
+        else { return nil }
+        return CGSize(width: width, height: height)
+    }
+
+    private func apply() {
+        guard let customSize else { return }
+        AppWindows.resize(window, to: customSize)
+        refresh()
+    }
+
+    private func refresh() {
+        currentSize = AppWindows.size(of: window)
     }
 }
