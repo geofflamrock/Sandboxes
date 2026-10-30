@@ -78,13 +78,6 @@ struct SecretsView: View {
             await secrets.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             ToolbarItem {
                 Button("Add Secret", systemImage: "plus") {
                     editor = SecretDraft()

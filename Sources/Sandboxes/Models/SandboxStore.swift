@@ -1,8 +1,10 @@
 import Foundation
 import Observation
 
-/// What's selected in the sidebar: a sandbox, or one of the management pages.
+/// What's selected in the sidebar: Home, a sandbox, or one of the
+/// management pages.
 enum SidebarItem: Hashable {
+    case home
     case sandbox(Sandbox.ID)
     case environments
     case secrets
@@ -37,7 +39,16 @@ final class SandboxStore {
     private(set) var approvals: [NetworkApproval] = []
     /// Approvals with a response or deny in flight.
     private(set) var respondingApprovalIDs: Set<NetworkApproval.ID> = []
-    var selection: SidebarItem?
+    /// Home when nothing else is chosen. `nil` (such as after Command-clicking
+    /// the selected row) shows Home too, without a row selected.
+    var selection: SidebarItem? = .home {
+        didSet { recordNavigation(from: oldValue) }
+    }
+    /// Pages Back returns to, oldest first. Only pages are recorded, not
+    /// the tabs inside them, as in Finder and System Settings.
+    private(set) var backHistory: [SidebarItem] = []
+    /// Pages Forward returns to, the next one last.
+    private(set) var forwardHistory: [SidebarItem] = []
     /// Whether the main window is open. While it's closed the app stays in
     /// the menu bar and only checks for pending approvals.
     private(set) var isWindowOpen = false
@@ -79,10 +90,70 @@ final class SandboxStore {
     @ObservationIgnored private var refreshAgain = false
     /// A sandbox to select once the sandbox list next loads.
     @ObservationIgnored private var pendingSelection: Sandbox.ID?
+    /// Set while Back or Forward changes the selection, so it isn't recorded
+    /// as a new visit.
+    @ObservationIgnored private var isReplayingHistory = false
+    nonisolated private static let historyLimit = 50
 
     var selectedSandbox: Sandbox? {
         guard case let .sandbox(id) = selection else { return nil }
         return sandboxes.first { $0.id == id }
+    }
+
+    var canGoBack: Bool { !backHistory.isEmpty }
+    var canGoForward: Bool { !forwardHistory.isEmpty }
+
+    func goBack() {
+        guard let previous = backHistory.popLast() else { return }
+        forwardHistory.append(selection ?? .home)
+        replaceSelection(with: previous)
+    }
+
+    func goForward() {
+        guard let next = forwardHistory.popLast() else { return }
+        backHistory.append(selection ?? .home)
+        replaceSelection(with: next)
+    }
+
+    /// Changes the selection without recording a visit.
+    private func replaceSelection(with item: SidebarItem) {
+        isReplayingHistory = true
+        selection = item
+        isReplayingHistory = false
+    }
+
+    private func recordNavigation(from oldValue: SidebarItem?) {
+        let from = oldValue ?? .home
+        guard !isReplayingHistory, from != (selection ?? .home) else { return }
+        backHistory.append(from)
+        if backHistory.count > Self.historyLimit {
+            backHistory.removeFirst(backHistory.count - Self.historyLimit)
+        }
+        forwardHistory.removeAll()
+    }
+
+    /// Drops sandboxes that no longer exist from the history, so Back and
+    /// Forward never land on a missing page, and merges the neighbours that
+    /// then repeat.
+    private func pruneHistory() {
+        let ids = Set(sandboxes.map(\.id))
+        func exists(_ item: SidebarItem) -> Bool {
+            guard case let .sandbox(id) = item else { return true }
+            return ids.contains(id)
+        }
+        func withoutRepeats(_ items: [SidebarItem]) -> [SidebarItem] {
+            items.reduce(into: []) { result, item in
+                if result.last != item { result.append(item) }
+            }
+        }
+        // The current page goes on the end so an entry next to it that matches
+        // it is merged away too. Assigned only when changed, as this runs on
+        // every refresh.
+        let current = selection ?? .home
+        let back = Array(withoutRepeats(backHistory.filter(exists) + [current]).dropLast())
+        let forward = Array(withoutRepeats(forwardHistory.filter(exists) + [current]).dropLast())
+        if back != backHistory { backHistory = back }
+        if forward != forwardHistory { forwardHistory = forward }
     }
 
     /// Reloads the list. Calls made while a reload is in flight queue one more reload.
@@ -206,7 +277,7 @@ final class SandboxStore {
     /// which lists every sandbox's, when there's no such sandbox.
     func showApprovals(forSandbox name: String?) {
         guard let name else {
-            selection = nil
+            selection = .home
             return
         }
         approvalsToReveal = name
@@ -215,7 +286,7 @@ final class SandboxStore {
         } else {
             // Not loaded yet, or new since the list was last loaded, which it
             // isn't while the window is closed.
-            selection = nil
+            selection = .home
             pendingSelection = name
         }
     }
@@ -317,8 +388,11 @@ final class SandboxStore {
                 }
             }
             if case let .sandbox(id) = selection, !sandboxes.contains(where: { $0.id == id }) {
-                selection = nil
+                // Not a visit: Back from Home goes to the page before the
+                // removed sandbox.
+                replaceSelection(with: .home)
             }
+            pruneHistory()
         } catch {
             let wasFailing = loadError != nil
             loadError = error.localizedDescription

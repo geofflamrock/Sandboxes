@@ -50,13 +50,6 @@ struct PoliciesView: View {
             await policies.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             // File system rules can't be changed, so their tab has no actions.
             if tab == .network {
                 ToolbarItemGroup {

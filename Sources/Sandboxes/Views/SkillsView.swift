@@ -38,13 +38,6 @@ struct SkillsView: View {
             await skills.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             ToolbarItemGroup {
                 Button("Update All", systemImage: "arrow.down.circle") {
                     Task { await skills.updateAll() }

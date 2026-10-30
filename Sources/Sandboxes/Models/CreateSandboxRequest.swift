@@ -69,6 +69,47 @@ struct AdditionalWorkspace: Identifiable, Hashable {
     }
 }
 
+/// A folder on the Mac used for a path a kit shares with the host
+/// (`host-mount@1`), instead of the folder Docker Sandboxes manages for it.
+/// sbx only accepts a sandbox path that one of the kits declares.
+struct HostMount: Identifiable, Hashable {
+    let id = UUID()
+    var sandboxPath = ""
+    /// As typed or chosen.
+    var hostPath = ""
+
+    var trimmedSandboxPath: String { sandboxPath.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var normalizedHostPath: String? { WorkspacePath.normalized(hostPath) }
+    var isBlank: Bool { trimmedSandboxPath.isEmpty && normalizedHostPath == nil }
+
+    /// What `--mount` takes: `HOST:SANDBOX_PATH`.
+    var spec: String { "\(normalizedHostPath ?? ""):\(trimmedSandboxPath)" }
+
+    /// Why the mount can't be used, if it can't. A sandbox path must be
+    /// absolute and canonical, as the kit spec requires of the path it declares.
+    func problem(inEnvironmentFile: Bool) -> String? {
+        let path = trimmedSandboxPath
+        if path.isEmpty {
+            return "Enter a sandbox path for each host mount."
+        }
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false).dropFirst()
+        if !path.hasPrefix("/") || path == "/" || path.hasSuffix("/")
+            || parts.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) {
+            return "“\(path)” isn't a sandbox path. Enter the full path the kit gives, such as /home/agent/.cache."
+        }
+        if path.contains(":") {
+            return "The sandbox path “\(path)” can't contain a colon."
+        }
+        guard normalizedHostPath != nil else {
+            return "Choose a folder on your Mac for “\(path)”."
+        }
+        if hostPath.contains(":") {
+            return "The folder for “\(path)” can't have a colon in its path."
+        }
+        return WorkspacePath.problem(with: hostPath, inEnvironmentFile: inEnvironmentFile)
+    }
+}
+
 struct EnvironmentVariable: Identifiable, Hashable {
     let id = UUID()
     var key = ""
@@ -183,6 +224,8 @@ struct CreateSandboxRequest {
     var workspacePath = ""
     var mode: WorkspaceMode = .direct
     var additionalWorkspaces: [AdditionalWorkspace] = []
+    /// Folders on the Mac for paths the kits share with the host.
+    var hostMounts: [HostMount] = []
     var name = ""
     /// 0 lets sbx choose: all of the Mac's CPUs.
     var cpus = 0
@@ -220,6 +263,15 @@ struct CreateSandboxRequest {
     var enteredPorts: [PortMapping] {
         ports.filter { !$0.isBlank }
     }
+    var enteredHostMounts: [HostMount] {
+        hostMounts.filter { !$0.isBlank }
+    }
+    /// The host mounts to offer next time.
+    var recentHostMounts: [RecentHostMount] {
+        enteredHostMounts.compactMap { mount in
+            mount.normalizedHostPath.map { RecentHostMount(sandboxPath: mount.trimmedSandboxPath, hostPath: $0) }
+        }
+    }
     var deniedHostList: [String] {
         deniedHosts
             .split(whereSeparator: { $0 == "," || $0.isWhitespace })
@@ -253,6 +305,9 @@ struct CreateSandboxRequest {
             arguments += ["--kit", kit]
         }
         arguments += kitArgumentFlags
+        for mount in enteredHostMounts {
+            arguments += ["--mount", mount.spec]
+        }
         for server in staticMCPServers {
             arguments += ["--static-mcp", server]
         }
@@ -327,6 +382,15 @@ struct CreateSandboxRequest {
             if let problem = WorkspacePath.problem(with: folder.path, inEnvironmentFile: inEnvironmentFile) {
                 return problem
             }
+        }
+        for mount in enteredHostMounts {
+            if let problem = mount.problem(inEnvironmentFile: inEnvironmentFile) {
+                return problem
+            }
+        }
+        let sandboxPaths = enteredHostMounts.map(\.trimmedSandboxPath)
+        if let repeated = sandboxPaths.first(where: { path in sandboxPaths.filter { $0 == path }.count > 1 }) {
+            return "“\(repeated)” has more than one host mount."
         }
         for variable in environment where !variable.isBlank {
             if variable.trimmedKey.isEmpty {

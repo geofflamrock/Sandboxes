@@ -76,13 +76,6 @@ struct SbxSettingsListView: View {
             await settings.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             ToolbarItem {
                 Button("Restart Daemon", systemImage: "arrow.clockwise") {
                     settings.restartPrompt = SbxSettingStore.RestartPrompt(key: nil)

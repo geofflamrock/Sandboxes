@@ -99,7 +99,7 @@ struct CreateSandboxView: View {
     private func save() {
         do {
             try environments.save(request, to: editingURL)
-            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits, hostMounts: request.recentHostMounts)
             store.selection = .environments
             close()
             AppWindows.showMain()
@@ -116,7 +116,7 @@ struct CreateSandboxView: View {
         let request = request
         let run = CreationRun(request: request)
         run.start { [recents, store] in
-            recents.record(workload: request.trimmedWorkload, kits: request.kits)
+            recents.record(workload: request.trimmedWorkload, kits: request.kits, hostMounts: request.recentHostMounts)
             Task { await store.refresh() }
         }
         self.run = run
@@ -139,6 +139,7 @@ private struct CreateSandboxForm: View {
     @Environment(RecentsStore.self) private var recents
     @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
+    @Environment(SbxStatus.self) private var sbxStatus
     @State private var kitDraft = KitDraft()
     @State private var section = CreateSandboxSection.general
     /// Sections visited before and after the current one, for Back and Forward.
@@ -243,6 +244,11 @@ private struct CreateSandboxForm: View {
                 if request.workspace != nil {
                     additionalWorkspacesSection
                 }
+            case .hostMounts:
+                hostMountsSection
+                if !availableRecentHostMounts.isEmpty {
+                    recentHostMountsSection
+                }
             case .kits:
                 kitsSection
                 if !availableRecentKits.isEmpty {
@@ -297,16 +303,22 @@ private struct CreateSandboxForm: View {
 
     /// The sections for what's being made. An environment file doesn't pick MCP
     /// servers the way `sbx create` does: it registers servers itself.
+    /// Host mounts need sbx v0.50.0.
     private var visibleSections: [CreateSandboxSection] {
-        request.target == .environment
-            ? CreateSandboxSection.allCases.filter { $0 != .mcp }
-            : CreateSandboxSection.allCases
+        CreateSandboxSection.allCases.filter { section in
+            switch section {
+            case .mcp: request.target == .sandbox
+            case .hostMounts: sbxStatus.supportsHostMounts
+            default: true
+            }
+        }
     }
 
     /// How many things are added in a section, so what's set elsewhere shows
     /// without opening it. A zero badge isn't shown.
     private func badge(for section: CreateSandboxSection) -> Int {
         switch section {
+        case .hostMounts: request.enteredHostMounts.count
         case .kits: request.kits.count
         case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
         case .mcp: request.staticMCPServers.count
@@ -555,6 +567,105 @@ private struct CreateSandboxForm: View {
         }
     }
 
+    // MARK: Host Mounts
+
+    private var hostMountsSection: some View {
+        Section {
+            ForEach($request.hostMounts) { $mount in
+                HStack {
+                    TextField("Sandbox Path", text: $mount.sandboxPath, prompt: Text("/home/agent/.cache"))
+                        .labelsHidden()
+                        .font(.body.monospaced())
+                        .frame(maxWidth: 220)
+                        .help("The path in the sandbox, from the kit's documentation")
+                    Image(systemName: "arrow.left")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    WorkspacePathField(
+                        path: $mount.hostPath,
+                        prompt: "~/.cache",
+                        panelMessage: "Choose the folder on your Mac to use for \(mount.trimmedSandboxPath.isEmpty ? "this host mount" : "“\(mount.trimmedSandboxPath)”").",
+                        canCreateFolders: true
+                    )
+                    RemoveButton(help: "Remove host mount") {
+                        request.hostMounts.removeAll { $0.id == mount.id }
+                    }
+                }
+            }
+            HStack {
+                Button("Add Host Mount", systemImage: "plus") {
+                    request.hostMounts.append(HostMount())
+                }
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        } header: {
+            Text("Host Mounts")
+        } footer: {
+            Text("Some kits share a folder with your Mac, at a sandbox path given in the kit's documentation. Docker Sandboxes manages that folder unless you choose your own here. Its files are kept when the sandbox is removed.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Recent host mounts
+
+    /// Recent host mounts at sandbox paths that don't have one already,
+    /// since a path can only have one.
+    private var availableRecentHostMounts: [RecentHostMount] {
+        let used = Set(request.enteredHostMounts.map(\.trimmedSandboxPath))
+        return recents.hostMounts.filter { !used.contains($0.sandboxPath) }
+    }
+
+    /// Cards for the most recent host mounts, such as package caches, so one
+    /// used before is a click away.
+    private var recentHostMountsSection: some View {
+        let mounts = availableRecentHostMounts
+        let shown = mounts.prefix(Self.recentKitCardLimit)
+        let more = mounts.dropFirst(Self.recentKitCardLimit)
+        return Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
+                ForEach(Array(shown)) { mount in
+                    RecentCard(
+                        title: mount.sandboxPath,
+                        subtitle: (mount.hostPath as NSString).abbreviatingWithTildeInPath,
+                        systemImage: "externaldrive.connected.to.line.below",
+                        help: "Add “\(mount.sandboxPath)”"
+                    ) {
+                        add(mount)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            HStack {
+                Text("Recent Host Mounts")
+                Spacer()
+                if !more.isEmpty {
+                    Menu("More") {
+                        ForEach(Array(more)) { mount in
+                            Button("\(mount.sandboxPath) ← \((mount.hostPath as NSString).abbreviatingWithTildeInPath)") { add(mount) }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                Button("Clear") { recents.clearHostMounts() }
+                    .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    /// Fills the first empty row, if there is one, rather than leaving it
+    /// above the added mount.
+    private func add(_ mount: RecentHostMount) {
+        let added = HostMount(sandboxPath: mount.sandboxPath, hostPath: mount.hostPath)
+        if let index = request.hostMounts.firstIndex(where: \.isBlank) {
+            request.hostMounts[index] = added
+        } else {
+            request.hostMounts.append(added)
+        }
+    }
+
     // MARK: Kits
 
     private var kitsSection: some View {
@@ -627,7 +738,15 @@ private struct CreateSandboxForm: View {
         return Section {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
                 ForEach(Array(shown), id: \.self) { kit in
-                    RecentKitCard(kit: kit) { add(kit: kit) }
+                    let source = KitSource(reference: kit)
+                    RecentCard(
+                        title: KitArgument.handle(for: kit),
+                        subtitle: source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit,
+                        systemImage: source.systemImage,
+                        help: "Add “\(kit)”"
+                    ) {
+                        add(kit: kit)
+                    }
                 }
             }
             .padding(.vertical, 4)
@@ -1015,6 +1134,7 @@ private struct CreateSandboxForm: View {
 private enum CreateSandboxSection: CaseIterable, Identifiable {
     case general
     case workspace
+    case hostMounts
     case kits
     case runtime
     case network
@@ -1026,6 +1146,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .workspace: "Workspace"
+        case .hostMounts: "Host Mounts"
         case .kits: "Kits"
         case .runtime: "Runtime"
         case .network: "Network"
@@ -1037,6 +1158,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .workspace: "folder"
+        case .hostMounts: "externaldrive.connected.to.line.below"
         case .kits: "shippingbox"
         case .runtime: "cpu"
         case .network: "network"
@@ -1081,6 +1203,8 @@ private struct WorkspacePathField: View {
     @Binding var path: String
     let prompt: String
     let panelMessage: String
+    /// Whether New Folder is offered, for a folder that may not exist yet.
+    var canCreateFolders = false
     var onChoose: (URL) -> Void = { _ in }
 
     var body: some View {
@@ -1090,7 +1214,7 @@ private struct WorkspacePathField: View {
                 .font(.body.monospaced())
                 .help(path)
             Button("Choose…") {
-                if let url = OpenPanel.choose(directories: true, prompt: "Choose", message: panelMessage).first {
+                if let url = OpenPanel.choose(directories: true, canCreateDirectories: canCreateFolders, prompt: "Choose", message: panelMessage).first {
                     path = url.path
                     onChoose(url)
                 }
@@ -1141,6 +1265,7 @@ enum OpenPanel {
         directories: Bool = false,
         files: [UTType] = [],
         multiple: Bool = false,
+        canCreateDirectories: Bool = false,
         showsHiddenFiles: Bool = false,
         prompt: String,
         message: String
@@ -1150,7 +1275,7 @@ enum OpenPanel {
         panel.canChooseFiles = !files.isEmpty
         panel.allowedContentTypes = files
         panel.allowsMultipleSelection = multiple
-        panel.canCreateDirectories = false
+        panel.canCreateDirectories = canCreateDirectories
         panel.showsHiddenFiles = showsHiddenFiles
         panel.prompt = prompt
         panel.message = message
@@ -1219,26 +1344,28 @@ private struct AgentTile: View {
     }
 }
 
-/// A kit used before, by its short name and where it's from, which adds it
-/// when clicked.
-private struct RecentKitCard: View {
-    let kit: String
+/// Something used before, such as a kit by its short name and where it's
+/// from, which adds it when clicked.
+private struct RecentCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let help: String
     let action: () -> Void
 
     @State private var isHovering = false
 
     var body: some View {
-        let source = KitSource(reference: kit)
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: source.systemImage)
+                Image(systemName: systemImage)
                     .foregroundStyle(.secondary)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(KitArgument.handle(for: kit))
+                    Text(title)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text(source == .local ? (kit as NSString).abbreviatingWithTildeInPath : kit)
+                    Text(subtitle)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1257,7 +1384,7 @@ private struct RecentKitCard: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help("Add “\(kit)”")
+        .help(help)
     }
 }
 

@@ -18,6 +18,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Manage agent skills and choose how sandboxes share them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
+- Install new versions of Sandboxes from inside the app.
 
 ## Getting started
 
@@ -26,6 +27,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - macOS 26 or later
 - The [`sbx` CLI](https://docs.docker.com/ai/sandboxes/). Install it with Homebrew: `brew install docker/tap/sbx`
 - `sbx` v0.48.0 or later to unload MCP servers from a sandbox.
+- `sbx` v0.50.0 or later to choose and show kit host mounts.
 - An `sbx` with the experimental `sbx skills` commands (checked against v0.49.1) to manage skills.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
@@ -53,7 +55,7 @@ If you installed the app by hand: Sandboxes isn't notarized by Apple yet, so the
 3. Scroll down to the message that Sandboxes was blocked and click **Open Anyway**.
 4. Click **Open Anyway** again and enter your password when asked.
 
-You only need to do this once. Alternatively, clear the quarantine flag in Terminal after copying the app to Applications:
+You only need to do this once. Updates installed from inside the app aren't blocked. Alternatively, clear the quarantine flag in Terminal after copying the app to Applications:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Sandboxes.app
@@ -85,14 +87,14 @@ Local builds show a "Local" badge at the bottom of the sidebar and have version 
 
 ### Update checks
 
-Release builds check the [latest GitHub release](https://github.com/geofflamrock/Sandboxes/releases/latest) at launch and every 6 hours. When it's newer, the sidebar and the menu bar menu link to it. Drafts and pre-releases are ignored.
+Release builds use [Sparkle](https://sparkle-project.org) to check for and install updates. Every 6 hours, Sparkle reads `appcast.xml` from the [latest GitHub release](https://github.com/geofflamrock/Sandboxes/releases/latest), so drafts and pre-releases are ignored. When it lists a newer build, the sidebar and the menu bar menu show it, and clicking it opens Sparkle's window with the release notes and **Install Update**. **Sandboxes › Check for Updates…** and **Settings › General** check straight away. Sparkle downloads the DMG, checks its EdDSA signature against the public key in the app (`SUPublicEDKey`), replaces the app and reopens it. Updates installed this way aren't quarantined, so macOS doesn't block them.
 
-Other builds don't check. To try it out in one, open **Settings › Development**, turn on **Check for updates in this build** and enter an older version to pretend to be, such as `0.0.1`. You can also check another repository's releases there.
+Other builds don't check. To try it out in one, open **Settings › Development** and turn on **Check for updates in this build**. Sparkle compares build numbers, and builds from CI are numbered after the releases before them, so only a local build (build 1) sees the latest release as an update. You can also read another repository's appcast there.
 
-These settings are stored as the `UpdateCheckForceEnabled`, `UpdateCheckCurrentVersion` and `UpdateCheckRepository` defaults, so they also work as launch arguments:
+These settings are stored as the `UpdateCheckForceEnabled` and `UpdateCheckRepository` defaults, so they also work as launch arguments:
 
 ```bash
-open Sandboxes.app --args -UpdateCheckForceEnabled YES -UpdateCheckCurrentVersion 0.0.1
+open Sandboxes.app --args -UpdateCheckForceEnabled YES
 ```
 
 Release builds ignore them, so values left over from testing a build don't affect a release.
@@ -123,15 +125,30 @@ It assembles `_site/` from symlinks to `site/` and the icon SVGs, so edits show 
 
 Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Test builds are ahead of the latest release, so their version is the next minor version after it: when the latest release is v0.4.0, they're 0.5.0. Pull request builds are named `Sandboxes-<version>-pr<number>-<commit>.dmg` and `main` builds `Sandboxes-<version>-build<run number>-<commit>.dmg`, where `<commit>` is the short commit SHA. The app shows a badge such as "PR #12 · abc1234" or "main · abc1234" at the bottom of the sidebar so you can tell you're not on a release. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch and the commit.
 
-To download the latest test build with the GitHub CLI:
+To install the latest test build, run `scripts/install-test-build.sh` from a clone of the repo. It needs the [GitHub CLI](https://cli.github.com), signed in. It downloads the build, quits Sandboxes if it's running, replaces `/Applications/Sandboxes.app` and opens it.
 
 ```bash
-gh run download --repo geofflamrock/Sandboxes --name Sandboxes "$(gh run list --repo geofflamrock/Sandboxes --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+scripts/install-test-build.sh        # latest main build
+scripts/install-test-build.sh 12     # latest build of PR #12
 ```
 
 ### Releases
 
-Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` to it, then redeploys the [website](#website) so its release button shows the new version. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
+Publishing a GitHub release builds the app with the release's version and attaches `Sandboxes-<version>.dmg` and `appcast.xml` to it, then redeploys the [website](#website) so its release button shows the new version. Tag releases `v1.2.3` (or `1.2.3`). Release builds show their version, such as "v1.2.3", at the bottom of the sidebar. Builds are ad-hoc signed and not notarized.
+
+The appcast is what [update checks](#update-checks) read. Sparkle's `generate_appcast` writes it with the release's notes and an EdDSA signature for the DMG, made with the private key in the `SPARKLE_PRIVATE_KEY` repository secret. The app checks the signature with the public key in `project.yml` (`SPARKLE_PUBLIC_ED_KEY`). To set up the keys, download Sparkle from its [releases](https://github.com/sparkle-project/Sparkle/releases) and run:
+
+```bash
+./bin/generate_keys
+```
+
+It saves the private key in your Keychain and prints the public key to put in `project.yml` (`./bin/generate_keys -p` prints it again). Then export the private key, copy it into the secret and delete the export:
+
+```bash
+./bin/generate_keys -x sparkle-private-key && gh secret set SPARKLE_PRIVATE_KEY --repo geofflamrock/Sandboxes < sparkle-private-key && rm -P sparkle-private-key
+```
+
+Keep a backup of the private key. Without it, existing installs can't install any later release, and users have to download one from GitHub again. A release fails to build if either key is missing or they don't match.
 
 ### Commands the app runs
 
@@ -144,9 +161,10 @@ Publishing a GitHub release builds the app with the release's version and attach
 | Diagnostics (home page and Settings › sbx) | `sbx diagnose --json`, at most every 5 minutes, straight away when `sbx ls` starts failing, or when you click **Run Again** in Settings › sbx or choose **Help › Run sbx Diagnostics…** |
 | Start the daemon (home page) | `sbx daemon start --detach`, when the Daemon check fails and you click **Start Daemon** |
 | Sign in to Docker (home page) | `sbx login`, when the Authentication check fails and you click **Sign In**. The app shows the one-time code and opens the sign-in page |
-| Create | `[DOCKER_SANDBOXES_ROOT_SIZE=SIZE] [DOCKER_SANDBOXES_DOCKER_SIZE=SIZE] [DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=SIZE] sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--static-mcp SERVER]... [--publish [HOST_PORT:]SANDBOX_PORT]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name. The disk sizes from **Runtime › Disks** and **Workspace › Clone Size** (Clone mode only) are set as `SIZEg`, or as typed for **Custom**, in that `sbx create` process's environment, not your shell's or the sandbox's, since `sbx create` has no flags for them |
+| Create | `[DOCKER_SANDBOXES_ROOT_SIZE=SIZE] [DOCKER_SANDBOXES_DOCKER_SIZE=SIZE] [DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=SIZE] sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--mount HOST:SANDBOX_PATH]... [--static-mcp SERVER]... [--publish [HOST_PORT:]SANDBOX_PORT]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:ro]]...]`. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name. The disk sizes from **Runtime › Disks** and **Workspace › Clone Size** (Clone mode only) are set as `SIZEg`, or as typed for **Custom**, in that `sbx create` process's environment, not your shell's or the sandbox's, since `sbx create` has no flags for them |
 | Review an environment file's plan | `sbx env plan [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE]`, with the name entered (the file's `name:` to start with), and `--clone` when you choose Clone for a workspace that doesn't set `workspace.clone`. With **Include My Defaults**, it runs in the file's folder without FILE, so sbx adds `~/.sbxenv.yaml`. That's offered when the defaults file exists and the file is called `sbxenv.yaml`, and not for a file in the environment files folder whose defaults would mount the project directory, which would be the file's own folder |
-| Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app. Ports entered in the New Sandbox window are saved in the file's `ports`, so sbx publishes them from there |
+| Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app. Ports entered in the New Sandbox window are saved in the file's `ports`, so sbx publishes them from there, and host mounts in its `mounts` |
+| Host mounts (sandbox Overview) | `sbx inspect NAME --json`, once each time a sandbox is shown, with `sbx` v0.50.0 or later. Its `mounts` lists the folder for each kit host mount, including the ones Docker Sandboxes manages |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit rather than a built-in agent, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |

@@ -38,6 +38,21 @@ struct ContentView: View {
                     HomeView()
                 }
             }
+            .toolbar {
+                // Walks the pages visited, like the New Sandbox window's
+                // sections. The shortcuts are on the buttons rather than in a
+                // menu so they only apply to this window.
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.backward", action: { store.goBack() })
+                        .disabled(!store.canGoBack)
+                        .keyboardShortcut("[")
+                        .help("See the page you were on before")
+                    Button("Forward", systemImage: "chevron.forward", action: { store.goForward() })
+                        .disabled(!store.canGoForward)
+                        .keyboardShortcut("]")
+                        .help("See the page you went back from")
+                }
+            }
             // Content scrolled under the toolbar and the sandbox tabs fades out,
             // as in System Settings, rather than showing through behind them.
             .scrollEdgeEffectStyle(.soft, for: .top)
@@ -148,6 +163,12 @@ struct SandboxSidebar: View {
         @Bindable var store = store
 
         List(selection: $store.selection) {
+            // Outside the sections so it stays put when they're collapsed or
+            // a search filters the sandboxes.
+            Label("Home", systemImage: "house")
+                .badge(store.approvals.count)
+                .tag(SidebarItem.home)
+                .help("Things to set up, requests waiting for approval, and shortcuts for creating a sandbox")
             Section("Sandboxes", isExpanded: $sandboxesExpanded) {
                 ForEach(filteredSandboxes) { sandbox in
                     SandboxRow(
@@ -224,14 +245,18 @@ struct SandboxSidebar: View {
                         .help(error)
                 }
                 if let update = updates.availableUpdate {
-                    Link(destination: update.url) {
+                    Button {
+                        updates.checkForUpdates()
+                    } label: {
                         Label("Version \(update.version) available", systemImage: "arrow.down.circle.fill")
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .glassEffect(.regular.interactive(), in: .capsule)
-                    .help("Download Sandboxes \(update.version) from GitHub")
+                    .help("Install Sandboxes \(update.version)")
                 }
                 // On one line when they fit, otherwise the sbx badges go below.
                 ViewThatFits(in: .horizontal) {

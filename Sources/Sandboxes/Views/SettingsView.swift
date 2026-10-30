@@ -26,7 +26,6 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     @AppStorage(ApprovalNotifier.enabledKey) private var notifiesAboutApprovals = true
-    @AppStorage(UpdateChecker.enabledKey) private var checksForUpdates = true
     @AppStorage(EnvironmentStore.directoryKey) private var environmentsDirectory = ""
     @Environment(UpdateChecker.self) private var updates
     @Environment(EnvironmentStore.self) private var environments
@@ -84,13 +83,21 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if UpdateChecker.isSupported {
+            if updates.isRunning {
                 Section {
-                    Toggle("Check for updates", isOn: $checksForUpdates)
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updates.checksAutomatically },
+                        set: { updates.setChecksAutomatically($0) }
+                    ))
+                    LabeledContent("Look for a newer version now.") {
+                        Button("Check Now") {
+                            updates.checkForUpdates()
+                        }
+                    }
                 } header: {
                     Text("Updates")
                 } footer: {
-                    Text("Shows when a newer version is on GitHub, with a link to download it.")
+                    Text("Shows in the sidebar and menu bar when a newer version is on GitHub. Updates are checked before they're installed, and Sandboxes reopens when it's done.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -102,9 +109,6 @@ private struct GeneralSettingsView: View {
             if isOn {
                 ApprovalNotifier.shared.requestAuthorization()
             }
-        }
-        .onChange(of: checksForUpdates) {
-            Task { await updates.check() }
         }
         .onChange(of: environmentsDirectory) {
             environments.refresh()
@@ -133,7 +137,6 @@ private struct GeneralSettingsView: View {
 /// Settings › Development, only in builds that aren't releases.
 private struct DevelopmentSettingsView: View {
     @AppStorage(UpdateChecker.forceEnabledKey) private var forcesUpdateChecks = false
-    @AppStorage(UpdateChecker.currentVersionKey) private var pretendVersion = ""
     @AppStorage(UpdateChecker.repositoryKey) private var updateRepository = ""
     @Environment(UpdateChecker.self) private var updates
 
@@ -142,59 +145,35 @@ private struct DevelopmentSettingsView: View {
             Section {
                 Toggle("Check for updates in this build", isOn: $forcesUpdateChecks)
                 if forcesUpdateChecks {
-                    TextField("Pretend to be version", text: $pretendVersion, prompt: Text(AppInfo.version))
-                        .onSubmit { Task { await updates.check() } }
                     TextField("Repository", text: $updateRepository, prompt: Text(UpdateChecker.defaultRepository))
-                        .onSubmit { Task { await updates.check() } }
                     LabeledContent {
                         Button("Check Now") {
-                            Task { await updates.check() }
+                            updates.checkForUpdates()
                         }
-                        .disabled(updates.status == .checking)
+                        .disabled(!updates.isRunning)
                     } label: {
-                        UpdateStatusLabel(status: updates.status, update: updates.availableUpdate)
+                        if updates.isRunning {
+                            Text("Opens Sparkle's update window.")
+                        } else {
+                            Text("Sparkle can't start without a public key in Info.plist (SUPublicEDKey).")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             } header: {
                 Text("Updates")
             } footer: {
-                Text("Only in builds that aren't releases. Pretend to be an older version to see the update in the sidebar and menu bar.")
+                Text("Only in builds that aren't releases. Sparkle compares build numbers, so a local build (build 1) sees the latest release as an update, but builds from CI don't. Turning this off takes effect the next time Sandboxes opens.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
-        .onChange(of: forcesUpdateChecks) {
-            Task { await updates.check() }
-        }
-    }
-}
-
-/// The result of the last update check, for Settings › Development.
-private struct UpdateStatusLabel: View {
-    let status: UpdateChecker.Status
-    let update: UpdateChecker.Release?
-
-    var body: some View {
-        switch status {
-        case .notChecked:
-            Text("Not checked")
-                .foregroundStyle(.secondary)
-        case .checking:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Checking…")
+        .onChange(of: forcesUpdateChecks) { _, isOn in
+            if isOn {
+                updates.start()
             }
-        case .checked(let latest):
-            if let update {
-                Label("Version \(update.version) available", systemImage: "arrow.down.circle.fill")
-            } else {
-                Label("Up to date (latest is \(latest))", systemImage: "checkmark.circle.fill")
-            }
-        case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
         }
     }
 }

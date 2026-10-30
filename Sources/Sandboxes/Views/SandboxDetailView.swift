@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// The tabs of the sandbox detail view. The last one used is remembered
 /// across sandboxes, so watching traffic carries on when you switch.
@@ -47,6 +48,11 @@ struct SandboxDetailView: View {
     @State private var isPublishingPort = false
     @State private var portRemoval: PublishedPort?
     @State private var unpublishingPorts: Set<PublishedPort.ID> = []
+    @Environment(SbxStatus.self) private var sbxStatus
+    /// Nil until they've been read.
+    @State private var hostMounts: [SandboxHostMount]?
+    @State private var hostMountsError: String?
+    @State private var isLoadingHostMounts = false
 
     // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
@@ -60,6 +66,13 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
+                            if sbxStatus.supportsHostMounts {
+                                SandboxHostMountsSection(
+                                    mounts: hostMounts,
+                                    error: hostMountsError,
+                                    isLoading: isLoadingHostMounts
+                                )
+                            }
                             portsSection
                             SandboxResourcesSection(sandbox: sandbox)
                                 .id(sandbox.name)
@@ -95,6 +108,20 @@ struct SandboxDetailView: View {
         .onChange(of: sandbox.name) {
             ports = nil
             portsError = nil
+        }
+        // Host mounts are fixed when a sandbox is created, so they're read once.
+        .task(id: sandbox.name) {
+            hostMounts = nil
+            hostMountsError = nil
+            guard sbxStatus.supportsHostMounts else { return }
+            isLoadingHostMounts = true
+            defer { isLoadingHostMounts = false }
+            do {
+                hostMounts = try await SandboxHostMount.fetch(for: sandbox.name)
+            } catch {
+                guard !Task.isCancelled else { return }
+                hostMountsError = error.localizedDescription
+            }
         }
         // Ports are only read while they're shown, and sbx can only list
         // them while the sandbox is running.
@@ -139,13 +166,6 @@ struct SandboxDetailView: View {
         }
         .navigationTitle(sandbox.name)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             // Kept out of the actions' group so it doesn't widen it, and always
             // laid out so the toolbar doesn't shift when it appears.
             ToolbarItem {
@@ -587,6 +607,53 @@ struct SandboxDetailView: View {
                     Text(value).textSelection(.enabled)
                 }
             }
+        }
+    }
+}
+
+/// The folders on the Mac that the sandbox's kits share with it.
+private struct SandboxHostMountsSection: View {
+    let mounts: [SandboxHostMount]?
+    let error: String?
+    let isLoading: Bool
+
+    var body: some View {
+        Section {
+            if let mounts, mounts.isEmpty {
+                Text("No kits share a folder with this sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if mounts == nil {
+                Text(error == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(mounts ?? []) { mount in
+                LabeledContent {
+                    HStack(spacing: 6) {
+                        Text(mount.isManaged ? "Managed by Docker Sandboxes" : (mount.hostPath as NSString).abbreviatingWithTildeInPath)
+                            .foregroundStyle(mount.isManaged ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help(mount.hostPath)
+                        Button("Show in Finder", systemImage: "folder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: mount.hostPath, isDirectory: true)])
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .help("Show in Finder")
+                    }
+                } label: {
+                    Text(mount.sandboxPath)
+                        .font(.body.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+        } header: {
+            SectionHeader(title: "Host Mounts", count: mounts?.count, isLoading: isLoading)
+        } footer: {
+            Text(error.map { "Couldn't read the host mounts: \($0)" }
+                ?? "Folders on your Mac that the sandbox's kits share with it. Their files are kept when the sandbox is removed.")
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -46,13 +46,6 @@ struct EnvironmentsView: View {
             environments.refresh()
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Home", systemImage: "chevron.backward") {
-                    store.selection = nil
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to Home")
-            }
             ToolbarItem {
                 Button("Open Environment File", systemImage: "square.and.arrow.down") {
                     EnvironmentFilePanel.open(into: environments)
