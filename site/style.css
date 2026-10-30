@@ -270,154 +270,17 @@ h2 {
   margin-bottom: 8px;
 }
 
-/* A real window screenshot includes its own title bar and shadow. */
+/* A window screenshot includes its own title bar and shadow. */
 .shot {
   display: block;
   width: 100%;
   height: auto;
 }
 
-/* A placeholder drawn as a macOS window in dark mode, to match the
-   screenshots: a title bar with the window controls, a sidebar and a few
-   lines of content. */
-.window {
-  display: flex;
-  flex-direction: column;
-  aspect-ratio: 16 / 10;
-  margin: 0;
-  background: #1e1f24;
-  border: 1px solid rgb(0 0 0 / 0.5);
-  border-radius: 12px;
-  box-shadow: 0 24px 48px rgb(19 42 92 / 0.3), 0 2px 6px rgb(19 42 92 / 0.15), inset 0 0 0 1px rgb(255 255 255 / 0.08);
-  overflow: hidden;
-}
-
-.window-bar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  height: 36px;
-  padding-left: 14px;
-  background: #2a2b31;
-  border-bottom: 1px solid rgb(0 0 0 / 0.4);
-}
-
-.lights {
-  display: flex;
-  gap: 8px;
-}
-
-.lights i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #ff5f57;
-}
-
-.lights i:nth-child(2) {
-  background: #febc2e;
-}
-
-.lights i:nth-child(3) {
-  background: #28c840;
-}
-
-.window-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.window-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 28%;
-  padding: 18px 14px;
-  background: #26272d;
-  border-right: 1px solid rgb(0 0 0 / 0.3);
-}
-
-.window-sidebar i,
-.window-content i,
-.window-content b {
-  display: block;
-  height: 10px;
-  border-radius: 5px;
-  background: rgb(255 255 255 / 0.12);
-}
-
-.window-sidebar i:nth-child(odd) {
-  width: 70%;
-}
-
-.window-sidebar i:nth-child(even) {
-  width: 88%;
-}
-
-.window-content {
-  position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-  padding: 22px;
-}
-
-.window-content b {
-  width: 45%;
-  height: 16px;
-  margin-bottom: 4px;
-  background: rgb(255 255 255 / 0.22);
-}
-
-.window-content i {
-  background: rgb(255 255 255 / 0.08);
-}
-
-.window-content i.short {
-  width: 60%;
-}
-
-/* The New Sandbox window's form: a label and a field on each row. */
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.window-content .form-row i {
-  flex: none;
-  width: 22%;
-}
-
-.form-row u {
-  display: block;
-  flex: 1;
-  height: 24px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.06);
-}
-
-.form-row u.short {
-  flex: 0 0 40%;
-}
-
 /* The main window's screenshot, centred below the install command. */
 .main-shot {
   max-width: 1000px;
   margin: 64px auto 0;
-}
-
-.window-label {
-  position: absolute;
-  right: 0;
-  bottom: 18px;
-  left: 0;
-  color: #9a9ca6;
-  font-size: 13px;
-  text-align: center;
 }
 
 .copy {
@@ -503,7 +366,6 @@ footer a {
   @media (prefers-reduced-motion: no-preference) {
     .features-title,
     .feature-text,
-    .feature > .window,
     .feature > .shot,
     #requirements .inner,
     #other-install .inner {
@@ -512,7 +374,6 @@ footer a {
       animation-range: entry 10% cover 25%;
     }
 
-    .feature > .window,
     .feature > .shot {
       animation-range: entry 20% cover 32%;
     }
