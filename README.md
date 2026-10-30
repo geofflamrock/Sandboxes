@@ -103,10 +103,11 @@ To change the background fill, or how the layers are grouped, scaled or lit, ope
 
 Every pull request and every push to `main` uploads a DMG as the `Sandboxes` artifact on the workflow run. Test builds are ahead of the latest release, so their version is the next minor version after it: when the latest release is v0.4.0, they're 0.5.0. Pull request builds are named `Sandboxes-<version>-pr<number>-<commit>.dmg` and `main` builds `Sandboxes-<version>-build<run number>-<commit>.dmg`, where `<commit>` is the short commit SHA. The app shows a badge such as "PR #12 · abc1234" or "main · abc1234" at the bottom of the sidebar so you can tell you're not on a release. **Sandboxes › About Sandboxes** shows the version, build number and, for test builds, the PR or branch and the commit.
 
-To download the latest test build with the GitHub CLI:
+To install the latest test build, run `scripts/install-test-build.sh` from a clone of the repo. It needs the [GitHub CLI](https://cli.github.com), signed in. It downloads the build, quits Sandboxes if it's running, replaces `/Applications/Sandboxes.app` and opens it.
 
 ```bash
-gh run download --repo geofflamrock/Sandboxes --name Sandboxes "$(gh run list --repo geofflamrock/Sandboxes --workflow Build --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+scripts/install-test-build.sh        # latest main build
+scripts/install-test-build.sh 12     # latest build of PR #12
 ```
 
 ### Releases
