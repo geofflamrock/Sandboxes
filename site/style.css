@@ -76,7 +76,7 @@ code {
 
 /* Wider, for the feature rows with screenshots. */
 .inner.wide {
-  max-width: 1120px;
+  max-width: 1240px;
 }
 
 .hero {
@@ -238,7 +238,7 @@ h2 {
    sides each row. On phones the text comes first, then the screenshot. */
 .feature {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   align-items: center;
   gap: 56px;
   padding: 48px 0;
@@ -254,7 +254,7 @@ h2 {
 }
 
 .feature.reverse {
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 }
 
 .feature.reverse .feature-text {
