@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sandboxes</title>
+  <meta name="description" content="A macOS app for managing Docker Sandboxes.">
+  <link rel="icon" href="AppIcon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="inner">
+      <div class="brand">
+        <img class="artwork" src="AppIconArtwork.svg" alt="" width="200" height="186">
+        <div class="brand-text">
+          <h1>Sandboxes</h1>
+          <p class="tagline">A macOS app for managing <a href="https://docs.docker.com/ai/sandboxes/">Docker Sandboxes</a>.</p>
+          <div class="actions">
+            <!-- .github/workflows/pages.yml fills in the latest release's version and page when it deploys. -->
+            <a id="release" class="button primary" href="https://github.com/geofflamrock/Sandboxes/releases/latest">Latest release</a>
+            <a class="button" href="https://github.com/geofflamrock/Sandboxes">View on GitHub</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="install" class="install">
+        <div class="install-command">
+          <code id="install-command"><span class="tok-cmd">curl</span> <span class="tok-flag">-fsSL</span> <span class="tok-url">https://geofflamrock.github.io/Sandboxes/install.sh</span> <span class="tok-op">|</span> <span class="tok-cmd">bash</span></code>
+          <button type="button" class="copy icon" data-copy="install-command" aria-label="Copy" title="Copy">
+            <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+            <svg class="done-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          </button>
+        </div>
+        <p class="links">
+          <a href="https://github.com/geofflamrock/Sandboxes/blob/main/site/install.sh">View install script</a>
+          <a href="#other-install">Other ways to install</a>
+        </p>
+        <p class="note">Requires macOS 26 or later.</p>
+      </div>
+    </div>
+
+    <div class="inner wide">
+      <!-- Window screenshots (Shift-Command-4, then Space) keep their own title
+           bar and shadow. Their width and height are in points, half the
+           Retina capture's pixels. -->
+      <img class="shot main-shot" src="screenshots/main-window.webp" width="1000" height="655" alt="The Sandboxes main window, with a request from the codex sandbox to reach example.com waiting for approval, three sandboxes in the sidebar, and buttons to create a sandbox from an agent or an environment file">
+    </div>
+  </header>
+
+  <main>
+    <section id="features" class="band">
+      <div class="inner wide">
+        <h2 class="features-title">Features</h2>
+
+        <div class="feature">
+          <div class="feature-text">
+            <h3 class="feature-label">Sandboxes</h3>
+            <ul>
+              <li>Create a sandbox, configuring options such as kits, extra workspace folders and MCP servers.</li>
+              <li>Save <a href="https://docs.docker.com/ai/sandboxes/configuration/environment-files/">environment files</a> and use them to create sandboxes.</li>
+              <li>See each sandbox’s details and resource usage.</li>
+              <li>Start, stop and remove sandboxes.</li>
+              <li>Run a sandbox’s agent in your terminal, or open the sandbox in <a href="https://claude.ai/download">Claude Desktop</a>.</li>
+            </ul>
+          </div>
+          <img class="shot" src="screenshots/new-sandbox-window.webp" width="1000" height="662" alt="The New Sandbox window, with Copilot picked from a grid of agents, sections for the workspace, host mounts, kits, runtime, network and MCP servers in the sidebar, and the sbx command it will run">
+        </div>
+
+        <div class="feature reverse">
+          <div class="feature-text">
+            <h3 class="feature-label">Access</h3>
+            <ul>
+              <li>Get a notification when an agent’s network request needs approval, then approve or deny it.</li>
+              <li>Add network rules for all sandboxes or for just one.</li>
+              <li>See a sandbox’s network traffic, and the network and file system rules that apply to it.</li>
+            </ul>
+          </div>
+          <img class="shot" src="screenshots/network-policies.webp" width="1000" height="655" alt="A sandbox’s policies, with a pending request to approve or deny, its network policy, and the network rules that apply to it, each labelled as coming from its kit or from the global rules">
+        </div>
+
+        <div class="feature">
+          <div class="feature-text">
+            <h3 class="feature-label">Configuration</h3>
+            <ul>
+              <li>Manage secrets for all sandboxes or for just one.</li>
+              <li>Add MCP servers and choose which sandboxes use them.</li>
+              <li>Add agent skills and choose how sandboxes share them.</li>
+              <li>View and change <code>sbx</code> settings, such as proxies and kit policy.</li>
+              <li>Install, upgrade and sign in to <code>sbx</code>, and run diagnostics when something isn’t working.</li>
+            </ul>
+          </div>
+          <img class="shot" src="screenshots/settings.webp" width="1000" height="655" alt="The Settings page, with sbx settings grouped into sections, switches to turn them on or off, values with Edit buttons, and badges on the ones that need a restart">
+        </div>
+      </div>
+    </section>
+
+    <section id="requirements" class="band">
+      <div class="inner">
+        <h2>Requirements</h2>
+        <ul>
+          <li>macOS 26 or later.</li>
+          <li>The <a href="https://docs.docker.com/ai/sandboxes/"><code>sbx</code> CLI</a>. Install it with Homebrew: <code>brew install docker/tap/sbx</code>, or from the app.</li>
+          <li><a href="https://claude.ai/download">Claude Desktop</a> v2.110.0 or later, to open sandboxes in Claude Desktop.</li>
+        </ul>
+        <p>The <a href="https://github.com/geofflamrock/Sandboxes#requirements">README</a> lists the <code>sbx</code> versions that some features need.</p>
+      </div>
+    </section>
+
+    <section id="other-install" class="band">
+      <div class="inner">
+        <h2>Other ways to install</h2>
+        <p>Download the DMG and install it yourself:</p>
+        <ol>
+          <li>Download <code>Sandboxes-&lt;version&gt;.dmg</code> from the <a href="https://github.com/geofflamrock/Sandboxes/releases/latest">latest release</a>.</li>
+          <li>Open the DMG and drag Sandboxes onto Applications.</li>
+          <li>Sandboxes isn’t notarised by Apple yet, so the first time you open it macOS blocks it. Click Done, then open System Settings › Privacy &amp; Security and click Open Anyway. You only need to do this once.</li>
+        </ol>
+        <p>The install script doesn’t need the last step, because macOS doesn’t flag downloads made with <code>curl</code>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="inner">
+      <p>Free and open source under the <a href="https://github.com/geofflamrock/Sandboxes/blob/main/LICENSE">MIT licence</a>.</p>
+      <p><a href="https://github.com/geofflamrock/Sandboxes">GitHub</a> · <a href="https://github.com/geofflamrock/Sandboxes/releases">Releases</a> · <a href="https://github.com/geofflamrock/Sandboxes/issues">Issues</a></p>
+    </div>
+  </footer>
+
+  <script>
+    for (const button of document.querySelectorAll("button.copy")) {
+      button.addEventListener("click", () => {
+        const text = document.getElementById(button.dataset.copy).textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          // Show a tick for a moment.
+          button.classList.add("copied");
+          setTimeout(() => { button.classList.remove("copied"); }, 1500);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

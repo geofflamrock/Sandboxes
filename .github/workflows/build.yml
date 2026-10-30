@@ -198,6 +198,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # To start the Website workflow.
+      actions: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -213,3 +215,12 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
           DMG: ${{ needs.build.outputs.dmg }}
         run: gh release upload "$TAG" "$DMG" appcast.xml --clobber --repo "$GITHUB_REPOSITORY"
+
+      # Redeploys the website so its release button shows this release. It's
+      # started here, once the DMG is attached, rather than by pages.yml
+      # listening for releases: a release runs on its tag, and the
+      # github-pages environment only lets main deploy.
+      - name: Update the website
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"

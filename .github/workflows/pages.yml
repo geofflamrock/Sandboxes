@@ -1,0 +1,73 @@
+name: Website
+
+# Publishes site/ to GitHub Pages at https://geofflamrock.github.io/Sandboxes/.
+# The icon (the favicon) and its artwork without the background (the header)
+# are copied from Design/ so there's only one copy of each.
+# The release button's version is filled in here rather than in the browser,
+# so it doesn't change after the page loads. Publishing a release runs this
+# again: build.yml's release job starts it once the DMG is attached.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - Design/AppIcon.svg
+      - Design/AppIconArtwork.svg
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Always main, so a run started from another branch doesn't publish it.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Assemble site
+        run: |
+          mkdir _site
+          cp -R site/. _site/
+          cp Design/AppIcon.svg Design/AppIconArtwork.svg _site/
+
+      # Before the first release, or if the API fails, the button keeps its
+      # "Latest release" label and links to the latest release page.
+      - name: Add the latest release to the release button
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! release=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name + " " + .html_url'); then
+            echo "::warning::Couldn't get the latest release, so the release button has no version."
+            exit 0
+          fi
+          read -r tag url <<< "$release"
+          sed -i "s|\(<a id=\"release\"[^>]*href=\"\)[^\"]*\(\"[^>]*>\)[^<]*</a>|\1$url\2Latest release: $tag</a>|" _site/index.html
+          if ! grep -qF "Latest release: $tag</a>" _site/index.html; then
+            echo "::error::Couldn't find the release button (id=\"release\") in site/index.html."
+            exit 1
+          fi
+          echo "Release button: $tag, $url"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
