@@ -27,7 +27,7 @@ if [ "$target" = main ]; then
   log "Using the main branch of $repo"
 else
   [[ "$target" =~ ^[0-9]+$ ]] || fail "Expected a PR number or main, got '$target'."
-  log "Looking up PR #$target…"
+  log "Looking up PR #${target}…"
   branch=$(gh pr view "$target" --repo "$repo" --json headRefName -q .headRefName)
   log "Branch: $branch"
 fi
