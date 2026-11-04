@@ -158,7 +158,7 @@ Keep a backup of the private key. Without it, existing installs can't install an
 
 | Action | Command |
 | --- | --- |
-| List | `sbx ls --json` |
+| List | `sbx ls --json`. Overview takes the workspace and additional workspaces from `workspaces` (the first is the workspace, and the others give a target when one was chosen), and takes whether the workspace is cloned, and which folders are read-only, from `mounts`: a clone's folder is mounted read-only at `/run/sandbox/source` |
 | Installed version (home page and Settings › sbx) | `sbx version`, compared with the latest release from the GitHub API for `docker/sbx-releases` |
 | Install sbx (home page) | `brew install docker/tap/sbx`, when you click **Install sbx** |
 | Upgrade sbx (home page and Settings › sbx) | `brew upgrade docker/tap/sbx` (or the cask it was installed from, such as `sbx@rc`), when you click **Upgrade sbx** |

@@ -66,6 +66,7 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
+                            SandboxWorkspaceSection(sandbox: sandbox)
                             if sbxStatus.supportsHostMounts {
                                 SandboxHostMountsSection(
                                     mounts: hostMounts,
@@ -256,9 +257,6 @@ struct SandboxDetailView: View {
                             .textSelection(.enabled)
                     }
                 }
-            }
-            LabeledContent(sandbox.workspaces.count > 1 ? "Workspaces" : "Workspace") {
-                lines(sandbox.workspaces.map { ($0 as NSString).abbreviatingWithTildeInPath })
             }
         }
     }
@@ -596,22 +594,108 @@ struct SandboxDetailView: View {
         }
         await reloadPorts()
     }
+}
 
-    @ViewBuilder
-    private func lines(_ values: [String]) -> some View {
-        if values.isEmpty {
-            Text("None")
-        } else {
-            VStack(alignment: .trailing) {
-                ForEach(values, id: \.self) { value in
-                    Text(value).textSelection(.enabled)
+/// The folders on the Mac that the sandbox's kits share with it.
+/// The main workspace and how it's mounted, then the folders mounted
+/// alongside it, as the New Sandbox window sets them.
+private struct SandboxWorkspaceSection: View {
+    let sandbox: Sandbox
+
+    var body: some View {
+        Section {
+            if let workspace = sandbox.workspace {
+                LabeledContent("Folder") {
+                    FolderPath(path: workspace)
                 }
+                if let isCloned = sandbox.isCloned {
+                    LabeledContent("Mode") {
+                        Text((isCloned ? WorkspaceMode.clone : .direct).title)
+                    }
+                }
+            } else {
+                Text("No workspace.")
+                    .foregroundStyle(.secondary)
             }
+        } header: {
+            Text("Workspace")
+        } footer: {
+            if let footer {
+                Text(footer)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if !sandbox.additionalWorkspaces.isEmpty {
+            Section {
+                ForEach(sandbox.additionalWorkspaces, id: \.self) { folder in
+                    LabeledContent {
+                        HStack(spacing: 6) {
+                            if folder.isReadOnly {
+                                Text("Read-only")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.quaternary, in: .capsule)
+                                    .help("The agent can't change anything in this folder")
+                            }
+                            FolderPath(path: folder.hostPath)
+                        }
+                    } label: {
+                        // In full, since ~ in the sandbox is the agent's home, not yours.
+                        Text(folder.sandboxPath)
+                            .font(.body.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help("Where the folder is mounted in the sandbox")
+                    }
+                }
+            } header: {
+                SectionHeader(title: "Additional Workspaces", count: sandbox.additionalWorkspaces.count, isLoading: false)
+            } footer: {
+                Text("Folders on your Mac mounted alongside the workspace, by where they're mounted in the sandbox.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var footer: String? {
+        guard sandbox.workspace != nil else {
+            return "The agent works in the sandbox's own filesystem."
+        }
+        switch sandbox.isCloned {
+        case true?:
+            return "The sandbox works on a private clone of the folder's Git repository. Fetch its commits from the sandbox-\(sandbox.name) remote."
+        case false?:
+            return WorkspaceMode.direct.explanation
+        case nil:
+            return nil
         }
     }
 }
 
-/// The folders on the Mac that the sandbox's kits share with it.
+/// A folder on the Mac, abbreviated with `~`, and a button to show it in Finder.
+private struct FolderPath: View {
+    let path: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text((path as NSString).abbreviatingWithTildeInPath)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(path)
+            Button("Show in Finder", systemImage: "folder") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)])
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("Show in Finder")
+        }
+    }
+}
+
 private struct SandboxHostMountsSection: View {
     let mounts: [SandboxHostMount]?
     let error: String?

@@ -37,12 +37,25 @@ enum SandboxState: Hashable {
     }
 }
 
+/// A folder on the Mac mounted alongside a sandbox's main workspace.
+struct SandboxWorkspace: Hashable {
+    let hostPath: String
+    /// Where it's mounted in the sandbox: the same path unless another was chosen.
+    let sandboxPath: String
+    let isReadOnly: Bool
+}
+
 struct Sandbox: Identifiable, Hashable {
     var id: String { name }
     let name: String
     let status: String
     let agent: String?
-    let workspaces: [String]
+    /// The main workspace on the Mac, if there is one.
+    let workspace: String?
+    /// Whether the agent works on a clone of the main workspace. Nil when
+    /// `sbx ls` doesn't list the sandbox's mounts.
+    let isCloned: Bool?
+    let additionalWorkspaces: [SandboxWorkspace]
     let createdAt: Date?
     /// The CPU limit recorded for the sandbox, if `sbx ls` reports one.
     let cpus: Double?
@@ -108,15 +121,62 @@ enum SandboxListParser {
         guard let name = string(value(in: record, for: ["name", "sandbox", "id"])), !name.isEmpty else {
             return nil
         }
+        // The main workspace comes first, then the additional ones, which
+        // name their target when one was chosen. `mounts` has everything
+        // mounted, including whether it's read-only.
+        let workspaces = list(value(in: record, for: ["workspaces", "workspace", "paths", "path"])).map(MountSpec.init)
+        let mounts = value(in: record, for: ["mounts"]).map { list($0).map(MountSpec.init) }
+        let workspace = workspaces.first?.host
+        // sbx mounts the folder a clone is made from read-only at this path.
+        let isCloned = workspace.flatMap { workspace in
+            mounts.map { specs in specs.contains { $0.host == workspace && $0.target == "/run/sandbox/source" } }
+        }
+        let additional = workspaces.dropFirst().map { spec -> SandboxWorkspace in
+            let target = spec.target ?? spec.host
+            let mount = mounts?.first { $0.host == spec.host && ($0.target ?? $0.host) == target }
+            return SandboxWorkspace(
+                hostPath: spec.host,
+                sandboxPath: target,
+                isReadOnly: spec.isReadOnly ?? mount?.isReadOnly ?? false
+            )
+        }
         return Sandbox(
             name: name,
             status: string(value(in: record, for: ["status", "state"])) ?? "",
             agent: string(value(in: record, for: ["agent", "kit", "workload", "image", "template"])),
-            workspaces: list(value(in: record, for: ["workspaces", "workspace", "paths", "path", "mounts"])),
+            workspace: workspace,
+            isCloned: isCloned,
+            additionalWorkspaces: additional,
             createdAt: date(value(in: record, for: ["created_at", "created", "creation_time", "created_time"])),
             cpus: number(resource(in: record, for: ["cpus", "cpu", "cpu_count", "cpu_limit", "vcpus", "num_cpus"])),
             memoryBytes: memoryBytes(in: record)
         )
+    }
+
+    /// `PATH[:TARGET][:ro]`, as `sbx ls` lists workspaces and mounts. A target
+    /// is an absolute path, so it starts after the last `:/`.
+    private struct MountSpec {
+        let host: String
+        let target: String?
+        /// Nil when there's no `:ro` or `:rw`.
+        let isReadOnly: Bool?
+
+        init(_ text: String) {
+            var rest = Substring(text)
+            if rest.hasSuffix(":ro") || rest.hasSuffix(":rw") {
+                isReadOnly = rest.hasSuffix(":ro")
+                rest = rest.dropLast(3)
+            } else {
+                isReadOnly = nil
+            }
+            if let separator = rest.range(of: ":/", options: .backwards) {
+                host = String(rest[..<separator.lowerBound])
+                target = String(rest[rest.index(after: separator.lowerBound)...])
+            } else {
+                host = String(rest)
+                target = nil
+            }
+        }
     }
 
     /// Looks for a resource limit at the top level or in a nested
