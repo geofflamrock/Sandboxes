@@ -56,6 +56,31 @@ enum AppWindows {
         bringToFront(window)
     }
 
+    /// The size of one of the app's windows, title bar included, or nil when
+    /// it isn't open.
+    static func size(of kind: Kind) -> CGSize? {
+        guard let window = windows[kind]?.window, window.isVisible else { return nil }
+        return window.frame.size
+    }
+
+    /// Resizes one of the app's windows, title bar included, keeping its
+    /// top-left corner where it is. For screenshots at a set size, from
+    /// Settings › Development. Sizes below the window's minimum are raised
+    /// to it.
+    static func resize(_ kind: Kind, to size: CGSize) {
+        guard let window = windows[kind]?.window, window.isVisible else { return }
+        // SwiftUI sets the minimum from the content's frame, so it can be
+        // on either of these.
+        let contentMinimum = window.frameRect(forContentRect: NSRect(origin: .zero, size: window.contentMinSize)).size
+        let width = max(size.width, window.minSize.width, contentMinimum.width)
+        let height = max(size.height, window.minSize.height, contentMinimum.height)
+        let frame = window.frame
+        window.setFrame(
+            NSRect(x: frame.minX, y: frame.maxY - height, width: width, height: height),
+            display: true
+        )
+    }
+
     private static func show(_ kind: Kind, open: () -> Void) {
         NSApp.setActivationPolicy(.regular)
         open()
