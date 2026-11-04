@@ -321,7 +321,7 @@ private struct CreateSandboxForm: View {
         case .hostMounts: request.enteredHostMounts.count
         case .kits: request.kits.count
         case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
-        case .mcp: request.staticMCPServers.count
+        case .mcp: request.mcpMode == .staticServers ? request.staticMCPServers.count : 0
         case .general, .workspace, .runtime: 0
         }
     }
@@ -1071,67 +1071,40 @@ private struct CreateSandboxForm: View {
 
     private var mcpSection: some View {
         Section {
-            if sbxStatus.supportsStaticMCPNone {
-                Toggle(isOn: noMCPServersBinding) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("No MCP Servers")
-                        Text("The agent can't find or load servers itself")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            Picker("Mode", selection: $request.mcpMode) {
+                ForEach(visibleMCPModes) { mode in
+                    Text(mode.title).tag(mode)
                 }
-                .toggleStyle(.checkbox)
             }
-            if mcp.servers.isEmpty {
-                Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(mcp.servers) { server in
-                Toggle(isOn: mcpBinding(for: server.name)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(server.name)
-                        Text(server.status == .ready ? server.transportTitle : "\(server.transportTitle) · \(server.statusTitle)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            .pickerStyle(.radioGroup)
+            if request.mcpMode == .staticServers {
+                if mcp.servers.isEmpty {
+                    Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
+                        .foregroundStyle(.secondary)
                 }
-                .toggleStyle(.checkbox)
-                .disabled(isWithoutMCPServers)
+                ForEach(mcp.servers) { server in
+                    Toggle(isOn: mcpBinding(for: server.name)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(server.name)
+                            Text(server.status == .ready ? server.transportTitle : "\(server.transportTitle) · \(server.statusTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                }
             }
         } header: {
             Text("MCP Servers")
         } footer: {
-            Text(mcpFooter)
+            Text(request.mcpMode.explanation)
                 .foregroundStyle(.secondary)
         }
     }
 
-    /// Static mode with no servers, which needs sbx v0.51.0.
-    private var isWithoutMCPServers: Bool {
-        sbxStatus.supportsStaticMCPNone && request.staticMCPWithoutServers
-    }
-
-    private var mcpFooter: String {
-        if isWithoutMCPServers {
-            return "The sandbox starts in static mode with no MCP servers, and the agent can't find or load any itself. You can still load servers into the sandbox later."
-        }
-        if request.staticMCPServers.isEmpty {
-            return "With none chosen, the sandbox starts in dynamic mode: no servers are loaded, and the agent can find and load registered servers itself."
-        }
-        return "The sandbox starts in static mode with only these servers loaded, and the agent can't find others itself. You can still load more into the sandbox later."
-    }
-
-    /// Choosing no servers clears any that were chosen, so the list and the
-    /// command agree.
-    private var noMCPServersBinding: Binding<Bool> {
-        Binding {
-            request.staticMCPWithoutServers
-        } set: { isOn in
-            request.staticMCPWithoutServers = isOn
-            if isOn {
-                request.staticMCPServers.removeAll()
-            }
-        }
+    /// None needs sbx v0.51.0.
+    private var visibleMCPModes: [MCPMode] {
+        MCPMode.allCases.filter { $0 != .staticNone || sbxStatus.supportsStaticMCPNone }
     }
 
     private func mcpBinding(for name: String) -> Binding<Bool> {

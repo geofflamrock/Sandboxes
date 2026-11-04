@@ -14,7 +14,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - Get notified when an agent makes a network request that needs approval, and approve or deny across the current or all sandboxes.
 - Manage global and sandbox specific secrets.
 - Manage global and sandbox specific network rules.
-- Manage MCP servers and configure sandboxes to use them, or to use none at all.
+- Manage MCP servers, and create sandboxes in dynamic MCP mode, static mode with chosen servers, or with none.
 - Manage agent skills and choose how sandboxes share them.
 - View and change `sbx` settings, such as proxies and kit policy, and restart the daemon when a change needs it.
 - Install, upgrade and sign in to `sbx` from the app, and run diagnostics to find problems with your setup.
