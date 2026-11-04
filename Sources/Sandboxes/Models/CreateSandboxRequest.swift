@@ -166,7 +166,8 @@ enum HostResources {
 }
 
 /// A disk sbx sizes when it creates a sandbox. `sbx create` has no flags for
-/// these yet, only environment variables it reads when it runs.
+/// these yet, only environment variables it reads when it runs. Environment
+/// files have keys for them in `sandboxOptions` from sbx v0.51.0.
 enum SandboxDisk: CaseIterable {
     case system
     case docker
@@ -177,6 +178,15 @@ enum SandboxDisk: CaseIterable {
         case .system: "DOCKER_SANDBOXES_ROOT_SIZE"
         case .docker: "DOCKER_SANDBOXES_DOCKER_SIZE"
         case .clonedWorkspace: "DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE"
+        }
+    }
+
+    /// Its key in an environment file's `sandboxOptions`.
+    var environmentFileKey: String {
+        switch self {
+        case .system: "rootSize"
+        case .docker: "dockerSize"
+        case .clonedWorkspace: "clonedWorkspaceSize"
         }
     }
 
@@ -196,6 +206,18 @@ enum SandboxDisk: CaseIterable {
 enum DiskSize: Hashable {
     case gib(Int)
     case custom(String)
+
+    /// A size as written, such as `20g`: one of `disk`'s choices when it is
+    /// one, or else custom, as typed. Nil when it's empty.
+    init?(_ text: String, for disk: SandboxDisk) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let match = trimmed.wholeMatch(of: #/(\d+)g/#), let gib = Int(match.1), disk.choices.contains(gib) {
+            self = .gib(gib)
+        } else {
+            self = .custom(trimmed)
+        }
+    }
 
     /// What sbx is given, or nil when a custom size is empty.
     var value: String? {
@@ -327,18 +349,19 @@ struct CreateSandboxRequest {
     }
 
     /// The disks this request sizes: the cloned workspace only when there's a
-    /// workspace to clone. Environment files can't set disk sizes.
+    /// workspace to clone. An environment file saves them in `sandboxOptions`.
     var sizedDisks: [SandboxDisk] {
-        guard target == .sandbox else { return [] }
-        return SandboxDisk.allCases.filter { disk in
+        SandboxDisk.allCases.filter { disk in
             disk != .clonedWorkspace || (workspace != nil && mode == .clone)
         }
     }
 
     /// Variables set for the `sbx create` process only, not in the sandbox,
-    /// in the order the command line shows them.
+    /// in the order the command line shows them. An environment file has the
+    /// sizes in it instead.
     var processEnvironment: [(key: String, value: String)] {
-        sizedDisks.compactMap { disk in
+        guard target == .sandbox else { return [] }
+        return sizedDisks.compactMap { disk in
             guard let value = diskSizes[disk]?.value else { return nil }
             return (key: disk.environmentVariable, value: value)
         }
