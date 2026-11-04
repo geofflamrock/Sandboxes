@@ -43,8 +43,6 @@ struct SandboxWorkspace: Hashable {
     /// Where it's mounted in the sandbox: the same path unless another was chosen.
     let sandboxPath: String
     let isReadOnly: Bool
-
-    var isAtSamePath: Bool { sandboxPath == hostPath }
 }
 
 struct Sandbox: Identifiable, Hashable {

@@ -642,17 +642,17 @@ private struct SandboxWorkspaceSection: View {
                             FolderPath(path: folder.hostPath)
                         }
                     } label: {
-                        Text(folder.isAtSamePath ? "Same path" : folder.sandboxPath)
-                            .font(folder.isAtSamePath ? Font.body : Font.body.monospaced())
-                            .foregroundStyle(folder.isAtSamePath ? .secondary : .primary)
+                        // In full, since ~ in the sandbox is the agent's home, not yours.
+                        Text(folder.sandboxPath)
+                            .font(.body.monospaced())
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
-                            .help(folder.isAtSamePath ? "Mounted at the same path as on your Mac" : "Where the folder is mounted in the sandbox")
+                            .help("Where the folder is mounted in the sandbox")
                     }
                 }
             } header: {
-                SectionHeader(title: "Additional Folders", count: sandbox.additionalWorkspaces.count, isLoading: false)
+                SectionHeader(title: "Additional Workspaces", count: sandbox.additionalWorkspaces.count, isLoading: false)
             } footer: {
                 Text("Folders on your Mac mounted alongside the workspace, by where they're mounted in the sandbox.")
                     .foregroundStyle(.secondary)
