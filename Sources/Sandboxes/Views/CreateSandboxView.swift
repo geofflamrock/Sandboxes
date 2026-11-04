@@ -7,7 +7,6 @@ struct CreateSandboxView: View {
     @Environment(RecentsStore.self) private var recents
     @Environment(EnvironmentStore.self) private var environments
     @Environment(\.dismissWindow) private var dismissWindow
-    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     @State private var request = CreateSandboxRequest()
     @State private var run: CreationRun?
@@ -91,7 +90,7 @@ struct CreateSandboxView: View {
         if let workload = store.createWorkload {
             request.workload = workload
         } else if request.workload.isEmpty {
-            request.workload = recents.workloads.first ?? Agent.claude.workload(for: agentVersion) ?? ""
+            request.workload = recents.workloads.first ?? Agent.claude.builtInName
         }
     }
 
@@ -137,7 +136,6 @@ private struct CreateSandboxForm: View {
     let onSave: () -> Void
 
     @Environment(RecentsStore.self) private var recents
-    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
     @Environment(MCPServerStore.self) private var mcp
     @Environment(SbxStatus.self) private var sbxStatus
     @State private var kitDraft = KitDraft()
@@ -212,14 +210,18 @@ private struct CreateSandboxForm: View {
         }
         // A typed workload is inspected once typing pauses, rather than for
         // every partial reference. Docker's own agents are inspected straight away.
-        .task(id: request.trimmedWorkload) {
+        .task(id: request.workloadInspectionSource) {
             let workload = request.trimmedWorkload
-            guard KitArgument.isInspectable(workload: workload) else { return }
-            if inspector.results[workload] == nil && Agent.match(workload: workload) == nil {
+            guard let source = request.workloadInspectionSource else { return }
+            if inspector.results[workload] == nil && Agent(workload: workload) == nil {
                 try? await Task.sleep(for: .milliseconds(700))
                 guard !Task.isCancelled else { return }
             }
-            inspector.inspect(workload)
+            inspector.inspect(workload, from: source)
+        }
+        // A new or loaded request starts without this, so it's set again whenever they differ.
+        .onChange(of: request.agentsAreKits != sbxStatus.resolvesAgentsToKits, initial: true) {
+            request.agentsAreKits = sbxStatus.resolvesAgentsToKits
         }
         .onChange(of: request.kits, initial: true) {
             for kit in request.kits {
@@ -236,8 +238,8 @@ private struct CreateSandboxForm: View {
             case .general:
                 nameSection
                 agentSection
-                if KitArgument.isInspectable(workload: request.trimmedWorkload) {
-                    kitArgumentsSection(for: request.trimmedWorkload)
+                if let source = request.workloadInspectionSource {
+                    kitArgumentsSection(for: request.trimmedWorkload, source: source)
                 }
             case .workspace:
                 workspaceSection
@@ -431,26 +433,17 @@ private struct CreateSandboxForm: View {
 
     private var agentSection: some View {
         Section {
-            Picker("Version", selection: $agentVersion) {
-                ForEach(AgentVersion.allCases) { version in
-                    Text(version.title).tag(version)
-                }
-            }
-            .pickerStyle(.segmented)
             AgentPicker(
-                agents: Agent.creatable(in: agentVersion),
-                version: agentVersion,
+                agents: Agent.creatable,
                 selection: Agent(workload: request.workload)
             ) { agent in
-                if let workload = agent.workload(for: agentVersion) {
-                    request.workload = workload
-                }
+                request.workload = agent.builtInName
             }
             HStack {
                 TextField(
-                    agentVersion == .builtIn ? "Agent" : "Image",
+                    "Custom kit or image",
                     text: $request.workload,
-                    prompt: Text(Agent.claude.workload(for: agentVersion) ?? "")
+                    prompt: Text("docker/sbx-kit-claude")
                 )
                 .font(.body.monospaced())
                 RecentsMenu(title: "Recent Images", items: recents.workloads) {
@@ -462,28 +455,29 @@ private struct CreateSandboxForm: View {
         } header: {
             Text("Agent")
         } footer: {
-            Text(agentFooter)
-                .foregroundStyle(.secondary)
-        }
-        // Switching version swaps a picked agent for the same agent in the other version.
-        .onChange(of: agentVersion) {
-            if let agent = Agent(workload: request.workload), let workload = agent.workload(for: agentVersion) {
-                request.workload = workload
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Pick an agent, or enter any kit from an OCI registry, a folder or a Git repository.")
+                if needsShellCredentials {
+                    HStack {
+                        Text("Shell sandboxes get provider credentials from the shell-credentials mixin.")
+                        Button("Add Mixin") {
+                            request.kits.append(Self.shellCredentialsKit)
+                        }
+                        .controlSize(.small)
+                    }
+                }
             }
-        }
-        // Picking a recent image or typing one of Docker's agents shows its version.
-        .onChange(of: request.workload, initial: true) {
-            if let version = Agent.match(workload: request.workload)?.version {
-                agentVersion = version
-            }
+            .foregroundStyle(.secondary)
         }
     }
 
-    private var agentFooter: String {
-        switch agentVersion {
-        case .builtIn: "Built-in agents come with sbx. Pick one, or enter a workload kit from an OCI registry."
-        case .kit: "Pick an agent, or enter any workload kit from an OCI registry."
-        }
+    /// The mixin that gives shell sandboxes provider credentials, which
+    /// they need since the shell agent became a kit in sbx 0.51.0.
+    private static let shellCredentialsKit = "sbx/shell-credentials"
+
+    private var needsShellCredentials: Bool {
+        Agent(workload: request.workload) == .shell && sbxStatus.resolvesAgentsToKits
+            && !request.kits.contains { KitArgument.handle(for: $0) == "shell-credentials" }
     }
 
     // MARK: Name
@@ -814,7 +808,7 @@ private struct CreateSandboxForm: View {
 
     // MARK: Kit arguments
 
-    private func kitArgumentsSection(for kit: String, onRemove: (() -> Void)? = nil) -> some View {
+    private func kitArgumentsSection(for kit: String, source: String? = nil, onRemove: (() -> Void)? = nil) -> some View {
         KitArgumentsSection(
             kit: kit,
             result: inspector.results[kit],
@@ -823,7 +817,7 @@ private struct CreateSandboxForm: View {
             } set: {
                 request.kitArgumentValues[kit] = $0
             },
-            onRetry: { inspector.inspect(kit) },
+            onRetry: { inspector.inspect(kit, from: source) },
             onRemove: onRemove
         )
     }
@@ -1303,14 +1297,13 @@ enum OpenPanel {
 /// highlighted; a custom image highlights none.
 private struct AgentPicker: View {
     let agents: [Agent]
-    let version: AgentVersion
     let selection: Agent?
     let onSelect: (Agent) -> Void
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
             ForEach(agents, id: \.self) { agent in
-                AgentTile(agent: agent, workload: agent.workload(for: version), isSelected: agent == selection) {
+                AgentTile(agent: agent, workload: agent.builtInName, isSelected: agent == selection) {
                     onSelect(agent)
                 }
             }

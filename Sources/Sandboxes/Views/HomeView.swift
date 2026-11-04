@@ -528,7 +528,6 @@ private struct EnvironmentCard: View {
 private struct QuickCreateSection: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
-    @AppStorage(AgentVersion.key) private var agentVersion = AgentVersion.kit
 
     private static let maxRecents = 4
 
@@ -550,10 +549,10 @@ private struct QuickCreateSection: View {
     }
 
     /// The most recently used workloads, one per agent. Before anything has
-    /// been created, the first few agents in the version picked last.
+    /// been created, the first few agents.
     private var workloads: [String] {
         guard !recents.workloads.isEmpty else {
-            return Agent.creatable(in: agentVersion).prefix(3).compactMap { $0.workload(for: agentVersion) }
+            return Agent.creatable.prefix(3).map(\.builtInName)
         }
         var seenAgents: Set<String> = []
         var result: [String] = []

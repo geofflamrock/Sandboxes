@@ -307,6 +307,10 @@ struct CreateSandboxRequest {
     /// Values entered for kits' arguments, by kit reference and then argument
     /// name. An argument without one is left to its default.
     var kitArgumentValues: [String: [String: String]] = [:]
+    /// Whether the installed sbx runs an agent's bare name from its published
+    /// kit (v0.51.0 and later), so the agent's kit arguments can be set. The
+    /// New Sandbox window keeps this in step with `SbxStatus`.
+    var agentsAreKits = false
 
     var trimmedWorkload: String { workload.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -500,7 +504,12 @@ struct CreateSandboxRequest {
 
     /// The workload, when it's a kit, then the mixins: the kits whose arguments can be set.
     var argumentKits: [String] {
-        (KitArgument.isInspectable(workload: trimmedWorkload) ? [trimmedWorkload] : []) + kits
+        (workloadInspectionSource == nil ? [] : [trimmedWorkload]) + kits
+    }
+
+    /// The kit to inspect for the workload's arguments, if it has any.
+    var workloadInspectionSource: String? {
+        KitArgument.inspectionSource(for: trimmedWorkload, agentsAreKits: agentsAreKits)
     }
 
     /// Records what `kit` declares. A required toggle without a default

@@ -16,8 +16,9 @@ enum Agent: CaseIterable {
     case shell
 
     /// Recognizes an agent from whatever `sbx ls --json` reports for it: the
-    /// agent name (`claude`), a kit (`docker/sbx-kit-claude`) or a template
-    /// image (`docker/sandbox-templates:claude-code`).
+    /// agent name (`claude`), a kit (`docker.io/sbx/claude:latest` or
+    /// `docker/sbx-kit-claude`) or a template image
+    /// (`docker/sandbox-templates:claude-code`).
     init?(identifier: String?) {
         guard let identifier = identifier?.lowercased(), !identifier.isEmpty else { return nil }
         // Every Docker image name contains "docker", so match Docker Agent on
@@ -82,8 +83,15 @@ enum Agent: CaseIterable {
         }
     }
 
-    /// The v3 workload kit Docker publishes for the agent, if there is one.
-    var workloadImage: String? {
+    /// The kit sbx 0.51.0 and later resolve the agent's bare name to
+    /// (`docker.io/sbx/claude`). There's no `sbx/gemini`.
+    var sbxKit: String? {
+        self == .gemini ? nil : "sbx/\(builtInName)"
+    }
+
+    /// The v3 workload kit Docker published for the agent before sbx 0.51.0,
+    /// if there is one.
+    var dockerKit: String? {
         switch self {
         case .claude: "docker/sbx-kit-claude"
         case .codex: "docker/sbx-kit-codex"
@@ -99,21 +107,15 @@ enum Agent: CaseIterable {
         }
     }
 
-    /// What to pass `sbx create` for the agent in `version`, if it comes in that version.
-    func workload(for version: AgentVersion) -> String? {
-        switch version {
-        case .builtIn: builtInName
-        case .kit: workloadImage
-        }
-    }
-
-    /// The creatable agent and version `workload` picks: a built-in agent's
-    /// name, or one of Docker's kits ignoring a `docker.io/` registry prefix
-    /// and any tag or digest.
-    static func match(workload: String) -> (agent: Agent, version: AgentVersion)? {
+    /// The creatable agent `workload` picks: an agent's bare name, its
+    /// `sbx/<name>` kit or Docker's earlier `docker/sbx-kit-<name>` kit,
+    /// ignoring a `docker.io/` registry prefix and any tag or digest. Recents
+    /// and environment files may use any of these.
+    init?(workload: String) {
         let trimmed = workload.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let agent = creatable.first(where: { $0.builtInName == trimmed }) {
-            return (agent, .builtIn)
+        if let agent = Self.creatable.first(where: { $0.builtInName == trimmed }) {
+            self = agent
+            return
         }
         var name = Substring(trimmed)
         if let at = name.firstIndex(of: "@") { name = name[..<at] }
@@ -121,27 +123,23 @@ enum Agent: CaseIterable {
         for prefix in ["docker.io/", "index.docker.io/"] where name.hasPrefix(prefix) {
             name = name.dropFirst(prefix.count)
         }
-        if let agent = creatable.first(where: { $0.workloadImage == String(name) }) {
-            return (agent, .kit)
+        let image = String(name)
+        guard let agent = Self.creatable.first(where: { $0.sbxKit == image || $0.dockerKit == image }) else {
+            return nil
         }
-        return nil
+        self = agent
     }
 
-    /// The creatable agent `workload` picks, in either version.
-    init?(workload: String) {
-        guard let match = Self.match(workload: workload) else { return nil }
-        self = match.agent
+    /// Whether `workload` is an agent's bare name, as in `sbx create claude`.
+    static func isBuiltInName(_ workload: String) -> Bool {
+        let trimmed = workload.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return creatable.contains { $0.builtInName == trimmed }
     }
 
     /// Agents that can be picked when creating a sandbox, in the order shown.
     static let creatable: [Agent] = [
         .claude, .codex, .copilot, .cursor, .gemini, .openCode, .dockerAgent, .devin, .droid, .kiro, .shell,
     ]
-
-    /// The creatable agents that come in `version`.
-    static func creatable(in version: AgentVersion) -> [Agent] {
-        creatable.filter { $0.workload(for: version) != nil }
-    }
 
     /// The agent's logo in the asset catalog, from Simple Icons (CC0). Agents
     /// without one there use an SF Symbol instead.
@@ -187,27 +185,6 @@ enum Agent: CaseIterable {
         case .dockerAgent: Color(red: 0x24 / 255, green: 0x96 / 255, blue: 0xED / 255)
         case .gemini: Color(red: 0x8E / 255, green: 0x75 / 255, blue: 0xB2 / 255)
         default: nil
-        }
-    }
-}
-
-/// Which of the two forms of Docker's agents the New Sandbox window offers.
-enum AgentVersion: String, CaseIterable, Identifiable {
-    /// Agents built into sbx, picked by name (`claude`).
-    case builtIn
-    /// Docker's v3 workload kits (`docker/sbx-kit-claude`).
-    case kit
-
-    /// The version picked last in the New Sandbox window, which the home page's
-    /// suggestions follow too.
-    static let key = "agentVersion"
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .builtIn: "Built-in (v2)"
-        case .kit: "Kit (v3)"
         }
     }
 }

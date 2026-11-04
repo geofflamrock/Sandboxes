@@ -57,11 +57,20 @@ struct KitArgument: Hashable, Identifiable {
         return "\(key)=\(value)"
     }
 
-    /// Whether a workload can be inspected as a kit. A bare word, such as
-    /// `claude`, is a built-in agent's name to sbx, and those aren't kits.
+    /// Whether a workload is a kit reference. A bare word, such as `claude`,
+    /// is a built-in agent's name to sbx rather than a kit.
     static func isInspectable(workload: String) -> Bool {
-        guard !workload.isEmpty, Agent.match(workload: workload)?.version != .builtIn else { return false }
+        guard !workload.isEmpty, !Agent.isBuiltInName(workload) else { return false }
         return workload.contains("/") || KitSource(reference: workload) != .registry
+    }
+
+    /// The kit to inspect for a workload's arguments: the workload itself when
+    /// it's a kit, or the agent's `sbx/<name>` kit for an agent's bare name
+    /// when sbx resolves those to kits (v0.51.0 and later).
+    static func inspectionSource(for workload: String, agentsAreKits: Bool) -> String? {
+        if isInspectable(workload: workload) { return workload }
+        guard agentsAreKits, Agent.isBuiltInName(workload) else { return nil }
+        return Agent(workload: workload)?.sbxKit
     }
 
     /// The name sbx knows a kit by when an argument is aimed at it with
@@ -227,8 +236,10 @@ final class KitInspector {
     private(set) var results: [String: Result] = [:]
 
     /// Starts inspecting `reference` unless it's been inspected or is being
-    /// inspected. A failed inspection is tried again.
-    func inspect(_ reference: String) {
+    /// inspected. A failed inspection is tried again. `source` is the kit to
+    /// inspect when it differs from `reference`, such as `sbx/claude` for a
+    /// built-in agent's name, and the result is kept under `reference`.
+    func inspect(_ reference: String, from source: String? = nil) {
         switch results[reference] {
         case .loading, .loaded: return
         case .failed, nil: break
@@ -236,7 +247,7 @@ final class KitInspector {
         results[reference] = .loading
         Task {
             do {
-                results[reference] = .loaded(try await KitInspection.fetch(reference))
+                results[reference] = .loaded(try await KitInspection.fetch(source ?? reference))
             } catch {
                 results[reference] = .failed(error.localizedDescription)
             }
