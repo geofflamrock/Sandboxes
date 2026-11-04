@@ -269,6 +269,11 @@ extension CreateSandboxRequest {
         if memoryGiB > 0 {
             options.append(YAMLEntry(key: "memory", value: .scalar("\(memoryGiB)g")))
         }
+        for disk in sizedDisks {
+            if let size = diskSizes[disk]?.value {
+                options.append(YAMLEntry(key: disk.environmentFileKey, value: .scalar(size)))
+            }
+        }
         if let skillsMode {
             options.append(YAMLEntry(key: "skills", value: .scalar(skillsMode.rawValue)))
         }
@@ -415,7 +420,15 @@ extension CreateSandboxRequest {
                             unsupported.append("sandboxOptions.skills")
                         }
                     default:
-                        unsupported.append("sandboxOptions.\(option.key)")
+                        if let disk = SandboxDisk.allCases.first(where: { $0.environmentFileKey == option.key }) {
+                            if let text = option.value.string, !text.contains("${{"), let size = DiskSize(text, for: disk) {
+                                diskSizes[disk] = size
+                            } else {
+                                unsupported.append("sandboxOptions.\(option.key)")
+                            }
+                        } else {
+                            unsupported.append("sandboxOptions.\(option.key)")
+                        }
                     }
                 }
             default:
@@ -438,6 +451,11 @@ extension CreateSandboxRequest {
             if !kit.arguments.isEmpty {
                 kitArgumentValues[kit.reference] = kit.arguments
             }
+        }
+
+        // The window only sizes a cloned workspace in Clone mode, so saving would lose it otherwise.
+        if diskSizes[.clonedWorkspace] != nil && !sizedDisks.contains(.clonedWorkspace) {
+            unsupported.append("sandboxOptions.\(SandboxDisk.clonedWorkspace.environmentFileKey)")
         }
 
         if !unsupported.isEmpty {

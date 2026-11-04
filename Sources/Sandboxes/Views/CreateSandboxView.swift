@@ -262,7 +262,7 @@ private struct CreateSandboxForm: View {
                 }
             case .runtime:
                 resourcesSection
-                if request.target == .sandbox {
+                if showsDiskSizes {
                     disksSection
                 }
                 environmentSection
@@ -312,6 +312,11 @@ private struct CreateSandboxForm: View {
             default: true
             }
         }
+    }
+
+    /// Environment files can size disks from sbx v0.51.0.
+    private var showsDiskSizes: Bool {
+        request.target == .sandbox || sbxStatus.supportsEnvironmentDiskSizes
     }
 
     /// How many things are added in a section, so what's set elsewhere shows
@@ -520,7 +525,7 @@ private struct CreateSandboxForm: View {
             }
             .pickerStyle(.segmented)
             .disabled(request.workspace == nil)
-            if request.sizedDisks.contains(.clonedWorkspace) {
+            if showsDiskSizes && request.sizedDisks.contains(.clonedWorkspace) {
                 diskSizePicker("Clone Size", for: .clonedWorkspace)
             }
         } footer: {
