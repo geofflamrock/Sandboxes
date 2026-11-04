@@ -241,6 +241,10 @@ struct CreateSandboxRequest {
     /// MCP servers to load when the sandbox starts. Choosing any makes the
     /// set fixed: the agent can't find and load other servers itself.
     var staticMCPServers: [String] = []
+    /// Static mode with no servers at all (`--static-mcp none`, sbx v0.51.0),
+    /// so the agent has no MCP servers and can't load any itself. Only used
+    /// when no servers are chosen.
+    var staticMCPWithoutServers = false
     /// Sandbox ports to publish on the Mac.
     var ports: [PortMapping] = []
     /// Hosts the sandbox is denied from the start, one per line. Commas and
@@ -310,6 +314,9 @@ struct CreateSandboxRequest {
         }
         for server in staticMCPServers {
             arguments += ["--static-mcp", server]
+        }
+        if staticMCPServers.isEmpty && staticMCPWithoutServers {
+            arguments += ["--static-mcp", "none"]
         }
         for port in enteredPorts {
             arguments += ["--publish", port.spec]

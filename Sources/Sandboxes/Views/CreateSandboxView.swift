@@ -1071,6 +1071,17 @@ private struct CreateSandboxForm: View {
 
     private var mcpSection: some View {
         Section {
+            if sbxStatus.supportsStaticMCPNone {
+                Toggle(isOn: noMCPServersBinding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No MCP Servers")
+                        Text("The agent can't find or load servers itself")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
             if mcp.servers.isEmpty {
                 Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
                     .foregroundStyle(.secondary)
@@ -1085,14 +1096,41 @@ private struct CreateSandboxForm: View {
                     }
                 }
                 .toggleStyle(.checkbox)
+                .disabled(isWithoutMCPServers)
             }
         } header: {
             Text("MCP Servers")
         } footer: {
-            Text(request.staticMCPServers.isEmpty
-                ? "With none chosen, the agent can find and load registered servers itself."
-                : "Only these servers are loaded, and the agent can't find others itself. You can still load more into the sandbox later.")
+            Text(mcpFooter)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Static mode with no servers, which needs sbx v0.51.0.
+    private var isWithoutMCPServers: Bool {
+        sbxStatus.supportsStaticMCPNone && request.staticMCPWithoutServers
+    }
+
+    private var mcpFooter: String {
+        if isWithoutMCPServers {
+            return "The sandbox starts in static mode with no MCP servers, and the agent can't find or load any itself. You can still load servers into the sandbox later."
+        }
+        if request.staticMCPServers.isEmpty {
+            return "With none chosen, the sandbox starts in dynamic mode: no servers are loaded, and the agent can find and load registered servers itself."
+        }
+        return "The sandbox starts in static mode with only these servers loaded, and the agent can't find others itself. You can still load more into the sandbox later."
+    }
+
+    /// Choosing no servers clears any that were chosen, so the list and the
+    /// command agree.
+    private var noMCPServersBinding: Binding<Bool> {
+        Binding {
+            request.staticMCPWithoutServers
+        } set: { isOn in
+            request.staticMCPWithoutServers = isOn
+            if isOn {
+                request.staticMCPServers.removeAll()
+            }
         }
     }
 
