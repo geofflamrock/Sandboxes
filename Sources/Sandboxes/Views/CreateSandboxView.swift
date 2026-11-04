@@ -582,7 +582,7 @@ private struct CreateSandboxForm: View {
             .buttonStyle(.borderless)
             .help("Add a folder to mount")
         } header: {
-            Text("Additional Folders")
+            Text("Additional Workspaces")
         } footer: {
             Text(additionalWorkspacesFooter)
                 .foregroundStyle(.secondary)
