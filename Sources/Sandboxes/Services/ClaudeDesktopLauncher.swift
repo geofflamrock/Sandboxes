@@ -41,7 +41,7 @@ enum ClaudeDesktopLauncher {
         components.path = "/new"
         components.queryItems = [
             URLQueryItem(name: "ssh_host", value: "\(sandbox.name).sbx"),
-            URLQueryItem(name: "ssh_folder", value: sandbox.workspaces.first ?? defaultFolder),
+            URLQueryItem(name: "ssh_folder", value: sandbox.workspace ?? defaultFolder),
         ]
         return components.url!
     }
