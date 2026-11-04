@@ -174,6 +174,16 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether the installed sbx resolves an agent's bare name (`claude`) to
+    /// its published `sbx/<name>` kit, as v0.51.0 and later do. True when the
+    /// version isn't known, such as for a nightly build.
+    var resolvesAgentsToKits: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.51.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// A newer stable release than the installed version.
     var availableUpgrade: Release? {
         guard let installed = installation?.version, let latest, installed < latest.version
