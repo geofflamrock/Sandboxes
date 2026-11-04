@@ -209,6 +209,39 @@ enum DiskSize: Hashable {
     }
 }
 
+/// How a sandbox's MCP gateway offers servers to the agent, using sbx's
+/// terms. sbx picks the mode from `--static-mcp`: without it the sandbox is
+/// dynamic.
+enum MCPMode: CaseIterable, Identifiable {
+    /// No servers are loaded at the start, and the agent finds and loads them.
+    case dynamic
+    /// Only the chosen servers are loaded (`--static-mcp SERVER`).
+    case staticServers
+    /// Static mode with no servers (`--static-mcp none`, sbx v0.51.0).
+    case staticNone
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .dynamic: "Dynamic"
+        case .staticServers: "Static"
+        case .staticNone: "None"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .dynamic:
+            "No servers are loaded when the sandbox starts. The agent can search the registered servers and load the ones it needs, including servers registered later."
+        case .staticServers:
+            "Only the chosen servers are loaded, and the agent can't find or load others itself. You can still load more into the sandbox later."
+        case .staticNone:
+            "Static mode with no servers: the agent has no MCP servers and can't find or load any itself. You can still load servers into the sandbox later."
+        }
+    }
+}
+
 struct CreateSandboxRequest {
     /// What the New Sandbox window makes: a sandbox, or an environment file
     /// with the same options. It's set by how the window was opened.
@@ -238,8 +271,9 @@ struct CreateSandboxRequest {
     /// How the agent sees sbx's shared skills store. Nil leaves it to sbx's
     /// default, which is read only unless the skills.defaultMode setting says otherwise.
     var skillsMode: SkillsMode?
-    /// MCP servers to load when the sandbox starts. Choosing any makes the
-    /// set fixed: the agent can't find and load other servers itself.
+    var mcpMode: MCPMode = .dynamic
+    /// MCP servers to load when the sandbox starts, in static mode. They're
+    /// kept when another mode is chosen, in case the user switches back.
     var staticMCPServers: [String] = []
     /// Sandbox ports to publish on the Mac.
     var ports: [PortMapping] = []
@@ -308,8 +342,15 @@ struct CreateSandboxRequest {
         for mount in enteredHostMounts {
             arguments += ["--mount", mount.spec]
         }
-        for server in staticMCPServers {
-            arguments += ["--static-mcp", server]
+        switch mcpMode {
+        case .dynamic:
+            break
+        case .staticServers:
+            for server in staticMCPServers {
+                arguments += ["--static-mcp", server]
+            }
+        case .staticNone:
+            arguments += ["--static-mcp", "none"]
         }
         for port in enteredPorts {
             arguments += ["--publish", port.spec]
@@ -391,6 +432,10 @@ struct CreateSandboxRequest {
         let sandboxPaths = enteredHostMounts.map(\.trimmedSandboxPath)
         if let repeated = sandboxPaths.first(where: { path in sandboxPaths.filter { $0 == path }.count > 1 }) {
             return "“\(repeated)” has more than one host mount."
+        }
+        // Without a server, sbx would start the sandbox in dynamic mode instead.
+        if target == .sandbox && mcpMode == .staticServers && staticMCPServers.isEmpty {
+            return "Choose at least one MCP server for static mode."
         }
         for variable in environment where !variable.isBlank {
             if variable.trimmedKey.isEmpty {
