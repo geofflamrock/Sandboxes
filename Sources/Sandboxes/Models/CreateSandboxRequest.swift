@@ -59,13 +59,34 @@ struct AdditionalWorkspace: Identifiable, Hashable {
     /// As typed or chosen. An empty one is left out.
     var path = ""
     var isReadOnly = true
+    /// Where it's mounted in the sandbox. Empty for the same path as on the Mac.
+    var target = ""
 
     var normalizedPath: String? { WorkspacePath.normalized(path) }
+    var trimmedTarget: String { target.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// sbx mounts a path ending in `:ro` read-only.
-    var argument: String {
-        let path = normalizedPath ?? ""
-        return isReadOnly ? path + ":ro" : path
+    /// `PATH[:TARGET][:ro]`: sbx mounts the folder at TARGET when it's given,
+    /// and read-only with `:ro`. Older sbx doesn't take a target.
+    func argument(includingTarget: Bool) -> String {
+        var argument = normalizedPath ?? ""
+        if includingTarget && !trimmedTarget.isEmpty {
+            argument += ":" + trimmedTarget
+        }
+        return isReadOnly ? argument + ":ro" : argument
+    }
+
+    /// Why the folder can't be mounted where it's asked to be, if it can't.
+    var targetProblem: String? {
+        let target = trimmedTarget
+        guard !target.isEmpty else { return nil }
+        let name = (normalizedPath.map { ($0 as NSString).abbreviatingWithTildeInPath }) ?? path
+        guard target.hasPrefix("/"), target != "/" else {
+            return "Enter the full path in the sandbox to mount “\(name)” at, starting with /."
+        }
+        if target.contains(":") {
+            return "The path to mount “\(name)” at can't contain a colon."
+        }
+        return nil
     }
 }
 
@@ -279,6 +300,9 @@ struct CreateSandboxRequest {
     var workspacePath = ""
     var mode: WorkspaceMode = .direct
     var additionalWorkspaces: [AdditionalWorkspace] = []
+    /// Whether `sbx create` is given where each additional workspace is
+    /// mounted, which needs sbx v0.51.0. Environment files keep their targets either way.
+    var includesWorkspaceTargets = true
     /// Folders on the Mac for paths the kits share with the host.
     var hostMounts: [HostMount] = []
     var name = ""
@@ -388,7 +412,7 @@ struct CreateSandboxRequest {
         // Extra folders are positional too, so they only follow a main workspace.
         if let workspace {
             arguments.append(workspace)
-            arguments += enteredAdditionalWorkspaces.map(\.argument)
+            arguments += enteredAdditionalWorkspaces.map { $0.argument(includingTarget: includesWorkspaceTargets) }
         }
         return arguments
     }
@@ -448,6 +472,9 @@ struct CreateSandboxRequest {
         }
         for folder in enteredAdditionalWorkspaces {
             if let problem = WorkspacePath.problem(with: folder.path, inEnvironmentFile: inEnvironmentFile) {
+                return problem
+            }
+            if let problem = folder.targetProblem {
                 return problem
             }
         }

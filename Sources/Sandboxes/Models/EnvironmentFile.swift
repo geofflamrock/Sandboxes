@@ -232,11 +232,13 @@ extension CreateSandboxRequest {
             }
             let folders = enteredAdditionalWorkspaces
             if !folders.isEmpty {
-                entries.append(YAMLEntry(key: "additionalWorkspaces", value: .list(folders.map { folder in
-                    YAMLValue.map([
-                        YAMLEntry(key: "path", value: .scalar(folder.normalizedPath ?? "")),
-                        YAMLEntry(key: "readOnly", value: .plain(folder.isReadOnly ? "true" : "false")),
-                    ])
+                entries.append(YAMLEntry(key: "additionalWorkspaces", value: .list(folders.map { folder -> YAMLValue in
+                    var fields = [YAMLEntry(key: "path", value: .scalar(folder.normalizedPath ?? ""))]
+                    if !folder.trimmedTarget.isEmpty {
+                        fields.append(YAMLEntry(key: "target", value: .scalar(folder.trimmedTarget)))
+                    }
+                    fields.append(YAMLEntry(key: "readOnly", value: .plain(folder.isReadOnly ? "true" : "false")))
+                    return YAMLValue.map(fields)
                 })))
             }
         }
@@ -355,12 +357,22 @@ extension CreateSandboxRequest {
                 guard let items = value.list else { unsupported.append("additionalWorkspaces"); continue }
                 for item in items {
                     guard let fields = item.map, let path = item["path"]?.string,
-                          fields.allSatisfy({ ["path", "readOnly"].contains($0.key) }),
+                          fields.allSatisfy({ ["path", "target", "readOnly"].contains($0.key) }),
                           let path = Self.workspacePath(path, against: directory) else {
                         unsupported.append("additionalWorkspaces")
                         continue
                     }
-                    additionalWorkspaces.append(AdditionalWorkspace(path: path, isReadOnly: item["readOnly"]?.bool ?? false))
+                    // A target is a path in the sandbox, so it's kept as written.
+                    let target = item["target"]?.string ?? ""
+                    if item["target"] != nil && (item["target"]?.string == nil || target.contains("${{")) {
+                        unsupported.append("additionalWorkspaces.target")
+                        continue
+                    }
+                    additionalWorkspaces.append(AdditionalWorkspace(
+                        path: path,
+                        isReadOnly: item["readOnly"]?.bool ?? false,
+                        target: target
+                    ))
                 }
             case "mounts":
                 // Kit host mounts: sandbox paths to folders on the Mac. sbx

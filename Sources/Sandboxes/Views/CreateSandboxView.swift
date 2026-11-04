@@ -6,6 +6,7 @@ struct CreateSandboxView: View {
     @Environment(SandboxStore.self) private var store
     @Environment(RecentsStore.self) private var recents
     @Environment(EnvironmentStore.self) private var environments
+    @Environment(SbxStatus.self) private var sbxStatus
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var request = CreateSandboxRequest()
@@ -112,7 +113,8 @@ struct CreateSandboxView: View {
     }
 
     private func start() {
-        let request = request
+        var request = request
+        request.includesWorkspaceTargets = sbxStatus.supportsWorkspaceTargets
         let run = CreationRun(request: request)
         run.start { [recents, store] in
             recents.record(workload: request.trimmedWorkload, kits: request.kits, hostMounts: request.recentHostMounts)
@@ -544,6 +546,27 @@ private struct CreateSandboxForm: View {
                         prompt: "~/src/docs",
                         panelMessage: "Choose a folder to mount alongside the workspace."
                     )
+                    if sbxStatus.supportsWorkspaceTargets {
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        TextField("Mount At", text: $folder.target, prompt: Text("Same path"))
+                            .labelsHidden()
+                            .font(.body.monospaced())
+                            .frame(maxWidth: 180)
+                            .help("Where the folder is mounted in the sandbox. Leave empty for the same path as on your Mac.")
+                    } else if !folder.trimmedTarget.isEmpty {
+                        // Kept from the environment file, but older sbx can't change it.
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text(folder.trimmedTarget)
+                            .font(.body.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help("Choosing where a folder is mounted needs sbx v0.51.0 or later")
+                    }
                     Toggle("Read-only", isOn: $folder.isReadOnly)
                         .toggleStyle(.checkbox)
                         .help("Stop the agent changing anything in this folder")
@@ -559,11 +582,21 @@ private struct CreateSandboxForm: View {
             .buttonStyle(.borderless)
             .help("Add a folder to mount")
         } header: {
-            Text("Additional Folders")
+            Text("Additional Workspaces")
         } footer: {
-            Text("These folders are mounted at the same paths as on your Mac.")
+            Text(additionalWorkspacesFooter)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var additionalWorkspacesFooter: String {
+        if sbxStatus.supportsWorkspaceTargets {
+            return "These folders are mounted at the same paths as on your Mac, unless you enter a path in the sandbox to mount one at."
+        }
+        if request.additionalWorkspaces.contains(where: { !$0.trimmedTarget.isEmpty }) {
+            return "These folders are mounted at the same paths as on your Mac. Paths in the sandbox from the environment file are kept, but changing them needs sbx v0.51.0 or later."
+        }
+        return "These folders are mounted at the same paths as on your Mac."
     }
 
     // MARK: Host Mounts
@@ -1126,6 +1159,7 @@ private struct CreateSandboxForm: View {
     /// entered but not yet added.
     private var previewRequest: CreateSandboxRequest {
         var preview = request
+        preview.includesWorkspaceTargets = sbxStatus.supportsWorkspaceTargets
         if let pending = kitDraft.reference, !preview.kits.contains(pending) {
             preview.kits.append(pending)
         }
