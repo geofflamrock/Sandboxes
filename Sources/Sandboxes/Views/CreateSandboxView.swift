@@ -326,7 +326,7 @@ private struct CreateSandboxForm: View {
         case .hostMounts: request.enteredHostMounts.count
         case .kits: request.kits.count
         case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
-        case .mcp: request.staticMCPServers.count
+        case .mcp: request.mcpMode == .staticServers ? request.staticMCPServers.count : 0
         case .general, .workspace, .runtime: 0
         }
     }
@@ -1076,29 +1076,40 @@ private struct CreateSandboxForm: View {
 
     private var mcpSection: some View {
         Section {
-            if mcp.servers.isEmpty {
-                Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(mcp.servers) { server in
-                Toggle(isOn: mcpBinding(for: server.name)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(server.name)
-                        Text(server.status == .ready ? server.transportTitle : "\(server.transportTitle) · \(server.statusTitle)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            Picker("Mode", selection: $request.mcpMode) {
+                ForEach(visibleMCPModes) { mode in
+                    Text(mode.title).tag(mode)
                 }
-                .toggleStyle(.checkbox)
+            }
+            .pickerStyle(.radioGroup)
+            if request.mcpMode == .staticServers {
+                if mcp.servers.isEmpty {
+                    Text(mcp.hasLoaded ? "No MCP servers are registered. Add them in Management › MCP Servers." : "Loading…")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(mcp.servers) { server in
+                    Toggle(isOn: mcpBinding(for: server.name)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(server.name)
+                            Text(server.status == .ready ? server.transportTitle : "\(server.transportTitle) · \(server.statusTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                }
             }
         } header: {
             Text("MCP Servers")
         } footer: {
-            Text(request.staticMCPServers.isEmpty
-                ? "With none chosen, the agent can find and load registered servers itself."
-                : "Only these servers are loaded, and the agent can't find others itself. You can still load more into the sandbox later.")
+            Text(request.mcpMode.explanation)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// None needs sbx v0.51.0.
+    private var visibleMCPModes: [MCPMode] {
+        MCPMode.allCases.filter { $0 != .staticNone || sbxStatus.supportsStaticMCPNone }
     }
 
     private func mcpBinding(for name: String) -> Binding<Bool> {

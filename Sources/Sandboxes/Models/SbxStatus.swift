@@ -154,6 +154,16 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether the installed sbx takes `--static-mcp none`, for static MCP mode
+    /// with no servers, added in v0.51.0. True when the version isn't known,
+    /// such as for a nightly build.
+    var supportsStaticMCPNone: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.51.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// Whether the installed sbx reads disk sizes from an environment file's
     /// `sandboxOptions`, added in v0.51.0. True when the version isn't known,
     /// such as for a nightly build.
