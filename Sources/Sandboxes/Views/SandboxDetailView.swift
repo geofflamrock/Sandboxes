@@ -49,10 +49,10 @@ struct SandboxDetailView: View {
     @State private var portRemoval: PublishedPort?
     @State private var unpublishingPorts: Set<PublishedPort.ID> = []
     @Environment(SbxStatus.self) private var sbxStatus
-    /// Nil until they've been read.
-    @State private var hostMounts: [SandboxHostMount]?
-    @State private var hostMountsError: String?
-    @State private var isLoadingHostMounts = false
+    /// Nil until `sbx inspect` has been read.
+    @State private var inspection: SandboxInspection?
+    @State private var inspectionError: String?
+    @State private var isInspecting = false
 
     // The policies are polled here rather than in the Policies and Traffic
     // tabs so both share one refresh and the approvals row on Overview stays
@@ -66,12 +66,15 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
+                            if let kits = inspection?.kits, !kits.isEmpty {
+                                SandboxKitsSection(kits: kits, agent: sandbox.agent)
+                            }
                             SandboxWorkspaceSection(sandbox: sandbox)
                             if sbxStatus.supportsHostMounts {
                                 SandboxHostMountsSection(
-                                    mounts: hostMounts,
-                                    error: hostMountsError,
-                                    isLoading: isLoadingHostMounts
+                                    mounts: inspection?.hostMounts,
+                                    error: inspectionError,
+                                    isLoading: isInspecting
                                 )
                             }
                             portsSection
@@ -110,18 +113,19 @@ struct SandboxDetailView: View {
             ports = nil
             portsError = nil
         }
-        // Host mounts are fixed when a sandbox is created, so they're read once.
+        // Kits and host mounts rarely change after a sandbox is created, so
+        // they're read once each time it's shown.
         .task(id: sandbox.name) {
-            hostMounts = nil
-            hostMountsError = nil
+            inspection = nil
+            inspectionError = nil
             guard sbxStatus.supportsHostMounts else { return }
-            isLoadingHostMounts = true
-            defer { isLoadingHostMounts = false }
+            isInspecting = true
+            defer { isInspecting = false }
             do {
-                hostMounts = try await SandboxHostMount.fetch(for: sandbox.name)
+                inspection = try await SandboxInspection.fetch(for: sandbox.name)
             } catch {
                 guard !Task.isCancelled else { return }
-                hostMountsError = error.localizedDescription
+                inspectionError = error.localizedDescription
             }
         }
         // Ports are only read while they're shown, and sbx can only list
@@ -696,6 +700,64 @@ private struct FolderPath: View {
     }
 }
 
+/// The kits the sandbox was created with, in the order sbx gives them: the
+/// agent's kit, then any mixins.
+private struct SandboxKitsSection: View {
+    let kits: [SandboxKit]
+    let agent: String?
+
+    var body: some View {
+        Section {
+            ForEach(kits) { kit in
+                LabeledContent {
+                    HStack(spacing: 6) {
+                        if kit.id == agentKit?.id {
+                            Text("Agent")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(.quaternary, in: .capsule)
+                                .help("The kit that provides the sandbox's agent")
+                        }
+                        if let detail = kit.detail {
+                            Text(detail)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                                .help(kit.reference)
+                        }
+                    }
+                } label: {
+                    Label(kit.name, systemImage: kit.source.systemImage)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(kit.reference)
+                }
+                .contextMenu {
+                    Button("Copy Reference") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(kit.reference, forType: .string)
+                    }
+                }
+            }
+        } header: {
+            SectionHeader(title: "Kits", count: kits.count, isLoading: false)
+        } footer: {
+            Text("What the sandbox was built from: the agent's kit, then any mixins, as sbx resolved them.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Only one kit is marked, the first that matches the agent's name.
+    private var agentKit: SandboxKit? {
+        guard let agent else { return nil }
+        return kits.first { $0.provides(agent: agent) }
+    }
+}
+
+/// The folders on the Mac that the sandbox's kits share with it.
 private struct SandboxHostMountsSection: View {
     let mounts: [SandboxHostMount]?
     let error: String?

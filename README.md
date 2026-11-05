@@ -4,7 +4,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 ### Features 
 
-- See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
+- See the details of your sandboxes, including the kits they were built with, resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
 - Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
 - Start, stop and remove sandboxes.
@@ -32,6 +32,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 - `sbx` v0.51.0 or later to save disk sizes in environment files.
 - `sbx` v0.51.0 or later to set a built-in agent's kit arguments, since earlier versions don't run built-in agents from kits.
 - `sbx` v0.51.0 or later to choose where additional workspaces are mounted.
+- `sbx` v0.51.0 or later to show the kits a sandbox was built with.
 - An `sbx` with the experimental `sbx skills` commands (checked against v0.49.1) to manage skills.
 - [Claude Desktop](https://claude.ai/download) v2.110.0 or later, to open sandboxes in Claude Desktop. Create the sandbox with the Claude Code agent so it has Anthropic credentials and network access.
 
@@ -168,7 +169,7 @@ Keep a backup of the private key. Without it, existing installs can't install an
 | Create | `[DOCKER_SANDBOXES_ROOT_SIZE=SIZE] [DOCKER_SANDBOXES_DOCKER_SIZE=SIZE] [DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=SIZE] sbx create [--name NAME] [--clone] [--cpus N] [--memory SIZE] [--env KEY=VALUE]... [--env-file FILE]... [--kit KIT]... [--kit-arg [HANDLE.]NAME=VALUE]... [--mount HOST:SANDBOX_PATH]... [--static-mcp SERVER\|none]... [--publish [HOST_PORT:]SANDBOX_PORT]... [--deny-network HOST]... [--skills off\|readonly\|readwrite] WORKLOAD [PATH [PATH[:TARGET][:ro]]...]`. TARGET, where an additional workspace is mounted in the sandbox, is only given with `sbx` v0.51.0 or later. `WORKLOAD` is an agent's name (`claude`) when one is picked, or the custom kit or image as typed. An argument is aimed at its kit with the kit's handle only when another picked kit declares the same name. The disk sizes from **Runtime › Disks** and **Workspace › Clone Size** (Clone mode only) are set as `SIZEg`, or as typed for **Custom**, in that `sbx create` process's environment, not your shell's or the sandbox's, since `sbx create` has no flags for them. Environment files save them in the file instead (see below) |
 | Review an environment file's plan | `sbx env plan [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE]`, with the name entered (the file's `name:` to start with), and `--clone` when you choose Clone for a workspace that doesn't set `workspace.clone`. With **Include My Defaults**, it runs in the file's folder without FILE, so sbx adds `~/.sbxenv.yaml`. That's offered when the defaults file exists and the file is called `sbxenv.yaml`, and not for a file in the environment files folder whose defaults would mount the project directory, which would be the file's own folder. With `sbx` v0.51.0 or later, disk sizes from the New Sandbox window are saved in the file's `sandboxOptions` (`rootSize`, `dockerSize`, and `clonedWorkspaceSize` in Clone mode) as `SIZEg` or as typed, so the plan shows them and no size variables are set |
 | Create from an environment file | `sbx env create [--name NAME] [--clone] [--env-arg NAME=VALUE]... [FILE] --force`, the same way, after you approve the plan in the app. Ports entered in the New Sandbox window are saved in the file's `ports`, so sbx publishes them from there, host mounts in its `mounts`, and disk sizes in its `sandboxOptions` |
-| Host mounts (sandbox Overview) | `sbx inspect NAME --json`, once each time a sandbox is shown, with `sbx` v0.50.0 or later. Its `mounts` lists the folder for each kit host mount, including the ones Docker Sandboxes manages |
+| Kits and host mounts (sandbox Overview) | `sbx inspect NAME --json`, once each time a sandbox is shown, with `sbx` v0.50.0 or later. Its `kits` lists the kit references the sandbox was built with, the agent's kit first (v0.51.0 and later), and its `mounts` lists the folder for each kit host mount, including the ones Docker Sandboxes manages |
 | Read a kit's arguments (New Sandbox window) | `sbx kit inspect KIT --json`, for the workload when it's a kit, for a built-in agent's `sbx/NAME` kit on sbx v0.51.0 or later, and for each mixin kit. sbx refuses to inspect a kit with a required argument that has no value, so the app runs it again with `--kit-arg NAME=VALUE` stand-ins for each argument sbx complains about until it succeeds |
 | Start | `sbx run --detach --name NAME` |
 | Stop | `sbx stop NAME` |
