@@ -184,6 +184,15 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether `sbx inspect` lists the kits a sandbox was built with, added
+    /// in v0.51.0. True when the version isn't known, such as for a nightly build.
+    var supportsSandboxKits: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.51.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// Whether the installed sbx takes `PATH:TARGET` to choose where an
     /// additional workspace is mounted, added in v0.51.0. True when the version
     /// isn't known, such as for a nightly build.

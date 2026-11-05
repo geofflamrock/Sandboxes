@@ -1,7 +1,6 @@
 import Foundation
 
-/// What Overview shows from `sbx inspect NAME --json`, which is read once
-/// each time a sandbox is shown.
+/// What the Configuration tab shows from `sbx inspect NAME --json`.
 struct SandboxInspection {
     let hostMounts: [SandboxHostMount]
     /// Nil when sbx doesn't report kits, which it does from v0.51.0.

@@ -3,8 +3,11 @@ import AppKit
 
 /// The tabs of the sandbox detail view. The last one used is remembered
 /// across sandboxes, so watching traffic carries on when you switch.
+/// Overview shows what's happening now, and Configuration what the sandbox
+/// was created with.
 enum SandboxDetailTab: String, CaseIterable, Identifiable {
     case overview
+    case configuration
     case policies
     case traffic
     case secrets
@@ -16,6 +19,7 @@ enum SandboxDetailTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview: "Overview"
+        case .configuration: "Configuration"
         case .policies: "Policies"
         case .traffic: "Traffic"
         case .secrets: "Secrets"
@@ -49,9 +53,10 @@ struct SandboxDetailView: View {
     @State private var portRemoval: PublishedPort?
     @State private var unpublishingPorts: Set<PublishedPort.ID> = []
     @Environment(SbxStatus.self) private var sbxStatus
-    /// Nil until `sbx inspect` has been read.
+    /// Nil until `sbx inspect` has been read for the sandbox named `inspected`.
     @State private var inspection: SandboxInspection?
     @State private var inspectionError: String?
+    @State private var inspected: String?
     @State private var isInspecting = false
 
     // The policies are polled here rather than in the Policies and Traffic
@@ -66,20 +71,26 @@ struct SandboxDetailView: View {
                         case .overview:
                             approvalsSummarySection
                             detailsSection
-                            if let kits = inspection?.kits, !kits.isEmpty {
-                                SandboxKitsSection(kits: kits, agent: sandbox.agent)
-                            }
-                            SandboxWorkspaceSection(sandbox: sandbox)
-                            if sbxStatus.supportsHostMounts {
-                                SandboxHostMountsSection(
-                                    mounts: inspection?.hostMounts,
+                            portsSection
+                            SandboxResourcesSection(sandbox: sandbox)
+                                .id(sandbox.name)
+                        case .configuration:
+                            if sbxStatus.supportsSandboxKits {
+                                SandboxKitsSection(
+                                    kits: currentInspection.map { $0.kits ?? [] },
+                                    agent: sandbox.agent,
                                     error: inspectionError,
                                     isLoading: isInspecting
                                 )
                             }
-                            portsSection
-                            SandboxResourcesSection(sandbox: sandbox)
-                                .id(sandbox.name)
+                            SandboxWorkspaceSection(sandbox: sandbox)
+                            if sbxStatus.supportsHostMounts {
+                                SandboxHostMountsSection(
+                                    mounts: currentInspection?.hostMounts,
+                                    error: inspectionError,
+                                    isLoading: isInspecting
+                                )
+                            }
                         case .policies:
                             approvalsSection
                             policySection
@@ -112,17 +123,26 @@ struct SandboxDetailView: View {
         .onChange(of: sandbox.name) {
             ports = nil
             portsError = nil
-        }
-        // Kits and host mounts rarely change after a sandbox is created, so
-        // they're read once each time it's shown.
-        .task(id: sandbox.name) {
             inspection = nil
             inspectionError = nil
-            guard sbxStatus.supportsHostMounts else { return }
+            inspected = nil
+        }
+        // Kits and host mounts rarely change after a sandbox is created, so
+        // they're read the first time Configuration is shown for a sandbox,
+        // and again only after showing another sandbox or a failed read.
+        .task(id: "\(sandbox.name) \(tab == .configuration)") {
+            guard tab == .configuration, sbxStatus.supportsHostMounts, inspected != sandbox.name else { return }
+            let name = sandbox.name
+            inspection = nil
+            inspectionError = nil
             isInspecting = true
             defer { isInspecting = false }
             do {
-                inspection = try await SandboxInspection.fetch(for: sandbox.name)
+                let result = try await SandboxInspection.fetch(for: name)
+                // A read for a sandbox that's no longer shown mustn't replace a newer one.
+                guard !Task.isCancelled else { return }
+                inspection = result
+                inspected = name
             } catch {
                 guard !Task.isCancelled else { return }
                 inspectionError = error.localizedDescription
@@ -211,6 +231,11 @@ struct SandboxDetailView: View {
                     .labelStyle(.iconOnly)
             }
         }
+    }
+
+    /// The inspection, if it's for the sandbox now shown.
+    private var currentInspection: SandboxInspection? {
+        inspected == sandbox.name ? inspection : nil
     }
 
     // MARK: - Overview
@@ -703,12 +728,22 @@ private struct FolderPath: View {
 /// The kits the sandbox was created with, in the order sbx gives them,
 /// which doesn't always put the agent's kit first.
 private struct SandboxKitsSection: View {
-    let kits: [SandboxKit]
+    /// Nil until they've been read.
+    let kits: [SandboxKit]?
     let agent: String?
+    let error: String?
+    let isLoading: Bool
 
     var body: some View {
         Section {
-            ForEach(kits) { kit in
+            if let kits, kits.isEmpty {
+                Text("No kits are listed for this sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if kits == nil {
+                Text(error == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(kits ?? []) { kit in
                 LabeledContent {
                     HStack(spacing: 6) {
                         if kit.id == agentKit?.id {
@@ -743,9 +778,10 @@ private struct SandboxKitsSection: View {
                 }
             }
         } header: {
-            SectionHeader(title: "Kits", count: kits.count, isLoading: false)
+            SectionHeader(title: "Kits", count: kits?.count, isLoading: isLoading)
         } footer: {
-            Text("What the sandbox was built from: its agent's kit and any mixins, as sbx resolved them.")
+            Text(error.map { "Couldn't read the kits: \($0)" }
+                ?? "What the sandbox was built from: its agent's kit and any mixins, as sbx resolved them.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -753,7 +789,7 @@ private struct SandboxKitsSection: View {
     /// Only one kit is marked, the first that matches the agent's name.
     private var agentKit: SandboxKit? {
         guard let agent else { return nil }
-        return kits.first { $0.provides(agent: agent) }
+        return kits?.first { $0.provides(agent: agent) }
     }
 }
 
