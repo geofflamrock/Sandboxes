@@ -13,15 +13,10 @@ struct SandboxHostMount: Identifiable, Hashable {
     /// Application Support folder, keyed by kit and path.
     var isManaged: Bool { hostPath.contains("/com.docker.sandboxes/sandboxes/kit-host-mounts/") }
 
-    static func fetch(for sandbox: String) async throws -> [SandboxHostMount] {
-        parse(try await SbxCLI.runChecked(["inspect", sandbox, "--json"]))
-    }
-
     /// The `mounts` in `sbx inspect --json` output, which is a map from the
     /// sandbox path to the host folder in v0.50.0. A list of records is
     /// accepted too, in case a later version changes it.
-    static func parse(_ output: String) -> [SandboxHostMount] {
-        guard let record = document(in: output) as? [String: Any] else { return [] }
+    static func parse(_ record: [String: Any]) -> [SandboxHostMount] {
         var mounts: [SandboxHostMount] = []
         switch SandboxListParser.value(in: record, for: ["mounts", "hostMounts", "host_mounts"]) {
         case let map as [String: Any]:
@@ -47,18 +42,5 @@ struct SandboxHostMount: Identifiable, Hashable {
         guard let value = SandboxListParser.string(SandboxListParser.value(in: record, for: keys)), !value.isEmpty
         else { return nil }
         return value
-    }
-
-    /// The JSON document in `text`, skipping any warnings printed before it.
-    private static func document(in text: String) -> Any? {
-        var start = text.startIndex
-        while let index = text[start...].firstIndex(where: { $0 == "[" || $0 == "{" }) {
-            if let data = String(text[index...]).data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) {
-                return json
-            }
-            start = text.index(after: index)
-        }
-        return nil
     }
 }
