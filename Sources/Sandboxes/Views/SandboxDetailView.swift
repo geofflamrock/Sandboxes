@@ -75,12 +75,16 @@ struct SandboxDetailView: View {
                             SandboxResourcesSection(sandbox: sandbox)
                                 .id(sandbox.name)
                         case .configuration:
-                            if let kits = currentInspection?.kits, !kits.isEmpty {
-                                SandboxKitsSection(kits: kits, agent: sandbox.agent)
+                            if sbxStatus.supportsSandboxKits {
+                                SandboxKitsSection(
+                                    kits: currentInspection.map { $0.kits ?? [] },
+                                    agent: sandbox.agent,
+                                    error: inspectionError,
+                                    isLoading: isInspecting
+                                )
                             }
                             SandboxWorkspaceSection(sandbox: sandbox)
-                            // Hidden once it's known that no kit shares a folder.
-                            if sbxStatus.supportsHostMounts, currentInspection?.hostMounts.isEmpty != true {
+                            if sbxStatus.supportsHostMounts {
                                 SandboxHostMountsSection(
                                     mounts: currentInspection?.hostMounts,
                                     error: inspectionError,
@@ -724,12 +728,22 @@ private struct FolderPath: View {
 /// The kits the sandbox was created with, in the order sbx gives them,
 /// which doesn't always put the agent's kit first.
 private struct SandboxKitsSection: View {
-    let kits: [SandboxKit]
+    /// Nil until they've been read.
+    let kits: [SandboxKit]?
     let agent: String?
+    let error: String?
+    let isLoading: Bool
 
     var body: some View {
         Section {
-            ForEach(kits) { kit in
+            if let kits, kits.isEmpty {
+                Text("No kits are listed for this sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if kits == nil {
+                Text(error == nil ? "Loading…" : "Unknown")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(kits ?? []) { kit in
                 LabeledContent {
                     HStack(spacing: 6) {
                         if kit.id == agentKit?.id {
@@ -764,9 +778,10 @@ private struct SandboxKitsSection: View {
                 }
             }
         } header: {
-            SectionHeader(title: "Kits", count: kits.count, isLoading: false)
+            SectionHeader(title: "Kits", count: kits?.count, isLoading: isLoading)
         } footer: {
-            Text("What the sandbox was built from: its agent's kit and any mixins, as sbx resolved them.")
+            Text(error.map { "Couldn't read the kits: \($0)" }
+                ?? "What the sandbox was built from: its agent's kit and any mixins, as sbx resolved them.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -774,7 +789,7 @@ private struct SandboxKitsSection: View {
     /// Only one kit is marked, the first that matches the agent's name.
     private var agentKit: SandboxKit? {
         guard let agent else { return nil }
-        return kits.first { $0.provides(agent: agent) }
+        return kits?.first { $0.provides(agent: agent) }
     }
 }
 
@@ -786,7 +801,10 @@ private struct SandboxHostMountsSection: View {
 
     var body: some View {
         Section {
-            if mounts == nil {
+            if let mounts, mounts.isEmpty {
+                Text("No kits share a folder with this sandbox.")
+                    .foregroundStyle(.secondary)
+            } else if mounts == nil {
                 Text(error == nil ? "Loading…" : "Unknown")
                     .foregroundStyle(.secondary)
             }
