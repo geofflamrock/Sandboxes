@@ -33,7 +33,7 @@ struct SandboxInspection {
 }
 
 /// A kit a sandbox was created with, as `sbx inspect` lists it: the agent's
-/// kit first, then any mixins, each as the reference sbx resolved.
+/// kit or a mixin, as the reference sbx resolved.
 struct SandboxKit: Identifiable, Hashable {
     let reference: String
 

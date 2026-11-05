@@ -700,8 +700,8 @@ private struct FolderPath: View {
     }
 }
 
-/// The kits the sandbox was created with, in the order sbx gives them: the
-/// agent's kit, then any mixins.
+/// The kits the sandbox was created with, in the order sbx gives them,
+/// which doesn't always put the agent's kit first.
 private struct SandboxKitsSection: View {
     let kits: [SandboxKit]
     let agent: String?
@@ -745,7 +745,7 @@ private struct SandboxKitsSection: View {
         } header: {
             SectionHeader(title: "Kits", count: kits.count, isLoading: false)
         } footer: {
-            Text("What the sandbox was built from: the agent's kit, then any mixins, as sbx resolved them.")
+            Text("What the sandbox was built from: its agent's kit and any mixins, as sbx resolved them.")
                 .foregroundStyle(.secondary)
         }
     }
