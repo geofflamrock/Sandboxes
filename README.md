@@ -4,7 +4,7 @@ A macOS app for managing [Docker Sandboxes](https://docs.docker.com/ai/sandboxes
 
 ### Features 
 
-- See the details of your sandboxes, including the kits they were built with, resource usage, network traffic, and the network and file system rules that apply to them.
+- See the details of your sandboxes, including resource usage, network traffic, and the network and file system rules that apply to them.
 - Create new sandboxes quickly and easily.
 - Create and manage sandbox [environment files](https://docs.docker.com/ai/sandboxes/configuration/environment-files/) and use them to create sandboxes.
 - Start, stop and remove sandboxes.
