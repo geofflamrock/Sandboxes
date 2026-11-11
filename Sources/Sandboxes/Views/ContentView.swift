@@ -487,16 +487,8 @@ struct SandboxRow: View {
             // A Label, so the sidebar gives the icon the same column and
             // gap as the Home and Management rows.
             Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(sandbox.name)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                    Text(sandbox.agent ?? sandbox.statusLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                Text(sandbox.name)
+                    .lineLimit(1)
             } icon: {
                 AgentIcon(agent: sandbox.knownAgent)
                     .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
@@ -515,7 +507,6 @@ struct SandboxRow: View {
                     .help(sandbox.statusLabel)
             }
         }
-        .padding(.vertical, 2)
     }
 }
 
