@@ -484,17 +484,22 @@ struct SandboxRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            AgentIcon(agent: sandbox.knownAgent)
-                .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(sandbox.name)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                Text(sandbox.agent ?? sandbox.statusLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            // A Label, so the sidebar gives the icon the same column and
+            // gap as the Home and Management rows.
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sandbox.name)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    Text(sandbox.agent ?? sandbox.statusLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            } icon: {
+                AgentIcon(agent: sandbox.knownAgent)
+                    .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
             }
             Spacer(minLength: 4)
             if pendingApprovals > 0 {
