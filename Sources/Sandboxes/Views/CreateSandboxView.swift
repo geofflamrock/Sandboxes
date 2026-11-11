@@ -145,6 +145,11 @@ private struct CreateSandboxForm: View {
     /// shows what was typed in its own field.
     @State private var agentSearch = KitSearchModel()
     @State private var kitSearch = KitSearchModel()
+    /// Search text, apart from the workload and kit fields so that what's
+    /// typed to search is never taken for a kit.
+    @State private var agentSearchText = ""
+    @State private var kitSearchText = ""
+    @State private var isSearchingAgents = false
     @State private var section = CreateSandboxSection.general
     /// Sections visited before and after the current one, for Back and Forward.
     @State private var backSections: [CreateSandboxSection] = []
@@ -244,13 +249,17 @@ private struct CreateSandboxForm: View {
             case .general:
                 nameSection
                 agentSection
-                if showsAgentSearch {
+                if isSearchingAgents {
                     KitSearchSection(
-                        query: request.workload,
+                        query: $agentSearchText,
                         kind: .workload,
                         model: agentSearch,
-                        picked: [request.trimmedWorkload]
-                    ) { request.workload = $0 }
+                        picked: [request.trimmedWorkload],
+                        focusesField: true
+                    ) {
+                        request.workload = $0
+                        isSearchingAgents = false
+                    }
                 }
                 if let source = request.workloadInspectionSource {
                     kitArgumentsSection(for: request.trimmedWorkload, source: source)
@@ -267,9 +276,9 @@ private struct CreateSandboxForm: View {
                 }
             case .kits:
                 kitsSection
-                if kitDraft.source == .registry {
+                if kitDraft.source == .dockerHub {
                     KitSearchSection(
-                        query: kitDraft.image,
+                        query: $kitSearchText,
                         kind: .mixin,
                         model: kitSearch,
                         picked: request.kits
@@ -460,14 +469,21 @@ private struct CreateSandboxForm: View {
                 selection: Agent(workload: request.workload)
             ) { agent in
                 request.workload = agent.builtInName
+                isSearchingAgents = false
             }
             HStack {
                 TextField(
                     "Custom kit or image",
                     text: $request.workload,
-                    prompt: Text("Search Docker Hub, or enter a kit")
+                    prompt: Text("docker/sbx-kit-claude")
                 )
                 .font(.body.monospaced())
+                Button("Search Docker Hub…", systemImage: "magnifyingglass") {
+                    isSearchingAgents.toggle()
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(isSearchingAgents ? "Hide the Docker Hub search" : "Search Docker Hub for an agent kit")
                 RecentsMenu(title: "Recent Images", items: recents.workloads) {
                     request.workload = $0
                 } onClear: {
@@ -496,13 +512,6 @@ private struct CreateSandboxForm: View {
     /// The mixin that gives shell sandboxes provider credentials, which
     /// they need since the shell agent became a kit in sbx 0.51.0.
     private static let shellCredentialsKit = "sbx/shell-credentials"
-
-    /// Docker Hub is searched for a typed workload, but not for a picked
-    /// agent or a kit in a folder or Git repository.
-    private var showsAgentSearch: Bool {
-        let workload = request.trimmedWorkload
-        return !workload.isEmpty && Agent(workload: workload) == nil && KitSource(reference: workload) == .registry
-    }
 
     private var needsShellCredentials: Bool {
         Agent(workload: request.workload) == .shell && sbxStatus.resolvesAgentsToKits
@@ -730,16 +739,18 @@ private struct CreateSandboxForm: View {
     private var kitsSection: some View {
         Section {
             Picker("Add from", selection: $kitDraft.source) {
-                ForEach(KitSource.allCases) { source in
+                ForEach(KitDraft.Source.allCases) { source in
                     Label(source.title, systemImage: source.systemImage).tag(source)
                 }
             }
             .pickerStyle(.segmented)
 
             switch kitDraft.source {
+            case .dockerHub:
+                EmptyView()
             case .registry:
                 HStack {
-                    TextField("Image", text: $kitDraft.image, prompt: Text("Search Docker Hub, or enter an image"))
+                    TextField("Image", text: $kitDraft.image, prompt: Text("docker.io/example/my-kit:1.0"))
                         .font(.body.monospaced())
                         .onSubmit(addDraftKit)
                     Button("Add", action: addDraftKit)
@@ -833,8 +844,10 @@ private struct CreateSandboxForm: View {
     private var kitsFooter: String {
         let intro = "Mixin kits add tools and settings to the agent."
         switch kitDraft.source {
+        case .dockerHub:
+            return "\(intro) Search Docker Hub and click a kit to add it."
         case .registry:
-            return "\(intro) Pick one found on Docker Hub, or enter an image's full reference, such as docker.io/example/my-kit:1.0, and click Add. sbx only pulls kits from Docker Hub unless you allow other registries."
+            return "\(intro) sbx only pulls kits from Docker Hub unless you allow other registries."
         case .git:
             return "\(intro) Paste a clone URL or a link to the kit's folder. Ref is a branch, tag or commit; Folder is where the kit is in the repository. sbx only uses Git kits if you allow Git sources."
         case .local:
@@ -1247,12 +1260,45 @@ private enum DiskSizeChoice: Hashable {
 
 /// What's typed into the kit fields before it's added.
 private struct KitDraft {
-    var source: KitSource = .registry
+    /// Where a kit is added from: picked from a Docker Hub search, or one of
+    /// the sources sbx takes, typed or chosen.
+    enum Source: CaseIterable, Identifiable {
+        case dockerHub
+        case registry
+        case git
+        case local
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .dockerHub: "Docker Hub"
+            case .registry: KitSource.registry.title
+            case .git: KitSource.git.title
+            case .local: KitSource.local.title
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .dockerHub: "magnifyingglass"
+            case .registry: KitSource.registry.systemImage
+            case .git: KitSource.git.systemImage
+            case .local: KitSource.local.systemImage
+            }
+        }
+    }
+
+    var source = Source.dockerHub
     var image = ""
     var git = GitKitDraft()
 
+    /// The kit typed into the fields, which is added with Create if it
+    /// wasn't added already. A search is never a kit.
     var reference: String? {
         switch source {
+        case .dockerHub:
+            return nil
         case .registry:
             let image = image.trimmingCharacters(in: .whitespacesAndNewlines)
             return image.isEmpty ? nil : image

@@ -1,15 +1,20 @@
 import SwiftUI
 
-/// Kits on Docker Hub matching what's typed in the New Sandbox window, for
-/// the agent or for mixins, with filters for who published them. Clicking a
-/// kit picks it.
+/// A search of Docker Hub in the New Sandbox window, for the agent or for
+/// mixins, with filters for who published the kits. What's typed is only
+/// search text: a kit is picked by clicking it.
 struct KitSearchSection: View {
-    let query: String
+    @Binding var query: String
     let kind: KitSearchResult.Kind
     let model: KitSearchModel
     /// Kits already picked, which show as added rather than being picked twice.
     let picked: [String]
+    /// Puts the cursor in the search field when it appears, for a search
+    /// that's opened with a button.
+    var focusesField = false
     let onPick: (String) -> Void
+
+    @FocusState private var isFieldFocused: Bool
 
     @AppStorage(KitSearch.verifiedPublishersKey) private var verifiedPublishers = true
     @AppStorage(KitSearch.hardenedImagesKey) private var hardenedImages = true
@@ -31,6 +36,9 @@ struct KitSearchSection: View {
 
     var body: some View {
         Section {
+            TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
+                .labelsHidden()
+                .focused($isFieldFocused)
             let results = results
             let shown = showsAll ? results : Array(results.prefix(Self.shownLimit))
             ForEach(shown) { result in
@@ -65,6 +73,9 @@ struct KitSearchSection: View {
                 Text(footer)
                     .foregroundStyle(.secondary)
             }
+        }
+        .onAppear {
+            if focusesField { isFieldFocused = true }
         }
         .task(id: KitSearchModel.Query(text: query, filter: filter)) {
             showsAll = false
