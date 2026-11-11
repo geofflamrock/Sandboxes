@@ -141,6 +141,10 @@ private struct CreateSandboxForm: View {
     @Environment(MCPServerStore.self) private var mcp
     @Environment(SbxStatus.self) private var sbxStatus
     @State private var kitDraft = KitDraft()
+    /// Docker Hub searches for the agent and for mixins, kept apart so each
+    /// shows what was typed in its own field.
+    @State private var agentSearch = KitSearchModel()
+    @State private var kitSearch = KitSearchModel()
     @State private var section = CreateSandboxSection.general
     /// Sections visited before and after the current one, for Back and Forward.
     @State private var backSections: [CreateSandboxSection] = []
@@ -240,6 +244,14 @@ private struct CreateSandboxForm: View {
             case .general:
                 nameSection
                 agentSection
+                if showsAgentSearch {
+                    KitSearchSection(
+                        query: request.workload,
+                        kind: .workload,
+                        model: agentSearch,
+                        picked: [request.trimmedWorkload]
+                    ) { request.workload = $0 }
+                }
                 if let source = request.workloadInspectionSource {
                     kitArgumentsSection(for: request.trimmedWorkload, source: source)
                 }
@@ -255,6 +267,14 @@ private struct CreateSandboxForm: View {
                 }
             case .kits:
                 kitsSection
+                if kitDraft.source == .registry {
+                    KitSearchSection(
+                        query: kitDraft.image,
+                        kind: .mixin,
+                        model: kitSearch,
+                        picked: request.kits
+                    ) { add(kit: $0) }
+                }
                 if !availableRecentKits.isEmpty {
                     recentKitsSection
                 }
@@ -445,7 +465,7 @@ private struct CreateSandboxForm: View {
                 TextField(
                     "Custom kit or image",
                     text: $request.workload,
-                    prompt: Text("docker/sbx-kit-claude")
+                    prompt: Text("Search Docker Hub, or enter a kit")
                 )
                 .font(.body.monospaced())
                 RecentsMenu(title: "Recent Images", items: recents.workloads) {
@@ -458,7 +478,7 @@ private struct CreateSandboxForm: View {
             Text("Agent")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Pick an agent, or enter any kit from an OCI registry, a folder or a Git repository.")
+                Text("Pick an agent, search Docker Hub for one, or enter any kit from an OCI registry, a folder or a Git repository.")
                 if needsShellCredentials {
                     HStack {
                         Text("Shell sandboxes get provider credentials from the shell-credentials mixin.")
@@ -476,6 +496,13 @@ private struct CreateSandboxForm: View {
     /// The mixin that gives shell sandboxes provider credentials, which
     /// they need since the shell agent became a kit in sbx 0.51.0.
     private static let shellCredentialsKit = "sbx/shell-credentials"
+
+    /// Docker Hub is searched for a typed workload, but not for a picked
+    /// agent or a kit in a folder or Git repository.
+    private var showsAgentSearch: Bool {
+        let workload = request.trimmedWorkload
+        return !workload.isEmpty && Agent(workload: workload) == nil && KitSource(reference: workload) == .registry
+    }
 
     private var needsShellCredentials: Bool {
         Agent(workload: request.workload) == .shell && sbxStatus.resolvesAgentsToKits
@@ -712,7 +739,7 @@ private struct CreateSandboxForm: View {
             switch kitDraft.source {
             case .registry:
                 HStack {
-                    TextField("Image", text: $kitDraft.image, prompt: Text("docker.io/example/my-kit:1.0"))
+                    TextField("Image", text: $kitDraft.image, prompt: Text("Search Docker Hub, or enter an image"))
                         .font(.body.monospaced())
                         .onSubmit(addDraftKit)
                     Button("Add", action: addDraftKit)
@@ -807,7 +834,7 @@ private struct CreateSandboxForm: View {
         let intro = "Mixin kits add tools and settings to the agent."
         switch kitDraft.source {
         case .registry:
-            return "\(intro) sbx only pulls kits from Docker Hub unless you allow other registries."
+            return "\(intro) Pick one found on Docker Hub, or enter an image's full reference, such as docker.io/example/my-kit:1.0, and click Add. sbx only pulls kits from Docker Hub unless you allow other registries."
         case .git:
             return "\(intro) Paste a clone URL or a link to the kit's folder. Ref is a branch, tag or commit; Folder is where the kit is in the repository. sbx only uses Git kits if you allow Git sources."
         case .local:
