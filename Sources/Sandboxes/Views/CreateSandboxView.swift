@@ -572,6 +572,13 @@ private struct CreateSandboxForm: View {
                             .font(.body.monospaced())
                             .frame(maxWidth: 180)
                             .help("Where the folder is mounted in the sandbox. Leave empty for the same path as on your Mac.")
+                        if !fieldArguments.isEmpty {
+                            ArgumentMenu(arguments: fieldArguments, help: "Use one of the file's arguments in the path in the sandbox") { name in
+                                let target = $folder.wrappedValue.target
+                                let separator = target.isEmpty || target.hasSuffix("/") ? "" : "/"
+                                $folder.wrappedValue.target = target + separator + ArgumentReference.text(for: name)
+                            }
+                        }
                     } else if !folder.trimmedTarget.isEmpty {
                         // Kept from the environment file, but older sbx can't change it.
                         Image(systemName: "arrow.right")
@@ -961,8 +968,14 @@ private struct CreateSandboxForm: View {
     }
 
     /// A size picker, with a field to type the size under it when it's Custom.
+    /// An environment file can take the size from one of its arguments instead.
     @ViewBuilder
     private func diskSizePicker(_ title: String, for disk: SandboxDisk) -> some View {
+        let argument = Binding<String?> {
+            request.diskSizeArguments[disk]
+        } set: {
+            request.diskSizeArguments[disk] = $0
+        }
         let choice = Binding<DiskSizeChoice> {
             switch request.diskSizes[disk] {
             case nil: .automatic
@@ -980,16 +993,18 @@ private struct CreateSandboxForm: View {
                 request.diskSizes[disk] = .custom("")
             }
         }
-        Picker(title, selection: choice) {
-            Text("Automatic").tag(DiskSizeChoice.automatic)
-            Divider()
-            ForEach(disk.choices, id: \.self) { size in
-                Text("\(size) GB").tag(DiskSizeChoice.gib(size))
+        ArgumentControl(title, argument: argument, arguments: fieldArguments) {
+            Picker(title, selection: choice) {
+                Text("Automatic").tag(DiskSizeChoice.automatic)
+                Divider()
+                ForEach(disk.choices, id: \.self) { size in
+                    Text("\(size) GB").tag(DiskSizeChoice.gib(size))
+                }
+                Divider()
+                Text("Custom").tag(DiskSizeChoice.custom)
             }
-            Divider()
-            Text("Custom").tag(DiskSizeChoice.custom)
         }
-        if case let .custom(text) = request.diskSizes[disk] {
+        if request.diskSizeArguments[disk] == nil, case let .custom(text) = request.diskSizes[disk] {
             LabeledContent {
                 TextField("Size", text: Binding {
                     text

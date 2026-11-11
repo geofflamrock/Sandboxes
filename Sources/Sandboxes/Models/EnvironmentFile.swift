@@ -272,7 +272,9 @@ extension CreateSandboxRequest {
             options.append(YAMLEntry(key: "memory", value: .scalar("\(memoryGiB)g")))
         }
         for disk in sizedDisks {
-            if let size = diskSizes[disk]?.value {
+            if let argument = diskSizeArguments[disk] {
+                options.append(YAMLEntry(key: disk.environmentFileKey, value: .scalar(ArgumentReference.text(for: argument))))
+            } else if let size = diskSizes[disk]?.value {
                 options.append(YAMLEntry(key: disk.environmentFileKey, value: .scalar(size)))
             }
         }
@@ -391,9 +393,10 @@ extension CreateSandboxRequest {
                         unsupported.append("additionalWorkspaces")
                         continue
                     }
-                    // A target is a path in the sandbox, so it's kept as written.
+                    // A target is a path in the sandbox, so it's kept as written,
+                    // including any of the file's arguments it uses.
                     let target = item["target"]?.string ?? ""
-                    if item["target"] != nil && (item["target"]?.string == nil || target.contains("${{")) {
+                    if item["target"] != nil && (item["target"]?.string == nil || !ArgumentReference.isEditable(target)) {
                         unsupported.append("additionalWorkspaces.target")
                         continue
                     }
@@ -474,7 +477,9 @@ extension CreateSandboxRequest {
                         }
                     default:
                         if let disk = SandboxDisk.allCases.first(where: { $0.environmentFileKey == option.key }) {
-                            if let text = option.value.string, !text.contains("${{"), let size = DiskSize(text, for: disk) {
+                            if let argument = option.value.string.flatMap(ArgumentReference.name(of:)) {
+                                diskSizeArguments[disk] = argument
+                            } else if let text = option.value.string, !text.contains("${{"), let size = DiskSize(text, for: disk) {
                                 diskSizes[disk] = size
                             } else {
                                 unsupported.append("sandboxOptions.\(option.key)")
@@ -507,7 +512,8 @@ extension CreateSandboxRequest {
         }
 
         // The window only sizes a cloned workspace in Clone mode, so saving would lose it otherwise.
-        if diskSizes[.clonedWorkspace] != nil && !sizedDisks.contains(.clonedWorkspace) {
+        let sizesClone = diskSizes[.clonedWorkspace] != nil || diskSizeArguments[.clonedWorkspace] != nil
+        if sizesClone && !sizedDisks.contains(.clonedWorkspace) {
             unsupported.append("sandboxOptions.\(SandboxDisk.clonedWorkspace.environmentFileKey)")
         }
 

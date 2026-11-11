@@ -84,11 +84,19 @@ struct AdditionalWorkspace: Identifiable, Hashable {
     }
 
     /// Why the folder can't be mounted where it's asked to be, if it can't.
-    var targetProblem: String? {
+    /// An environment file can use its arguments in the path.
+    func targetProblem(inEnvironmentFile: Bool) -> String? {
         let target = trimmedTarget
         guard !target.isEmpty else { return nil }
         let name = (normalizedPath.map { ($0 as NSString).abbreviatingWithTildeInPath }) ?? path
-        guard target.hasPrefix("/"), target != "/" else {
+        if target.contains("${{") {
+            guard inEnvironmentFile, ArgumentReference.isEditable(target) else {
+                return "Enter the full path in the sandbox to mount “\(name)” at, rather than “\(target)”."
+            }
+            guard target.hasPrefix("/") || target.hasPrefix("${{") else {
+                return "Enter the full path in the sandbox to mount “\(name)” at, starting with / or an argument."
+            }
+        } else if !target.hasPrefix("/") || target == "/" {
             return "Enter the full path in the sandbox to mount “\(name)” at, starting with /."
         }
         if target.contains(":") {
@@ -324,6 +332,8 @@ struct CreateSandboxRequest {
     var memoryGiB = 0
     /// A disk that isn't here is left to sbx.
     var diskSizes: [SandboxDisk: DiskSize] = [:]
+    /// The environment file arguments that size disks, instead of `diskSizes`.
+    var diskSizeArguments: [SandboxDisk: String] = [:]
     var environment: [EnvironmentVariable] = []
     var environmentFiles: [URL] = []
     /// How the agent sees sbx's shared skills store. Nil leaves it to sbx's
@@ -508,7 +518,7 @@ struct CreateSandboxRequest {
             if let problem = WorkspacePath.problem(with: folder.path, inEnvironmentFile: inEnvironmentFile) {
                 return problem
             }
-            if let problem = folder.targetProblem {
+            if let problem = folder.targetProblem(inEnvironmentFile: inEnvironmentFile) {
                 return problem
             }
         }
@@ -560,7 +570,8 @@ struct CreateSandboxRequest {
     private var argumentsProblem: String? {
         guard target == .environment else {
             let usesArgument = cloneArgument != nil || cpusArgument != nil || memoryArgument != nil
-                || skillsArgument != nil || additionalWorkspaces.contains { $0.readOnlyArgument != nil }
+                || skillsArgument != nil || !diskSizeArguments.isEmpty
+                || additionalWorkspaces.contains { $0.readOnlyArgument != nil }
             return usesArgument ? "Only an environment file can use arguments. Choose values for the options that use one." : nil
         }
         var names: Set<String> = []
@@ -604,6 +615,7 @@ struct CreateSandboxRequest {
         workspacePath = renamedText(workspacePath)
         for index in additionalWorkspaces.indices {
             additionalWorkspaces[index].path = renamedText(additionalWorkspaces[index].path)
+            additionalWorkspaces[index].target = renamedText(additionalWorkspaces[index].target)
             additionalWorkspaces[index].readOnlyArgument = renamedArgument(additionalWorkspaces[index].readOnlyArgument)
         }
         for index in hostMounts.indices {
@@ -621,6 +633,7 @@ struct CreateSandboxRequest {
         cpusArgument = renamedArgument(cpusArgument)
         memoryArgument = renamedArgument(memoryArgument)
         skillsArgument = renamedArgument(skillsArgument)
+        diskSizeArguments = diskSizeArguments.mapValues { $0 == old ? new : $0 }
     }
 
     /// Why sbx won't accept `name` for a sandbox, if it won't.
