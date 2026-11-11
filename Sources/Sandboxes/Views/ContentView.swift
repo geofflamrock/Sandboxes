@@ -493,9 +493,6 @@ struct SandboxRow: View {
                 AgentIcon(agent: sandbox.knownAgent)
                     .foregroundStyle(sandbox.knownAgent?.color ?? .secondary)
             }
-            // The icon only shows the kind of agent, so the full one (such
-            // as a kit's “sbx-kit-claude”) is a hover away.
-            .help(sandbox.agent ?? "")
             Spacer(minLength: 4)
             if pendingApprovals > 0 {
                 Image(systemName: "hand.raised.fill")
