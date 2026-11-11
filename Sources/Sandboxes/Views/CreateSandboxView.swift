@@ -243,6 +243,8 @@ private struct CreateSandboxForm: View {
                 if let source = request.workloadInspectionSource {
                     kitArgumentsSection(for: request.trimmedWorkload, source: source)
                 }
+            case .arguments:
+                EnvironmentArgumentsSection(request: $request)
             case .workspace:
                 workspaceSection
                 if request.workspace != nil {
@@ -307,10 +309,11 @@ private struct CreateSandboxForm: View {
 
     /// The sections for what's being made. An environment file doesn't pick MCP
     /// servers the way `sbx create` does: it registers servers itself.
-    /// Host mounts need sbx v0.50.0.
+    /// Host mounts need sbx v0.50.0. Only an environment file has arguments.
     private var visibleSections: [CreateSandboxSection] {
         CreateSandboxSection.allCases.filter { section in
             switch section {
+            case .arguments: request.target == .environment
             case .mcp: request.target == .sandbox
             case .hostMounts: sbxStatus.supportsHostMounts
             default: true
@@ -327,6 +330,7 @@ private struct CreateSandboxForm: View {
     /// without opening it. A zero badge isn't shown.
     private func badge(for section: CreateSandboxSection) -> Int {
         switch section {
+        case .arguments: request.environmentArguments.count
         case .hostMounts: request.enteredHostMounts.count
         case .kits: request.kits.count
         case .network: request.enteredPorts.count + (request.target == .sandbox ? request.deniedHostList.count : 0)
@@ -431,6 +435,12 @@ private struct CreateSandboxForm: View {
         .controlSize(.large)
     }
 
+    /// The environment file's arguments, for the menus that use one in an
+    /// option. A sandbox has none.
+    private var fieldArguments: [KitArgument] {
+        request.target == .environment ? request.environmentArguments : []
+    }
+
     // MARK: Agent
 
     private var agentSection: some View {
@@ -509,17 +519,20 @@ private struct CreateSandboxForm: View {
                 WorkspacePathField(
                     path: $request.workspacePath,
                     prompt: "None",
-                    panelMessage: "Choose the folder the agent works in."
+                    panelMessage: "Choose the folder the agent works in.",
+                    arguments: fieldArguments
                 ) { url in
                     request.additionalWorkspaces.removeAll { $0.normalizedPath == url.path }
                 }
             }
-            Picker("Mode", selection: $request.mode) {
-                ForEach(WorkspaceMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+            ArgumentControl("Mode", argument: $request.cloneArgument, arguments: fieldArguments) {
+                Picker("Mode", selection: $request.mode) {
+                    ForEach(WorkspaceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
             .disabled(request.workspace == nil)
             if showsDiskSizes && request.sizedDisks.contains(.clonedWorkspace) {
                 diskSizePicker("Clone Size", for: .clonedWorkspace)
@@ -534,6 +547,9 @@ private struct CreateSandboxForm: View {
         guard request.workspace != nil else {
             return "Without a workspace the agent works in the sandbox's own filesystem."
         }
+        if let argument = request.cloneArgument {
+            return "“\(argument)” chooses whether the sandbox works on a private clone of the folder's Git repository: true for a clone, false to mount the folder."
+        }
         return request.mode.explanation
     }
 
@@ -544,7 +560,8 @@ private struct CreateSandboxForm: View {
                     WorkspacePathField(
                         path: $folder.path,
                         prompt: "~/src/docs",
-                        panelMessage: "Choose a folder to mount alongside the workspace."
+                        panelMessage: "Choose a folder to mount alongside the workspace.",
+                        arguments: fieldArguments
                     )
                     if sbxStatus.supportsWorkspaceTargets {
                         Image(systemName: "arrow.right")
@@ -555,6 +572,13 @@ private struct CreateSandboxForm: View {
                             .font(.body.monospaced())
                             .frame(maxWidth: 180)
                             .help("Where the folder is mounted in the sandbox. Leave empty for the same path as on your Mac.")
+                        if !fieldArguments.isEmpty {
+                            ArgumentMenu(arguments: fieldArguments, help: "Use one of the file's arguments in the path in the sandbox") { name in
+                                let target = $folder.wrappedValue.target
+                                let separator = target.isEmpty || target.hasSuffix("/") ? "" : "/"
+                                $folder.wrappedValue.target = target + separator + ArgumentReference.text(for: name)
+                            }
+                        }
                     } else if !folder.trimmedTarget.isEmpty {
                         // Kept from the environment file, but older sbx can't change it.
                         Image(systemName: "arrow.right")
@@ -567,9 +591,30 @@ private struct CreateSandboxForm: View {
                             .truncationMode(.middle)
                             .help("Choosing where a folder is mounted needs sbx v0.51.0 or later")
                     }
-                    Toggle("Read-only", isOn: $folder.isReadOnly)
-                        .toggleStyle(.checkbox)
-                        .help("Stop the agent changing anything in this folder")
+                    if let argument = folder.readOnlyArgument {
+                        Text("Read-only: \(ArgumentReference.text(for: argument))")
+                            .font(.callout.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        ArgumentMenu(
+                            arguments: fieldArguments,
+                            selection: argument,
+                            help: "Choose the argument that says whether the folder is read-only",
+                            onSelect: { $folder.wrappedValue.readOnlyArgument = $0 },
+                            onClear: { $folder.wrappedValue.readOnlyArgument = nil }
+                        )
+                    } else {
+                        Toggle("Read-only", isOn: $folder.isReadOnly)
+                            .toggleStyle(.checkbox)
+                            .help("Stop the agent changing anything in this folder")
+                        if !fieldArguments.isEmpty {
+                            ArgumentMenu(
+                                arguments: fieldArguments,
+                                help: "Use one of the file's arguments for whether the folder is read-only",
+                                onSelect: { $folder.wrappedValue.readOnlyArgument = $0 }
+                            )
+                        }
+                    }
                     RemoveButton(help: "Don't mount this folder") {
                         request.additionalWorkspaces.removeAll { $0.id == folder.id }
                     }
@@ -617,7 +662,8 @@ private struct CreateSandboxForm: View {
                         path: $mount.hostPath,
                         prompt: "~/.cache",
                         panelMessage: "Choose the folder on your Mac to use for \(mount.trimmedSandboxPath.isEmpty ? "this host mount" : "“\(mount.trimmedSandboxPath)”").",
-                        canCreateFolders: true
+                        canCreateFolders: true,
+                        arguments: fieldArguments
                     )
                     RemoveButton(help: "Remove host mount") {
                         request.hostMounts.removeAll { $0.id == mount.id }
@@ -851,7 +897,8 @@ private struct CreateSandboxForm: View {
                 request.kitArgumentValues[kit] = $0
             },
             onRetry: { inspector.inspect(kit, from: source) },
-            onRemove: onRemove
+            onRemove: onRemove,
+            environmentArguments: fieldArguments
         )
     }
 
@@ -870,18 +917,22 @@ private struct CreateSandboxForm: View {
 
     private var resourcesSection: some View {
         Section {
-            Picker("CPUs", selection: $request.cpus) {
-                Text("Automatic").tag(0)
-                Divider()
-                ForEach(1...HostResources.cpuCount, id: \.self) { count in
-                    Text("\(count)").tag(count)
+            ArgumentControl("CPUs", argument: $request.cpusArgument, arguments: fieldArguments) {
+                Picker("CPUs", selection: $request.cpus) {
+                    Text("Automatic").tag(0)
+                    Divider()
+                    ForEach(1...HostResources.cpuCount, id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
                 }
             }
-            Picker("Memory", selection: $request.memoryGiB) {
-                Text("Automatic").tag(0)
-                Divider()
-                ForEach(Self.memoryChoices, id: \.self) { size in
-                    Text("\(size) GB").tag(size)
+            ArgumentControl("Memory", argument: $request.memoryArgument, arguments: fieldArguments) {
+                Picker("Memory", selection: $request.memoryGiB) {
+                    Text("Automatic").tag(0)
+                    Divider()
+                    ForEach(Self.memoryChoices, id: \.self) { size in
+                        Text("\(size) GB").tag(size)
+                    }
                 }
             }
         } header: {
@@ -917,8 +968,14 @@ private struct CreateSandboxForm: View {
     }
 
     /// A size picker, with a field to type the size under it when it's Custom.
+    /// An environment file can take the size from one of its arguments instead.
     @ViewBuilder
     private func diskSizePicker(_ title: String, for disk: SandboxDisk) -> some View {
+        let argument = Binding<String?> {
+            request.diskSizeArguments[disk]
+        } set: {
+            request.diskSizeArguments[disk] = $0
+        }
         let choice = Binding<DiskSizeChoice> {
             switch request.diskSizes[disk] {
             case nil: .automatic
@@ -936,16 +993,18 @@ private struct CreateSandboxForm: View {
                 request.diskSizes[disk] = .custom("")
             }
         }
-        Picker(title, selection: choice) {
-            Text("Automatic").tag(DiskSizeChoice.automatic)
-            Divider()
-            ForEach(disk.choices, id: \.self) { size in
-                Text("\(size) GB").tag(DiskSizeChoice.gib(size))
+        ArgumentControl(title, argument: argument, arguments: fieldArguments) {
+            Picker(title, selection: choice) {
+                Text("Automatic").tag(DiskSizeChoice.automatic)
+                Divider()
+                ForEach(disk.choices, id: \.self) { size in
+                    Text("\(size) GB").tag(DiskSizeChoice.gib(size))
+                }
+                Divider()
+                Text("Custom").tag(DiskSizeChoice.custom)
             }
-            Divider()
-            Text("Custom").tag(DiskSizeChoice.custom)
         }
-        if case let .custom(text) = request.diskSizes[disk] {
+        if request.diskSizeArguments[disk] == nil, case let .custom(text) = request.diskSizes[disk] {
             LabeledContent {
                 TextField("Size", text: Binding {
                     text
@@ -974,6 +1033,11 @@ private struct CreateSandboxForm: View {
                         .foregroundStyle(.secondary)
                     TextField("Value", text: $variable.value, prompt: Text("value"))
                         .labelsHidden()
+                    if !fieldArguments.isEmpty {
+                        ArgumentMenu(arguments: fieldArguments, help: "Use one of the file's arguments in the value") { name in
+                            $variable.wrappedValue.value += ArgumentReference.text(for: name)
+                        }
+                    }
                     RemoveButton(help: "Remove variable") {
                         request.environment.removeAll { $0.id == variable.id }
                     }
@@ -1032,7 +1096,7 @@ private struct CreateSandboxForm: View {
         Section {
             ForEach($request.ports) { $port in
                 HStack {
-                    PortFields(port: $port)
+                    PortFields(port: $port, arguments: fieldArguments)
                     RemoveButton(help: "Remove port") {
                         request.ports.removeAll { $0.id == port.id }
                     }
@@ -1083,17 +1147,20 @@ private struct CreateSandboxForm: View {
 
     private var skillsSection: some View {
         Section {
-            Picker("Shared Skills", selection: $request.skillsMode) {
-                Text("Default").tag(SkillsMode?.none)
-                Divider()
-                ForEach(SkillsMode.allCases) { mode in
-                    Text(mode.title).tag(SkillsMode?.some(mode))
+            ArgumentControl("Shared Skills", argument: $request.skillsArgument, arguments: fieldArguments) {
+                Picker("Shared Skills", selection: $request.skillsMode) {
+                    Text("Default").tag(SkillsMode?.none)
+                    Divider()
+                    ForEach(SkillsMode.allCases) { mode in
+                        Text(mode.title).tag(SkillsMode?.some(mode))
+                    }
                 }
             }
         } header: {
             Text("Skills")
         } footer: {
-            Text(request.skillsMode?.explanation
+            Text(request.skillsArgument.map { "“\($0)” chooses how the agent sees the shared skills store: off, readonly or readwrite." }
+                ?? request.skillsMode?.explanation
                 ?? "Uses sbx's default, which is Read Only unless the skills.defaultMode setting changes it. Add skills to the store in Management › Skills.")
                 .foregroundStyle(.secondary)
         }
@@ -1177,6 +1244,7 @@ private struct CreateSandboxForm: View {
 
 private enum CreateSandboxSection: CaseIterable, Identifiable {
     case general
+    case arguments
     case workspace
     case hostMounts
     case kits
@@ -1189,6 +1257,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .arguments: "Arguments"
         case .workspace: "Workspace"
         case .hostMounts: "Host Mounts"
         case .kits: "Kits"
@@ -1201,6 +1270,7 @@ private enum CreateSandboxSection: CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .arguments: "curlybraces"
         case .workspace: "folder"
         case .hostMounts: "externaldrive.connected.to.line.below"
         case .kits: "shippingbox"
@@ -1249,6 +1319,8 @@ private struct WorkspacePathField: View {
     let panelMessage: String
     /// Whether New Folder is offered, for a folder that may not exist yet.
     var canCreateFolders = false
+    /// An environment file's arguments, which the path can use. Empty for a sandbox.
+    var arguments: [KitArgument] = []
     var onChoose: (URL) -> Void = { _ in }
 
     var body: some View {
@@ -1263,6 +1335,13 @@ private struct WorkspacePathField: View {
                     onChoose(url)
                 }
             }
+            // Added to the end, so a folder can be chosen first and an argument added under it.
+            if !arguments.isEmpty {
+                ArgumentMenu(arguments: arguments, help: "Use one of the file's arguments in the path") { name in
+                    let separator = path.isEmpty || path.hasSuffix("/") ? "" : "/"
+                    path += separator + ArgumentReference.text(for: name)
+                }
+            }
         }
     }
 }
@@ -1271,19 +1350,31 @@ private struct WorkspacePathField: View {
 /// the sandbox port it reaches.
 private struct PortFields: View {
     @Binding var port: PortMapping
+    /// An environment file's arguments, which either port can come from. Empty for a sandbox.
+    var arguments: [KitArgument] = []
 
     var body: some View {
         HStack {
             TextField("Host Port", text: $port.hostPort, prompt: Text("Automatic"))
                 .labelsHidden()
-                .frame(maxWidth: 110)
+                .frame(maxWidth: arguments.isEmpty ? 110 : 200)
                 .help("The port on your Mac. Leave it empty to use a free one.")
+            if !arguments.isEmpty {
+                ArgumentMenu(arguments: arguments, help: "Use one of the file's arguments for the host port") { name in
+                    port.hostPort = ArgumentReference.text(for: name)
+                }
+            }
             Image(systemName: "arrow.right")
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             TextField("Sandbox Port", text: $port.sandboxPort, prompt: Text("Sandbox port"))
                 .labelsHidden()
                 .help("The port a server in the sandbox listens on.")
+            if !arguments.isEmpty {
+                ArgumentMenu(arguments: arguments, help: "Use one of the file's arguments for the sandbox port") { name in
+                    port.sandboxPort = ArgumentReference.text(for: name)
+                }
+            }
         }
         .monospacedDigit()
     }
