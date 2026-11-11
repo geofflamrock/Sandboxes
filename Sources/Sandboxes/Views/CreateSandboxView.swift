@@ -275,6 +275,11 @@ private struct CreateSandboxForm: View {
                     recentHostMountsSection
                 }
             case .kits:
+                // Recent kits come first, since adding one used before is the
+                // quickest way to add a kit, whichever source is picked below.
+                if !availableRecentKits.isEmpty {
+                    recentKitsSection
+                }
                 kitsSection
                 if kitDraft.source == .dockerHub {
                     KitSearchSection(
@@ -283,9 +288,6 @@ private struct CreateSandboxForm: View {
                         model: kitSearch,
                         picked: request.kits
                     ) { add(kit: $0) }
-                }
-                if !availableRecentKits.isEmpty {
-                    recentKitsSection
                 }
                 ForEach(request.kits, id: \.self) { kit in
                     kitArgumentsSection(for: kit) {
