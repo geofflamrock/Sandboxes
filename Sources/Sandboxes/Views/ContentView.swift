@@ -488,7 +488,6 @@ struct SandboxRow: View {
             // gap as the Home and Management rows.
             Label {
                 Text(sandbox.name)
-                    .fontWeight(.medium)
                     .lineLimit(1)
             } icon: {
                 AgentIcon(agent: sandbox.knownAgent)
