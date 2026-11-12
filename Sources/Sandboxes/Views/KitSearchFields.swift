@@ -1,62 +1,16 @@
 import SwiftUI
 
-/// A search of Docker Hub in its own section, for the agent, with the
-/// filters for who published the kits in its heading.
-struct KitSearchSection: View {
-    @Binding var query: String
-    let kind: KitSearchResult.Kind
-    let model: KitSearchModel
-    /// Kits already picked, which show as added rather than being picked twice.
-    let picked: [String]
-    /// Puts the cursor in the search field when it appears, for a search
-    /// that's opened with a button.
-    var focusesField = false
-    let onPick: (String) -> Void
-
-    var body: some View {
-        Section {
-            KitSearchFields(
-                query: $query,
-                kind: kind,
-                model: model,
-                picked: picked,
-                showsFilters: false,
-                focusesField: focusesField,
-                onPick: onPick
-            )
-        } header: {
-            HStack {
-                Text("Docker Hub")
-                if model.isSearching {
-                    ProgressView()
-                        .controlSize(.mini)
-                }
-                Spacer()
-                KitSearchFilters()
-            }
-        } footer: {
-            KitSearchFooter(model: model)
-        }
-    }
-}
-
-/// The rows of a Docker Hub search: the field, optionally with the filters
-/// beside it, the results and how the search is going. They go inside a section, such as
-/// the Kits section when it adds kits from Docker Hub. What's typed is only
-/// search text: a kit is picked by clicking it.
+/// The rows of a Docker Hub search, for the agent or for mixins: the field
+/// with the filters beside it, the results and how the search is going.
+/// They go inside the section whose heading picks Docker Hub. What's typed
+/// is only search text: a kit is picked by clicking it.
 struct KitSearchFields: View {
     @Binding var query: String
     let kind: KitSearchResult.Kind
     let model: KitSearchModel
     /// Kits already picked, which show as added rather than being picked twice.
     let picked: [String]
-    /// Shows the filters beside the field, for a section whose heading has
-    /// other controls.
-    var showsFilters = true
-    var focusesField = false
     let onPick: (String) -> Void
-
-    @FocusState private var isFieldFocused: Bool
 
     @AppStorage(KitSearch.verifiedPublishersKey) private var verifiedPublishers = true
     @AppStorage(KitSearch.hardenedImagesKey) private var hardenedImages = true
@@ -77,25 +31,21 @@ struct KitSearchFields: View {
     }
 
     var body: some View {
-        if showsFilters {
-            HStack {
-                field
-                    // Leaves room to type when the window is narrow.
-                    .frame(minWidth: 160)
-                KitSearchFilters()
-                    .fixedSize()
-                if model.isSearching {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-        } else {
+        HStack {
             field
+                // Leaves room to type when the window is narrow.
+                .frame(minWidth: 160)
+            KitSearchFilters()
+                .fixedSize()
+            if model.isSearching {
+                ProgressView()
+                    .controlSize(.small)
+            }
         }
         let results = results
         let shown = showsAll ? results : Array(results.prefix(Self.shownLimit))
         ForEach(shown) { result in
-            KitSearchRow(result: result, isPicked: pickedRepositories.contains(result.reference)) {
+            KitSearchRow(result: result, kind: kind, isPicked: pickedRepositories.contains(result.reference)) {
                 onPick(result.reference)
             }
         }
@@ -113,10 +63,6 @@ struct KitSearchFields: View {
     private var field: some View {
         TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
             .labelsHidden()
-            .focused($isFieldFocused)
-            .onAppear {
-                if focusesField { isFieldFocused = true }
-            }
             .task(id: KitSearchModel.Query(text: query, filter: filter)) {
                 showsAll = false
                 await model.search(KitSearchModel.Query(text: query, filter: filter))
@@ -192,6 +138,7 @@ struct KitSearchFooter: View {
 /// published it.
 private struct KitSearchRow: View {
     let result: KitSearchResult
+    let kind: KitSearchResult.Kind
     let isPicked: Bool
     let action: () -> Void
 
@@ -222,14 +169,23 @@ private struct KitSearchRow: View {
                 if isPicked {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.tint)
-                        .help("Added")
+                        .help(kind == .workload ? "Selected" : "Added")
                 }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(isPicked)
-        .help(isPicked ? "“\(result.reference)” is added" : "Add “\(result.reference)”")
+        .help(help)
+    }
+
+    private var help: String {
+        switch (kind, isPicked) {
+        case (.workload, true): "“\(result.reference)” is the agent"
+        case (.workload, false): "Use “\(result.reference)” as the agent"
+        case (.mixin, true): "“\(result.reference)” is added"
+        case (.mixin, false): "Add “\(result.reference)”"
+        }
     }
 
     private var publisher: some View {
