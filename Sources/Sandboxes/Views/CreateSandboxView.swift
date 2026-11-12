@@ -281,14 +281,6 @@ private struct CreateSandboxForm: View {
                     recentKitsSection
                 }
                 kitsSection
-                if kitDraft.source == .dockerHub {
-                    KitSearchSection(
-                        query: $kitSearchText,
-                        kind: .mixin,
-                        model: kitSearch,
-                        picked: request.kits
-                    ) { add(kit: $0) }
-                }
                 ForEach(request.kits, id: \.self) { kit in
                     kitArgumentsSection(for: kit) {
                         request.kits.removeAll { $0 == kit }
@@ -740,16 +732,14 @@ private struct CreateSandboxForm: View {
 
     private var kitsSection: some View {
         Section {
-            Picker("Add from", selection: $kitDraft.source) {
-                ForEach(KitDraft.Source.allCases) { source in
-                    Label(source.title, systemImage: source.systemImage).tag(source)
-                }
-            }
-            .pickerStyle(.segmented)
-
             switch kitDraft.source {
             case .dockerHub:
-                EmptyView()
+                KitSearchFields(
+                    query: $kitSearchText,
+                    kind: .mixin,
+                    model: kitSearch,
+                    picked: request.kits
+                ) { add(kit: $0) }
             case .registry:
                 HStack {
                     TextField("Image", text: $kitDraft.image, prompt: Text("docker.io/example/my-kit:1.0"))
@@ -786,9 +776,30 @@ private struct CreateSandboxForm: View {
                     Button("Choose…", action: chooseLocalKit)
                 }
             }
+        } header: {
+            // Where the kit comes from heads the section, so its rows are only
+            // what that source needs.
+            HStack {
+                Text("Add Kit From")
+                Spacer()
+                Picker("Add Kit From", selection: $kitDraft.source) {
+                    ForEach(KitDraft.Source.allCases) { source in
+                        Label(source.title, systemImage: source.systemImage).tag(source)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+            }
         } footer: {
-            Text(kitsFooter)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(kitsFooter)
+                    .foregroundStyle(.secondary)
+                if kitDraft.source == .dockerHub {
+                    KitSearchFooter(model: kitSearch)
+                }
+            }
         }
     }
 

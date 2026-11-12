@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// A search of Docker Hub in the New Sandbox window, for the agent or for
-/// mixins, with filters for who published the kits. What's typed is only
-/// search text: a kit is picked by clicking it.
+/// A search of Docker Hub in its own section, for the agent, with the
+/// filters for who published the kits in its heading.
 struct KitSearchSection: View {
     @Binding var query: String
     let kind: KitSearchResult.Kind
@@ -11,6 +10,49 @@ struct KitSearchSection: View {
     let picked: [String]
     /// Puts the cursor in the search field when it appears, for a search
     /// that's opened with a button.
+    var focusesField = false
+    let onPick: (String) -> Void
+
+    var body: some View {
+        Section {
+            KitSearchFields(
+                query: $query,
+                kind: kind,
+                model: model,
+                picked: picked,
+                showsFilters: false,
+                focusesField: focusesField,
+                onPick: onPick
+            )
+        } header: {
+            HStack {
+                Text("Docker Hub")
+                if model.isSearching {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+                Spacer()
+                KitSearchFilters()
+            }
+        } footer: {
+            KitSearchFooter(model: model)
+        }
+    }
+}
+
+/// The rows of a Docker Hub search: the field, optionally the filters, the
+/// results and how the search is going. They go inside a section, such as
+/// the Kits section when it adds kits from Docker Hub. What's typed is only
+/// search text: a kit is picked by clicking it.
+struct KitSearchFields: View {
+    @Binding var query: String
+    let kind: KitSearchResult.Kind
+    let model: KitSearchModel
+    /// Kits already picked, which show as added rather than being picked twice.
+    let picked: [String]
+    /// Shows the filters in a row under the field, for a section whose
+    /// heading has other controls.
+    var showsFilters = true
     var focusesField = false
     let onPick: (String) -> Void
 
@@ -35,51 +77,41 @@ struct KitSearchSection: View {
     }
 
     var body: some View {
-        Section {
-            TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
-                .labelsHidden()
-                .focused($isFieldFocused)
-            let results = results
-            let shown = showsAll ? results : Array(results.prefix(Self.shownLimit))
-            ForEach(shown) { result in
-                KitSearchRow(result: result, isPicked: pickedRepositories.contains(result.reference)) {
-                    onPick(result.reference)
-                }
+        // The search runs from the field rather than the whole set of rows,
+        // since a modifier on rows applies to each of them.
+        TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
+            .labelsHidden()
+            .focused($isFieldFocused)
+            .onAppear {
+                if focusesField { isFieldFocused = true }
             }
-            if results.count > shown.count {
-                Button("Show All \(results.count) Kits") { showsAll = true }
-                    .buttonStyle(.borderless)
+            .task(id: KitSearchModel.Query(text: query, filter: filter)) {
+                showsAll = false
+                await model.search(KitSearchModel.Query(text: query, filter: filter))
             }
-            if results.isEmpty {
-                status
-            }
-        } header: {
+        if showsFilters {
             HStack {
-                Text("Docker Hub")
+                KitSearchFilters()
+                Spacer()
                 if model.isSearching {
                     ProgressView()
-                        .controlSize(.mini)
+                        .controlSize(.small)
                 }
-                Spacer()
-                Toggle("Verified publishers", isOn: $verifiedPublishers)
-                    .help("Show kits from publishers Docker Hub has verified, such as Docker.")
-                Toggle("Docker Hardened Images", isOn: $hardenedImages)
-                    .help("Show Docker Hardened Images.")
-            }
-            .toggleStyle(.button)
-            .controlSize(.small)
-        } footer: {
-            if let footer {
-                Text(footer)
-                    .foregroundStyle(.secondary)
             }
         }
-        .onAppear {
-            if focusesField { isFieldFocused = true }
+        let results = results
+        let shown = showsAll ? results : Array(results.prefix(Self.shownLimit))
+        ForEach(shown) { result in
+            KitSearchRow(result: result, isPicked: pickedRepositories.contains(result.reference)) {
+                onPick(result.reference)
+            }
         }
-        .task(id: KitSearchModel.Query(text: query, filter: filter)) {
-            showsAll = false
-            await model.search(KitSearchModel.Query(text: query, filter: filter))
+        if results.count > shown.count {
+            Button("Show All \(results.count) Kits") { showsAll = true }
+                .buttonStyle(.borderless)
+        }
+        if results.isEmpty {
+            status
         }
     }
 
@@ -102,8 +134,42 @@ struct KitSearchSection: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
 
-    private var footer: String? {
+/// Which publishers a search includes. Both are kept as preferences, so
+/// every search in the app uses the same ones.
+struct KitSearchFilters: View {
+    @AppStorage(KitSearch.verifiedPublishersKey) private var verifiedPublishers = true
+    @AppStorage(KitSearch.hardenedImagesKey) private var hardenedImages = true
+
+    var body: some View {
+        HStack {
+            Toggle("Verified publishers", isOn: $verifiedPublishers)
+                .help("Show kits from publishers Docker Hub has verified, such as Docker.")
+            Toggle("Docker Hardened Images", isOn: $hardenedImages)
+                .help("Show Docker Hardened Images.")
+        }
+        .toggleStyle(.button)
+        .controlSize(.small)
+    }
+}
+
+/// A note under a search: a warning when every publisher is shown, or what
+/// to do when Docker Hub can't be searched.
+struct KitSearchFooter: View {
+    let model: KitSearchModel
+
+    @AppStorage(KitSearch.verifiedPublishersKey) private var verifiedPublishers = true
+    @AppStorage(KitSearch.hardenedImagesKey) private var hardenedImages = true
+
+    var body: some View {
+        if let text {
+            Text(text)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var text: String? {
         if model.error != nil {
             return "You can still enter a kit's full reference."
         }
