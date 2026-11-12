@@ -40,8 +40,8 @@ struct KitSearchSection: View {
     }
 }
 
-/// The rows of a Docker Hub search: the field, optionally the filters, the
-/// results and how the search is going. They go inside a section, such as
+/// The rows of a Docker Hub search: the field, optionally with the filters
+/// beside it, the results and how the search is going. They go inside a section, such as
 /// the Kits section when it adds kits from Docker Hub. What's typed is only
 /// search text: a kit is picked by clicking it.
 struct KitSearchFields: View {
@@ -50,8 +50,8 @@ struct KitSearchFields: View {
     let model: KitSearchModel
     /// Kits already picked, which show as added rather than being picked twice.
     let picked: [String]
-    /// Shows the filters in a row under the field, for a section whose
-    /// heading has other controls.
+    /// Shows the filters beside the field, for a section whose heading has
+    /// other controls.
     var showsFilters = true
     var focusesField = false
     let onPick: (String) -> Void
@@ -77,27 +77,20 @@ struct KitSearchFields: View {
     }
 
     var body: some View {
-        // The search runs from the field rather than the whole set of rows,
-        // since a modifier on rows applies to each of them.
-        TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
-            .labelsHidden()
-            .focused($isFieldFocused)
-            .onAppear {
-                if focusesField { isFieldFocused = true }
-            }
-            .task(id: KitSearchModel.Query(text: query, filter: filter)) {
-                showsAll = false
-                await model.search(KitSearchModel.Query(text: query, filter: filter))
-            }
         if showsFilters {
             HStack {
+                field
+                    // Leaves room to type when the window is narrow.
+                    .frame(minWidth: 160)
                 KitSearchFilters()
-                Spacer()
+                    .fixedSize()
                 if model.isSearching {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
+        } else {
+            field
         }
         let results = results
         let shown = showsAll ? results : Array(results.prefix(Self.shownLimit))
@@ -113,6 +106,21 @@ struct KitSearchFields: View {
         if results.isEmpty {
             status
         }
+    }
+
+    /// The search runs from the field rather than the whole set of rows,
+    /// since a modifier on rows applies to each of them.
+    private var field: some View {
+        TextField("Search", text: $query, prompt: Text(kind == .workload ? "Search for an agent kit" : "Search for a mixin kit"))
+            .labelsHidden()
+            .focused($isFieldFocused)
+            .onAppear {
+                if focusesField { isFieldFocused = true }
+            }
+            .task(id: KitSearchModel.Query(text: query, filter: filter)) {
+                showsAll = false
+                await model.search(KitSearchModel.Query(text: query, filter: filter))
+            }
     }
 
     @ViewBuilder
