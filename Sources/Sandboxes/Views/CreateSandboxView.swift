@@ -496,7 +496,6 @@ private struct CreateSandboxForm: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .controlSize(.small)
                 .fixedSize()
             }
         } footer: {
@@ -820,7 +819,6 @@ private struct CreateSandboxForm: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .controlSize(.small)
                 .fixedSize()
             }
         } footer: {
