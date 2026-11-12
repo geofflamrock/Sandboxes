@@ -487,9 +487,9 @@ private struct CreateSandboxForm: View {
             // Like the Kits section, where the agent comes from heads the
             // section, so its rows are only what that source needs.
             HStack {
-                Text("Agent From")
+                Text("Agent")
                 Spacer()
-                Picker("Agent From", selection: $agentSource) {
+                Picker("Agent Source", selection: $agentSource) {
                     ForEach(AgentSource.allCases) { source in
                         Label(source.title, systemImage: source.systemImage).tag(source)
                     }
