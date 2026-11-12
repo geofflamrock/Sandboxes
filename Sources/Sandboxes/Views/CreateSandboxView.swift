@@ -141,6 +141,17 @@ private struct CreateSandboxForm: View {
     @Environment(MCPServerStore.self) private var mcp
     @Environment(SbxStatus.self) private var sbxStatus
     @State private var kitDraft = KitDraft()
+    /// Docker Hub searches for the agent and for mixins, kept apart so each
+    /// shows what was typed in its own field.
+    @State private var agentSearch = KitSearchModel()
+    @State private var kitSearch = KitSearchModel()
+    /// Search text, apart from the workload and kit fields so that what's
+    /// typed to search is never taken for a kit.
+    @State private var agentSearchText = ""
+    @State private var kitSearchText = ""
+    /// Where the agent is picked from. Only what's shown: `request.workload`
+    /// is what the sandbox runs, and switching doesn't change it.
+    @State private var agentSource = AgentSource.builtIn
     @State private var section = CreateSandboxSection.general
     /// Sections visited before and after the current one, for Back and Forward.
     @State private var backSections: [CreateSandboxSection] = []
@@ -199,6 +210,11 @@ private struct CreateSandboxForm: View {
             backSections.removeAll()
             forwardSections.removeAll()
         }
+        // Opens on what the workload is: an agent's name, or anything else
+        // as a custom kit, as when editing an environment file.
+        .onChange(of: presentation, initial: true) {
+            agentSource = AgentSource(workload: request.workload)
+        }
         .onChange(of: request.target) {
             let visible = visibleSections
             backSections.removeAll { !visible.contains($0) }
@@ -254,10 +270,12 @@ private struct CreateSandboxForm: View {
                     recentHostMountsSection
                 }
             case .kits:
-                kitsSection
+                // Recent kits come first, since adding one used before is the
+                // quickest way to add a kit, whichever source is picked below.
                 if !availableRecentKits.isEmpty {
                     recentKitsSection
                 }
+                kitsSection
                 ForEach(request.kits, id: \.self) { kit in
                     kitArgumentsSection(for: kit) {
                         request.kits.removeAll { $0 == kit }
@@ -435,30 +453,57 @@ private struct CreateSandboxForm: View {
 
     private var agentSection: some View {
         Section {
-            AgentPicker(
-                agents: Agent.creatable,
-                selection: Agent(workload: request.workload)
-            ) { agent in
-                request.workload = agent.builtInName
-            }
-            HStack {
-                TextField(
-                    "Custom kit or image",
-                    text: $request.workload,
-                    prompt: Text("docker/sbx-kit-claude")
-                )
-                .font(.body.monospaced())
-                RecentsMenu(title: "Recent Images", items: recents.workloads) {
-                    request.workload = $0
-                } onClear: {
-                    recents.clearWorkloads()
+            switch agentSource {
+            case .builtIn:
+                AgentPicker(
+                    agents: Agent.creatable,
+                    selection: Agent(workload: request.workload)
+                ) { agent in
+                    request.workload = agent.builtInName
+                }
+            case .dockerHub:
+                KitSearchFields(
+                    query: $agentSearchText,
+                    kind: .workload,
+                    model: agentSearch,
+                    picked: [request.trimmedWorkload]
+                ) { request.workload = $0 }
+            case .custom:
+                HStack {
+                    TextField(
+                        "Custom kit or image",
+                        text: $request.workload,
+                        prompt: Text("docker/sbx-kit-claude")
+                    )
+                    .font(.body.monospaced())
+                    RecentsMenu(title: "Recent Images", items: recents.workloads) {
+                        request.workload = $0
+                    } onClear: {
+                        recents.clearWorkloads()
+                    }
                 }
             }
         } header: {
-            Text("Agent")
+            // Like the Kits section, where the agent comes from heads the
+            // section, so its rows are only what that source needs.
+            HStack {
+                Text("Agent")
+                Spacer()
+                Picker("Agent Source", selection: $agentSource) {
+                    ForEach(AgentSource.allCases) { source in
+                        Label(source.title, systemImage: source.systemImage).tag(source)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Pick an agent, or enter any kit from an OCI registry, a folder or a Git repository.")
+                Text(agentFooter)
+                if agentSource == .dockerHub {
+                    KitSearchFooter(model: agentSearch)
+                }
                 if needsShellCredentials {
                     HStack {
                         Text("Shell sandboxes get provider credentials from the shell-credentials mixin.")
@@ -470,6 +515,21 @@ private struct CreateSandboxForm: View {
                 }
             }
             .foregroundStyle(.secondary)
+        }
+    }
+
+    private var agentFooter: String {
+        switch agentSource {
+        case .builtIn:
+            "Agents sbx knows by name."
+        case .dockerHub:
+            if request.trimmedWorkload.isEmpty || Agent.isBuiltInName(request.workload) {
+                "Search Docker Hub and click an agent kit to use it."
+            } else {
+                "Using “\(request.trimmedWorkload)”. Search Docker Hub and click an agent kit to use it."
+            }
+        case .custom:
+            "Enter any kit from an OCI registry, a folder or a Git repository."
         }
     }
 
@@ -702,14 +762,14 @@ private struct CreateSandboxForm: View {
 
     private var kitsSection: some View {
         Section {
-            Picker("Add from", selection: $kitDraft.source) {
-                ForEach(KitSource.allCases) { source in
-                    Label(source.title, systemImage: source.systemImage).tag(source)
-                }
-            }
-            .pickerStyle(.segmented)
-
             switch kitDraft.source {
+            case .dockerHub:
+                KitSearchFields(
+                    query: $kitSearchText,
+                    kind: .mixin,
+                    model: kitSearch,
+                    picked: request.kits
+                ) { add(kit: $0) }
             case .registry:
                 HStack {
                     TextField("Image", text: $kitDraft.image, prompt: Text("docker.io/example/my-kit:1.0"))
@@ -746,9 +806,29 @@ private struct CreateSandboxForm: View {
                     Button("Choose…", action: chooseLocalKit)
                 }
             }
+        } header: {
+            // Where the kit comes from heads the section, so its rows are only
+            // what that source needs.
+            HStack {
+                Text("Add Kit From")
+                Spacer()
+                Picker("Add Kit From", selection: $kitDraft.source) {
+                    ForEach(KitDraft.Source.allCases) { source in
+                        Label(source.title, systemImage: source.systemImage).tag(source)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
         } footer: {
-            Text(kitsFooter)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(kitsFooter)
+                    .foregroundStyle(.secondary)
+                if kitDraft.source == .dockerHub {
+                    KitSearchFooter(model: kitSearch)
+                }
+            }
         }
     }
 
@@ -806,6 +886,8 @@ private struct CreateSandboxForm: View {
     private var kitsFooter: String {
         let intro = "Mixin kits add tools and settings to the agent."
         switch kitDraft.source {
+        case .dockerHub:
+            return "\(intro) Search Docker Hub and click a kit to add it."
         case .registry:
             return "\(intro) sbx only pulls kits from Docker Hub unless you allow other registries."
         case .git:
@@ -1220,12 +1302,45 @@ private enum DiskSizeChoice: Hashable {
 
 /// What's typed into the kit fields before it's added.
 private struct KitDraft {
-    var source: KitSource = .registry
+    /// Where a kit is added from: picked from a Docker Hub search, or one of
+    /// the sources sbx takes, typed or chosen.
+    enum Source: CaseIterable, Identifiable {
+        case dockerHub
+        case registry
+        case git
+        case local
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .dockerHub: "Docker Hub"
+            case .registry: KitSource.registry.title
+            case .git: KitSource.git.title
+            case .local: KitSource.local.title
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .dockerHub: "magnifyingglass"
+            case .registry: KitSource.registry.systemImage
+            case .git: KitSource.git.systemImage
+            case .local: KitSource.local.systemImage
+            }
+        }
+    }
+
+    var source = Source.dockerHub
     var image = ""
     var git = GitKitDraft()
 
+    /// The kit typed into the fields, which is added with Create if it
+    /// wasn't added already. A search is never a kit.
     var reference: String? {
         switch source {
+        case .dockerHub:
+            return nil
         case .registry:
             let image = image.trimmingCharacters(in: .whitespacesAndNewlines)
             return image.isEmpty ? nil : image
@@ -1329,6 +1444,38 @@ enum OpenPanel {
 
 /// A grid of agent tiles. The tile for the agent in the image field is
 /// highlighted; a custom image highlights none.
+/// Where the New Sandbox window's agent is picked from.
+enum AgentSource: CaseIterable, Identifiable {
+    /// The agents sbx knows by name.
+    case builtIn
+    case dockerHub
+    /// Any kit or image reference, typed in.
+    case custom
+
+    var id: Self { self }
+
+    init(workload: String) {
+        let trimmed = workload.trimmingCharacters(in: .whitespacesAndNewlines)
+        self = trimmed.isEmpty || Agent.isBuiltInName(trimmed) ? .builtIn : .custom
+    }
+
+    var title: String {
+        switch self {
+        case .builtIn: "Built-in"
+        case .dockerHub: "Docker Hub"
+        case .custom: "Custom"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .builtIn: "square.grid.2x2"
+        case .dockerHub: "magnifyingglass"
+        case .custom: "character.cursor.ibeam"
+        }
+    }
+}
+
 private struct AgentPicker: View {
     let agents: [Agent]
     let selection: Agent?
