@@ -18,7 +18,7 @@ enum WorkspaceMode: String, CaseIterable, Identifiable {
         case .direct:
             "The folder is mounted into the sandbox, so changes appear on your Mac immediately."
         case .clone:
-            "The sandbox works on a private clone of the folder's Git repository. Fetch its commits from the sandbox-<name> remote."
+            "The sandbox works on a private clone of the folder's Git repository. Fetch its commits from the sandbox-<name> remote while the sandbox is running."
         }
     }
 }

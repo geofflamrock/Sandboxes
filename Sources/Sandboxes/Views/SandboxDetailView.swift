@@ -180,8 +180,8 @@ struct SandboxDetailView: View {
                 Task { await unpublish(port) }
             }
         } message: { port in
-            Text(port.isGitDaemon
-                ? "This is the port sbx publishes for the sandbox-\(sandbox.name) Git remote. Fetching the sandbox's commits will stop working."
+            Text(port.isGitRemote(isCloned: sandbox.isCloned)
+                ? gitRemoteUnpublishWarning
                 : "Apps on your Mac will no longer reach port \(port.sandboxPort) in “\(sandbox.name)” at \(port.hostAddress ?? "this address").")
         }
         // Show a rule added, changed or removed here or in Management
@@ -304,6 +304,7 @@ struct SandboxDetailView: View {
                     PublishedPortRow(
                         port: port,
                         sandboxName: sandbox.name,
+                        isGitRemote: port.isGitRemote(isCloned: sandbox.isCloned),
                         isUnpublishing: unpublishingPorts.contains(port.id)
                     ) {
                         portRemoval = port
@@ -610,6 +611,14 @@ struct SandboxDetailView: View {
         }
     }
 
+    /// From v0.54.0 sbx only publishes the Git daemon's port when the
+    /// `clone.legacyTcpRemote` setting is on.
+    private var gitRemoteUnpublishWarning: String {
+        sbxStatus.servesCloneRemoteOverSocket
+            ? "sbx publishes this port for the sandbox-\(sandbox.name) Git remote because the clone.legacyTcpRemote setting is on. Fetching the sandbox's commits will stop working."
+            : "This is the port sbx publishes for the sandbox-\(sandbox.name) Git remote. Fetching the sandbox's commits will stop working."
+    }
+
     private func unpublish(_ port: PublishedPort) async {
         unpublishingPorts.insert(port.id)
         defer { unpublishingPorts.remove(port.id) }
@@ -695,7 +704,7 @@ private struct SandboxWorkspaceSection: View {
         }
         switch sandbox.isCloned {
         case true?:
-            return "The sandbox works on a private clone of the folder's Git repository. Fetch its commits from the sandbox-\(sandbox.name) remote."
+            return "The sandbox works on a private clone of the folder's Git repository. Fetch its commits from the sandbox-\(sandbox.name) remote while the sandbox is running."
         case false?:
             return WorkspaceMode.direct.explanation
         case nil:
@@ -1030,6 +1039,8 @@ private func ruleOrigin(source: String?, appliesTo: String?) -> String {
 private struct PublishedPortRow: View {
     let port: PublishedPort
     let sandboxName: String
+    /// Whether the port is for the sandbox's `sandbox-<name>` Git remote.
+    let isGitRemote: Bool
     let isUnpublishing: Bool
     let unpublish: () -> Void
     @Environment(\.openURL) private var openURL
@@ -1040,7 +1051,7 @@ private struct PublishedPortRow: View {
                 Text("\(port.hostAddress ?? "Not published") → \(port.target)")
                     .monospacedDigit()
                     .textSelection(.enabled)
-                if port.isGitDaemon {
+                if isGitRemote {
                     Text("Used by the sandbox-\(sandboxName) Git remote")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1079,7 +1090,7 @@ private struct PublishedPortRow: View {
 
     /// The Git daemon isn't a web page, so it isn't offered.
     private var webURL: URL? {
-        port.isGitDaemon ? nil : port.browserURL
+        isGitRemote ? nil : port.browserURL
     }
 }
 

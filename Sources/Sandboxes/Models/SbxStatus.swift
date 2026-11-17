@@ -213,6 +213,17 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether a Clone-mode sandbox's `sandbox-<name>` remote goes through the
+    /// daemon socket, as it does from v0.54.0 unless the
+    /// `clone.legacyTcpRemote` setting is on. True when the version isn't
+    /// known, such as for a nightly build.
+    var servesCloneRemoteOverSocket: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.54.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// A newer stable release than the installed version.
     var availableUpgrade: Release? {
         guard let installed = installation?.version, let latest, installed < latest.version
