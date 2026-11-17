@@ -1,6 +1,6 @@
 import Foundation
 
-/// A sandbox port published on the Mac, as `sbx ports --json` reports it.
+/// A sandbox port published on the Mac, as `sbx port ls --json` reports it.
 struct PublishedPort: Identifiable, Hashable {
     var id: String { "\(hostAddress ?? "")→\(target)" }
     let hostIP: String?
@@ -24,7 +24,7 @@ struct PublishedPort: Identifiable, Hashable {
         protocolName.map { "\(sandboxPort)/\($0)" } ?? String(sandboxPort)
     }
 
-    /// What `sbx ports --unpublish` takes: `[HOST_IP:]HOST_PORT:SANDBOX_PORT[/PROTOCOL]`.
+    /// What `sbx port unpublish` (and `sbx ports --unpublish`) takes: `[HOST_IP:]HOST_PORT:SANDBOX_PORT[/PROTOCOL]`.
     var unpublishSpec: String? {
         guard let hostPort else { return nil }
         guard let hostIP, !hostIP.isEmpty else { return "\(hostPort):\(target)" }
@@ -50,29 +50,50 @@ struct PublishedPort: Identifiable, Hashable {
 
     var isGitDaemon: Bool { sandboxPort == Self.gitDaemonPort }
 
-    static func fetch(for sandbox: Sandbox) async throws -> [PublishedPort] {
-        try PublishedPortParser.parse(try await SbxCLI.runChecked(["ports", sandbox.name, "--json"]))
+    /// Pass `usesPortCommand` from `SbxStatus.supportsPortCommand`: sbx v0.54.0
+    /// added `sbx port ls|publish|unpublish` and deprecated `sbx ports`.
+    static func listArguments(for sandbox: String, usesPortCommand: Bool) -> [String] {
+        usesPortCommand ? ["port", "ls", sandbox, "--json"] : ["ports", sandbox, "--json"]
+    }
+
+    static func publishArguments(_ spec: String, for sandbox: String, usesPortCommand: Bool) -> [String] {
+        usesPortCommand ? ["port", "publish", sandbox, spec] : ["ports", sandbox, "--publish", spec]
+    }
+
+    static func unpublishArguments(_ spec: String, for sandbox: String, usesPortCommand: Bool) -> [String] {
+        usesPortCommand ? ["port", "unpublish", sandbox, spec] : ["ports", sandbox, "--unpublish", spec]
+    }
+
+    static func fetch(for sandbox: Sandbox, usesPortCommand: Bool) async throws -> [PublishedPort] {
+        try PublishedPortParser.parse(try await SbxCLI.runChecked(
+            listArguments(for: sandbox.name, usesPortCommand: usesPortCommand)
+        ))
     }
 
     /// Publishes `port`. sbx starts the sandbox first if it's stopped.
-    static func publish(_ port: PortMapping, in sandbox: Sandbox) async throws {
-        try await SbxCLI.runChecked(["ports", sandbox.name, "--publish", port.spec])
+    static func publish(_ port: PortMapping, in sandbox: Sandbox, usesPortCommand: Bool) async throws {
+        try await SbxCLI.runChecked(publishArguments(port.spec, for: sandbox.name, usesPortCommand: usesPortCommand))
     }
 
-    func unpublish(from sandbox: Sandbox) async throws {
+    /// Removes only this mapping: with the host port given, sbx leaves the
+    /// sandbox port's other host mappings alone.
+    func unpublish(from sandbox: Sandbox, usesPortCommand: Bool) async throws {
         guard let unpublishSpec else { return }
-        try await SbxCLI.runChecked(["ports", sandbox.name, "--unpublish", unpublishSpec])
+        try await SbxCLI.runChecked(
+            Self.unpublishArguments(unpublishSpec, for: sandbox.name, usesPortCommand: usesPortCommand)
+        )
     }
 }
 
-/// Parses `sbx ports --json`, which v0.49.1 reports as a list of
-/// `host_ip`, `host_port`, `sandbox_port` and `protocol`. Other key spellings
-/// and a wrapping object are accepted too, as for `sbx ls`.
+/// Parses `sbx port ls --json` (`sbx ports --json` before v0.54.0), which
+/// v0.49.1 to v0.54.0 report as a list of `host_ip`, `host_port`,
+/// `sandbox_port` and `protocol`. Other key spellings and a wrapping object
+/// are accepted too, as for `sbx ls`.
 enum PublishedPortParser {
     struct ParseError: LocalizedError {
         let output: String
         var errorDescription: String? {
-            "Couldn't read the output of sbx ports --json:\n\(output)"
+            "Couldn't read sbx's list of published ports:\n\(output)"
         }
     }
 

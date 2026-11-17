@@ -203,6 +203,16 @@ final class SbxStatus {
         return version >= minimum
     }
 
+    /// Whether the installed sbx has `sbx port ls|publish|unpublish`, added in
+    /// v0.54.0, which deprecates `sbx ports`. True when the version isn't
+    /// known, such as for a nightly build.
+    var supportsPortCommand: Bool {
+        guard case let .installed(installation) = state, let version = installation.version,
+              let minimum = SbxVersion(in: "0.54.0")
+        else { return true }
+        return version >= minimum
+    }
+
     /// A newer stable release than the installed version.
     var availableUpgrade: Release? {
         guard let installed = installation?.version, let latest, installed < latest.version

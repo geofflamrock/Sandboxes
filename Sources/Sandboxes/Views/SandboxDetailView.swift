@@ -598,7 +598,7 @@ struct SandboxDetailView: View {
         isLoadingPorts = true
         defer { isLoadingPorts = false }
         do {
-            let latest = try await PublishedPort.fetch(for: sandbox)
+            let latest = try await PublishedPort.fetch(for: sandbox, usesPortCommand: sbxStatus.supportsPortCommand)
             guard !Task.isCancelled else { return }
             if latest != ports {
                 ports = latest
@@ -614,7 +614,7 @@ struct SandboxDetailView: View {
         unpublishingPorts.insert(port.id)
         defer { unpublishingPorts.remove(port.id) }
         do {
-            try await port.unpublish(from: sandbox)
+            try await port.unpublish(from: sandbox, usesPortCommand: sbxStatus.supportsPortCommand)
         } catch {
             store.actionError = SandboxStore.ActionError(
                 title: "Couldn't Unpublish Port \(port.sandboxPort) of “\(sandbox.name)”",
@@ -1089,6 +1089,7 @@ private struct PublishPortSheet: View {
     let sandbox: Sandbox
     let onPublished: () async -> Void
     @Environment(SandboxStore.self) private var store
+    @Environment(SbxStatus.self) private var sbxStatus
     @Environment(\.dismiss) private var dismiss
     @State private var port = PortMapping()
     @State private var isPublishing = false
@@ -1152,7 +1153,7 @@ private struct PublishPortSheet: View {
         isPublishing = true
         error = nil
         do {
-            try await PublishedPort.publish(port, in: sandbox)
+            try await PublishedPort.publish(port, in: sandbox, usesPortCommand: sbxStatus.supportsPortCommand)
             // Publishing may have started the sandbox.
             await store.refresh()
             await onPublished()
