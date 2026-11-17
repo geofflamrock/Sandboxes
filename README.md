@@ -178,9 +178,9 @@ Keep a backup of the private key. Without it, existing installs can't install an
 | Network policy and rules (selected sandbox) | `sbx policy ls NAME --type network --json` |
 | File system rules (selected sandbox) | `sbx policy ls NAME --type filesystem --json` |
 | Network traffic (selected sandbox) | `sbx policy log NAME --type network --json` |
-| Published ports (selected sandbox's Overview) | `sbx ports NAME --json`, every 5 seconds while the sandbox is running and Overview is shown |
-| Publish a port | `sbx ports NAME --publish [HOST_PORT:]SANDBOX_PORT`, which starts the sandbox if it's stopped |
-| Unpublish a port | `sbx ports NAME --unpublish [HOST_IP:]HOST_PORT:SANDBOX_PORT/PROTOCOL`, as sbx reported the port (after confirming in the app) |
+| Published ports (selected sandbox's Overview) | `sbx port ls NAME --json` (`sbx ports NAME --json` before sbx v0.54.0), every 5 seconds while the sandbox is running and Overview is shown |
+| Publish a port | `sbx port publish NAME [HOST_PORT:]SANDBOX_PORT` (`sbx ports NAME --publish …` before sbx v0.54.0), which starts the sandbox if it's stopped |
+| Unpublish a port | `sbx port unpublish NAME [HOST_IP:]HOST_PORT:SANDBOX_PORT/PROTOCOL` (`sbx ports NAME --unpublish …` before sbx v0.54.0), as sbx reported the port (after confirming in the app) |
 | List network rules (sidebar and Management › Policies) | `sbx policy ls --type network --json` |
 | List file system rules (sidebar and Management › Policies) | `sbx policy ls --type filesystem --json` |
 | Add a network rule | `sbx policy allow network [--sandbox NAME] [--protocol tcp\|udp\|tcp,udp] HOSTS` or `sbx policy deny network …` with the same arguments |
