@@ -8,8 +8,10 @@ struct PublishedPort: Identifiable, Hashable {
     let sandboxPort: Int
     let protocolName: String?
 
-    /// sbx's Git daemon, which it publishes for a clone-mode sandbox's
-    /// `sandbox-<name>` remote.
+    /// sbx's Git daemon, which it publishes for a Clone-mode sandbox's
+    /// `sandbox-<name>` remote. From v0.54.0 the remote goes through the
+    /// daemon socket instead, and sbx only publishes this port when the
+    /// `clone.legacyTcpRemote` setting is on.
     static let gitDaemonPort = 9418
 
     /// Where it's reachable on the Mac, e.g. `127.0.0.1:49155`.
@@ -48,7 +50,13 @@ struct PublishedPort: Identifiable, Hashable {
         return URL(string: "http://\(host):\(hostPort)")
     }
 
-    var isGitDaemon: Bool { sandboxPort == Self.gitDaemonPort }
+    /// Whether this is the port for the sandbox's `sandbox-<name>` remote.
+    /// A sandbox not known to be a clone may still be one. From v0.54.0 sbx
+    /// won't let you publish this port in a Clone-mode sandbox, so there
+    /// it's always sbx's own.
+    func isGitRemote(isCloned: Bool?) -> Bool {
+        sandboxPort == Self.gitDaemonPort && isCloned != false
+    }
 
     /// Pass `usesPortCommand` from `SbxStatus.supportsPortCommand`: sbx v0.54.0
     /// added `sbx port ls|publish|unpublish` and deprecated `sbx ports`.
